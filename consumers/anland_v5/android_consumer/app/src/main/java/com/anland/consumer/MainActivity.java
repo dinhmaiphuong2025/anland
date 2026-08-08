@@ -501,7 +501,7 @@ public class MainActivity extends Activity
         mRoot = root;
         mDensity = getResources().getDisplayMetrics().density;
         mKeyboardFloating = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .getBoolean(KEY_KEYBOARD_FLOATING, true);
+            .getBoolean(KEY_KEYBOARD_FLOATING, false);
         buildExtraKeysBar();
 
         // ADDED: Create VirtualKeyboardView (hidden initially)
@@ -555,7 +555,12 @@ public class MainActivity extends Activity
             // When the IME hides by any means (toggle, system back, or the IME's
             // own close button), release the hidden input so its focus state
             // stays in sync — otherwise reopening needs a second press.
-            if (!insets.isVisible(WindowInsets.Type.ime())) {
+            // Ignore the initial hidden-inset dispatch while a show request is
+            // settling.  That dispatch can arrive between requestFocus() and
+            // showSoftInput(), and disabling the target there makes the first
+            // bound-key press appear to do nothing.
+            boolean imeWasVisible = mImeBottom > 0;
+            if (!insets.isVisible(WindowInsets.Type.ime()) && imeWasVisible) {
                 View focused = getCurrentFocus();
                 systemIme.releaseHiddenInput();
                 if (focused == systemIme.getInputView() || getCurrentFocus() == null)
@@ -1464,7 +1469,7 @@ public class MainActivity extends Activity
         // Pick up a Keyboard-floating toggle made in Settings: update the bar's
         // backdrop and re-run the layout so the surface margin tracks the new mode.
         mKeyboardFloating = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .getBoolean(KEY_KEYBOARD_FLOATING, true);
+            .getBoolean(KEY_KEYBOARD_FLOATING, false);
         if (extraKeysBar != null)
             extraKeysBar.setFloating(mKeyboardFloating);
         relayout();
@@ -1859,6 +1864,25 @@ public class MainActivity extends Activity
         setExtraKeysBarVisible(!visible);
     }
 
+    /**
+     * Handle the user-bound soft-keyboard toggle in every key dispatch path.
+     * Accessibility interception runs before the Activity, so keeping this in
+     * one helper keeps the setting consistent for both routes.
+     */
+    private boolean handleSoftKeyboardToggleKey(KeyEvent event) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        int boundKeycode = prefs.getInt(KEY_BOUND_KEYCODE, -1);
+        if (boundKeycode == -1 || event.getKeyCode() != boundKeycode)
+            return false;
+
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0)
+            systemIme.toggleSystemKeyboard();
+        // Consume both the press and release. Once the IME owns focus, allowing
+        // the release to continue through the normal dispatch path can send a
+        // stray key-up to Linux and leave its key state stuck.
+        return true;
+    }
+
     // Apply the screen-orientation preference (default / landscape / portrait).
     private void applyOrientation() {
         String mode = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -2151,16 +2175,12 @@ public class MainActivity extends Activity
         // nor toggles the extra-keys bar.
         if (keyCode == KeyEvent.KEYCODE_BACK && isMouseKeyEvent(event))
             return true;
+        if (handleSoftKeyboardToggleKey(event))
+            return true;
         if (event.getRepeatCount() > 0)
             return true;
 
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        int boundKeycode = prefs.getInt(KEY_BOUND_KEYCODE, -1);
-        if (boundKeycode != -1 && keyCode == boundKeycode) {
-            systemIme.toggleSystemKeyboard();   // Keep original bound key behavior (system IME)
-            return true;
-        }
-
         // Back key toggles the extra-keys bar (without opening the soft keyboard)
         // when enabled in settings. Leaves the default swallow behaviour otherwise.
         if (keyCode == KeyEvent.KEYCODE_BACK
@@ -2200,6 +2220,8 @@ public class MainActivity extends Activity
         if (handlePointerCaptureBackKey(event))
             return true;
         if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && isMouseKeyEvent(event))
+            return true;
+        if (handleSoftKeyboardToggleKey(event))
             return true;
         if (event.getRepeatCount() > 0)
             return true;
@@ -2263,6 +2285,8 @@ public class MainActivity extends Activity
         if (handlePointerCaptureBackKey(event))
             return true;
         if (keyCode == KeyEvent.KEYCODE_BACK && isMouseKeyEvent(event))
+            return true;
+        if (handleSoftKeyboardToggleKey(event))
             return true;
         forwardKeyToLinux(event);
         return true;

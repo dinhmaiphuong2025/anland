@@ -6,6 +6,7 @@ import android.view.KeyCharacterMap;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.view.inputmethod.BaseInputConnection;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
@@ -24,6 +25,12 @@ import java.nio.charset.StandardCharsets;
  * to read the active bar (for modifier combos) and to report visibility changes.
  */
 public final class SystemIME {
+
+    // A newly focused view may need a few UI-loop turns before IMM considers it
+    // the served editor. Keep the retry bounded so a failed request cannot leave
+    // a permanent callback chain behind.
+    private static final int SHOW_RETRY_LIMIT = 4;
+    private static final long SHOW_RETRY_DELAY_MS = 50L;
 
     /** Callback surface SystemIME needs from its host (MainActivity). */
     public interface Host {
@@ -50,6 +57,8 @@ public final class SystemIME {
     private final Native mNative;
     private InputMethodManager imm;
     private EditText hiddenInput;
+    /** Incremented whenever a pending show becomes obsolete (for example, hide). */
+    private int showRequestId;
 
     SystemIME(Activity activity, Host host, Native n) {
         this.activity = activity;
@@ -357,12 +366,50 @@ public final class SystemIME {
         hiddenInput.setEnabled(false);
     }
 
+    private void retryShow(int requestId, int attempt) {
+        if (attempt >= SHOW_RETRY_LIMIT || requestId != showRequestId
+                || !hiddenInput.isEnabled())
+            return;
+        hiddenInput.postDelayed(() -> requestShow(requestId, attempt + 1),
+                SHOW_RETRY_DELAY_MS);
+    }
+
+    private void requestShow(int requestId, int attempt) {
+        if (requestId != showRequestId || !hiddenInput.isEnabled()) return;
+        if (!hiddenInput.hasFocus()) hiddenInput.requestFocus();
+
+        android.os.ResultReceiver receiver = new android.os.ResultReceiver(
+                hiddenInput.getHandler()) {
+            @Override
+            protected void onReceiveResult(int resultCode, android.os.Bundle data) {
+                if (resultCode == InputMethodManager.RESULT_UNCHANGED_HIDDEN
+                        || resultCode == InputMethodManager.RESULT_HIDDEN) {
+                    retryShow(requestId, attempt);
+                }
+            }
+        };
+
+        // The insets API is the explicit user-driven show path on Android 11+
+        // and later. Keep IMM below as a compatibility/focus-registration
+        // fallback for devices that do not hand the view a controller yet.
+        WindowInsetsController controller = hiddenInput.getWindowInsetsController();
+        if (controller == null) controller = activity.getWindow().getInsetsController();
+        if (controller != null) controller.show(WindowInsets.Type.ime());
+
+        // showSoftInput() returns false when the view has not reached IMM's
+        // served-view state. In that case ResultReceiver is not guaranteed to
+        // run, so retry from the return value as well as from a hidden result.
+        if (!imm.showSoftInput(hiddenInput, InputMethodManager.SHOW_IMPLICIT, receiver))
+            retryShow(requestId, attempt);
+    }
+
     // Toggle the system IME (soft keyboard). Driven by the ⌨ bar key tap and the
     // user-bound hardware keycode.
     void toggleSystemKeyboard() {
         if (imm == null) imm = activity.getSystemService(InputMethodManager.class);
         if (imm == null) return;
         if (isImeVisible()) {
+            showRequestId++;
             imm.hideSoftInputFromWindow(hiddenInput.getWindowToken(), 0);
             releaseHiddenInput();
             // In freeform mode the inset callback may not fire; hide the bar
@@ -376,23 +423,18 @@ public final class SystemIME {
             // A secondary window is a fresh freeform/multi-window task: the IMM
             // registers hiddenInput as its served view asynchronously on the focus
             // change, so an immediate showSoftInput() here races that and no-ops.
-            // Post the request so it runs after focus settles, and retry once if the
-            // IME wasn't actually shown — the system also drops some SHOW_IMPLICIT
-            // requests for windows that aren't the current full input target.
+            // Post the request so it runs after focus settles, and retry briefly if
+            // the IME wasn't actually shown — the system also drops some
+            // SHOW_IMPLICIT requests for windows that aren't the current full input
+            // target.
+            final int requestId = ++showRequestId;
             hiddenInput.post(() -> {
-                if (!hiddenInput.hasWindowFocus()) hiddenInput.requestFocus();
-                imm.showSoftInput(hiddenInput, InputMethodManager.SHOW_IMPLICIT,
-                    new android.os.ResultReceiver(hiddenInput.getHandler()) {
-                        @Override
-                        protected void onReceiveResult(int resultCode, android.os.Bundle data) {
-                            if (resultCode == InputMethodManager.RESULT_UNCHANGED_HIDDEN
-                                    || resultCode == InputMethodManager.RESULT_HIDDEN) {
-                                hiddenInput.postDelayed(() ->
-                                    imm.showSoftInput(hiddenInput,
-                                        InputMethodManager.SHOW_IMPLICIT), 50);
-                            }
-                        }
-                    });
+                // Window focus only says that the Activity is foreground; it does
+                // not mean this 1x1 editor owns input focus. Returning from the
+                // Settings Activity commonly leaves the surface focused, so the
+                // old check could skip the request and make the first bound-key
+                // press a no-op.
+                requestShow(requestId, 0);
             });
             // In freeform / small-window mode the IME appears as a floating
             // window that does NOT trigger window insets, so applyImeInset()
