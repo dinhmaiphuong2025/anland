@@ -137,6 +137,10 @@ public class MainActivity extends Activity
     public static final String KEY_MOVE_THRESHOLD = "touchpad_move_threshold";
     // Magnifies declined gestures forwarded as touch; see Touchpad.setGestureScale.
     public static final String KEY_GESTURE_SCALE = "touchpad_gesture_scale";
+    // Disable pinch (two-finger spread) and three-or-more-finger gestures: they
+    // are swallowed instead of being forwarded to the desktop as touch.
+    public static final String KEY_DISABLE_MULTI_FINGER_GESTURES =
+            "disable_multi_finger_gestures";
     // Capture an external mouse/touchpad as a relative pointer so it cannot reach
     // the Android screen edges. This is deliberately opt-in: existing installations
     // keep the old absolute-pointer behaviour until the user enables it.
@@ -768,6 +772,8 @@ public class MainActivity extends Activity
                         Touchpad.DEFAULT_MOVE_THRESHOLD_FACTOR));
         pad.setGestureScale(prefs.getFloat(KEY_GESTURE_SCALE,
                 Touchpad.DEFAULT_GESTURE_SCALE));
+        pad.setMultiFingerGesturesDisabled(
+                prefs.getBoolean(KEY_DISABLE_MULTI_FINGER_GESTURES, false));
     }
 
     /**

@@ -97,6 +97,8 @@
     <string name="gesture_scale_label">手势幅度</string>
     <string name="gesture_scale_value">%1$.0f 像素</string>
     <string name="gesture_scale_hint">转为触摸的手势（双指开合、三指及以上）会映射到以指针为中心、边长为此值的正方形内。值越大，相同的手指移动幅度越大。</string>
+    <string name="disable_multi_finger_switch">禁用双指开合与多指手势</string>
+    <string name="disable_multi_finger_hint">开启：双指捏合/张开和三指及以上的手势会被吞掉，不会传到桌面；双指滚动和双指右键仍正常。关闭：双指开合、多指手势作为触摸转发到桌面。</string>
 
     <!-- Connection -->
     <string name="socket_path_label">守护进程套接字路径</string>

@@ -88,6 +88,14 @@ public final class Touchpad {
     private static final int TWO_FINGER_SCROLL = 1;
     private static final int TWO_FINGER_NOT_SCROLL = 2;
     private int twoFingerMode = TWO_FINGER_UNDECIDED;
+    // Same phase classified as NOT_SCROLL (a pinch) while multi-finger gestures
+    // are disabled: the whole phase is swallowed instead of being forwarded as
+    // touch, so the gesture does nothing and lifting one finger resumes normal
+    // one-finger cursor control.
+    private static final int TWO_FINGER_IGNORED = 3;
+    // True while three or more fingers are on the pad and multi-finger gestures
+    // are disabled: swallow the stream (see recognize) until it drops to one.
+    private boolean multiFingerIgnored = false;
     // Both fingers' positions when the two-finger phase began. The scroll test
     // measures displacement from here rather than frame to frame, matching AOSP.
     private float twoFingerStartX1, twoFingerStartY1;
@@ -131,6 +139,10 @@ public final class Touchpad {
     private float gestureScale = DEFAULT_GESTURE_SCALE;
 
     private float mouseAccelStrength = 1.0f; // 加速度强度，0.5 ~ 10.0
+
+    // 禁用双指捏合/张开与三指及以上的触摸转发手势（缩放等）。开启后这些
+    // 手势被吞掉（不转发为触摸），双指滚动与双指右键点击不受影响。
+    private boolean multiFingerGesturesDisabled = false;
 
     // ===== 调整后的平滑/抗抖动参数（更灵敏、更连续） =====
     private static final float DEAD_ZONE = 0.3f;          // 死区从 0.5 降到 0.3
@@ -213,6 +225,16 @@ public final class Touchpad {
     /** Invert both scroll axes ("natural" scrolling). */
     void setScrollReversed(boolean reversed) {
         scrollReversed = reversed;
+    }
+
+    /** 是否禁用双指捏合/张开与三指及以上的触摸转发手势。 */
+    void setMultiFingerGesturesDisabled(boolean disabled) {
+        multiFingerGesturesDisabled = disabled;
+        if (disabled) {
+            // A partially-observed gesture must not stay latched as "forwarded".
+            multiFingerIgnored = false;
+            twoFingerMode = TWO_FINGER_UNDECIDED;
+        }
     }
 
     /**
@@ -452,6 +474,24 @@ public final class Touchpad {
             return false;
         }
 
+        // 三指及以上手势被禁用时，吞掉整个流，直到手指减到一根（此时落回
+        // ACTION_POINTER_UP 的正常处理恢复单指控制）。
+        if (multiFingerIgnored) {
+            if (action == MotionEvent.ACTION_POINTER_UP
+                    && (event.getPointerCount() - 1) <= 1) {
+                multiFingerIgnored = false;
+                // fall through to the ACTION_POINTER_UP branch below
+            } else if (action == MotionEvent.ACTION_UP
+                    || action == MotionEvent.ACTION_CANCEL) {
+                multiFingerIgnored = false;
+                resetTouchpadState();
+                resetSmoothing();
+                return true;
+            } else {
+                return true; // swallow
+            }
+        }
+
         switch (action) {
             case MotionEvent.ACTION_DOWN: {
                 float x = event.getX();
@@ -487,8 +527,14 @@ public final class Touchpad {
                     lastY2 = twoFingerStartY2 = event.getY(1);
                     twoFingerMode = TWO_FINGER_UNDECIDED;
                 } else if (pointerCount >= 3) {
-                    // Three or more fingers is never one of ours.
-                    return declineGesture();
+                    if (multiFingerGesturesDisabled) {
+                        // 三指及以上手势被禁用，吞掉。
+                        multiFingerIgnored = true;
+                        isMultiFinger = true;
+                    } else {
+                        // Three or more fingers is never one of ours.
+                        return declineGesture();
+                    }
                 }
                 break;
             }
@@ -554,13 +600,28 @@ public final class Touchpad {
                         if (twoFingerMode == TWO_FINGER_UNDECIDED) {
                             twoFingerMode = classifyTwoFinger(x1, y1, x2, y2);
                             if (twoFingerMode == TWO_FINGER_NOT_SCROLL) {
-                                // A pinch, or one finger travelling against a resting
-                                // one. Hand the gesture to the forwarding path.
-                                return declineGesture();
+                                if (multiFingerGesturesDisabled) {
+                                    // 双指捏合/张开被禁用，吞掉这一阶段
+                                    //（不滚动也不转发为触摸）。
+                                    twoFingerMode = TWO_FINGER_IGNORED;
+                                } else {
+                                    // A pinch, or one finger travelling against a
+                                    // resting one. Hand the gesture to the
+                                    // forwarding path.
+                                    return declineGesture();
+                                }
                             }
                         }
 
-                        if (twoFingerMode == TWO_FINGER_SCROLL) {
+                        if (twoFingerMode == TWO_FINGER_IGNORED) {
+                            // Swallow the pinch: keep the anchors current so the
+                            // next touch that resumes normal input does not see
+                            // one giant delta.
+                            lastX1 = x1;
+                            lastY1 = y1;
+                            lastX2 = x2;
+                            lastY2 = y2;
+                        } else if (twoFingerMode == TWO_FINGER_SCROLL) {
                             float avgDx = ((x1 - lastX1) + (x2 - lastX2)) / 2;
                             float avgDy = ((y1 - lastY1) + (y2 - lastY2)) / 2;
 
@@ -815,6 +876,7 @@ public final class Touchpad {
         isLongPressPossible = false;
         isMultiFinger = false;
         twoFingerMode = TWO_FINGER_UNDECIDED;
+        multiFingerIgnored = false;
         // Cleared here rather than in declineGesture: the latch has to outlive the
         // events that follow it and only lifts when the gesture itself ends.
         gestureUnhandled = false;

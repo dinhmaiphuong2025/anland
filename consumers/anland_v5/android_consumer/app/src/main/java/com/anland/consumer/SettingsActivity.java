@@ -76,6 +76,8 @@ public class SettingsActivity extends Activity {
     private static final String KEY_SCROLL_THRESHOLD = "touchpad_scroll_threshold";
     private static final String KEY_MOVE_THRESHOLD = "touchpad_move_threshold";
     private static final String KEY_GESTURE_SCALE = "touchpad_gesture_scale";
+    private static final String KEY_DISABLE_MULTI_FINGER_GESTURES =
+            "disable_multi_finger_gestures";
 
     // Latency presets: target buffer in ms (0 = auto). The user-visible labels live
     // in the R.array.latency_labels string-array, parallel to this array.
@@ -799,6 +801,25 @@ public class SettingsActivity extends Activity {
         reverseScrollHint.setTextColor(Color.GRAY);
         reverseScrollHint.setPadding(0, dp(4), 0, dp(12));
         root.addView(reverseScrollHint);
+
+        // Disable pinch (two-finger spread) and three-or-more-finger gestures.
+        Switch disableMultiFingerSwitch = new Switch(this);
+        disableMultiFingerSwitch.setText(R.string.disable_multi_finger_switch);
+        disableMultiFingerSwitch.setTextSize(14);
+        disableMultiFingerSwitch.setPadding(0, dp(8), 0, 0);
+        disableMultiFingerSwitch.setChecked(prefs.getBoolean(
+                KEY_DISABLE_MULTI_FINGER_GESTURES, false));
+        disableMultiFingerSwitch.setOnCheckedChangeListener((v, checked) ->
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putBoolean(KEY_DISABLE_MULTI_FINGER_GESTURES, checked).apply());
+        root.addView(disableMultiFingerSwitch);
+
+        TextView disableMultiFingerHint = new TextView(this);
+        disableMultiFingerHint.setText(R.string.disable_multi_finger_hint);
+        disableMultiFingerHint.setTextSize(12);
+        disableMultiFingerHint.setTextColor(Color.GRAY);
+        disableMultiFingerHint.setPadding(0, dp(4), 0, dp(12));
+        root.addView(disableMultiFingerHint);
 
         addFloatSlider(root, R.string.scroll_speed_label, R.string.scroll_speed_value,
                 null, KEY_SCROLL_SPEED, 0.05f, 3.0f, 0.05f, 0.5f);
