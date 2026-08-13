@@ -12,7 +12,7 @@ pub struct display_ctx {
     _private: [u8; 0],
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct buf_info {
     pub stride: u32,
@@ -23,15 +23,15 @@ pub struct buf_info {
     pub offset: u32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct InputEvent {
     pub type_: u32,
     pub touch: InputTouch,
 }
 
-#[repr(C, packed)]
-#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub union InputEventUnion {
     pub touch: InputTouch,
     pub key: InputKey,
@@ -46,7 +46,7 @@ pub union InputEventUnion {
     pub padding: [u32; 4],
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct InputTouch {
     pub action: i32,
@@ -55,14 +55,14 @@ pub struct InputTouch {
     pub pointer_id: i32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct InputKey {
     pub action: i32,
     pub keycode: i32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct InputPointerMotion {
     pub x: f32,
@@ -71,14 +71,14 @@ pub struct InputPointerMotion {
     pub dy: f32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct InputPointerButton {
     pub button: u32,
     pub pressed: i32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct InputPointerAxis {
     pub axis: u32,
@@ -86,47 +86,47 @@ pub struct InputPointerAxis {
     pub discrete: i32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct InputDisplay {
     pub refresh_mhz: u32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct InputClipboard {
     pub size: u32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct InputTextInput {
     pub size: u32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct InputAction {
     pub action: u32,
     pub value: i32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct InputResource {
     pub type_: u32,
     pub fdnum: u32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct OutputEvent {
     pub type_: u32,
     pub clipboard: OutputClipboard,
 }
 
-#[repr(C, packed)]
-#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub union OutputEventUnion {
     pub clipboard: OutputClipboard,
     pub resources_request: OutputResourcesRequest,
@@ -134,20 +134,20 @@ pub union OutputEventUnion {
     pub padding: [u32; 4],
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct OutputClipboard {
     pub size: u32,
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct OutputResourcesRequest {
     pub type_: u32,
     pub args: [u32; 3],
 }
 
-#[repr(C, packed)]
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct OutputSetConsumerVar {
     pub var: u32,

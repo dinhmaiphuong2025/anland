@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::mem;
-use std::os::fd::OwnedFd;
+use std::os::fd::{BorrowedFd, OwnedFd};
 use std::os::unix::io::{AsRawFd, FromRawFd, RawFd};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -10,24 +10,30 @@ use anyhow::Context;
 use niri_config::OutputName;
 use smithay::backend::allocator::dmabuf::Dmabuf;
 use smithay::backend::allocator::Fourcc;
+use smithay::backend::input::{Axis, ButtonState, InputEvent as SmithayInputEvent, KeyState};
 use smithay::backend::egl::native::EGLSurfacelessDisplay;
 use smithay::backend::egl::{EGLContext, EGLDisplay};
 use smithay::backend::renderer::damage::OutputDamageTracker;
 use smithay::backend::renderer::gles::GlesRenderer;
-use smithay::backend::renderer::{DebugFlags, ImportDma};
+use smithay::backend::renderer::{Bind, DebugFlags, ImportDma, Renderer};
 use smithay::output::{Mode, Output, PhysicalProperties, Subpixel};
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{
     EventSource, Interest, Mode as PollMode, Poll, PostAction, Readiness, RegistrationToken,
-    Token, TokenFactory,
+    Result as CalloopResult, Token, TokenFactory,
 };
 use smithay::reexports::wayland_protocols::wp::presentation_time::server::wp_presentation_feedback;
 use smithay::utils::Size;
-use smithay::wayland::dmabuf::{DmabufFeedbackBuilder, DmabufGlobal};
+use smithay::wayland::dmabuf::{DmabufFeedback, DmabufFeedbackBuilder, DmabufGlobal};
 use smithay::wayland::presentation::Refresh;
 
 use anland_sys::*;
 
+use super::anland_input::{
+    AnlandInput, AnlandKeyboardEvent, AnlandPointerAxisEvent, AnlandPointerButtonEvent,
+    AnlandPointerMotionEvent, AnlandTouchCancelEvent, AnlandTouchDownEvent, AnlandTouchFrameEvent,
+    AnlandTouchMotionEvent, AnlandTouchUpEvent, AnlandVirtualDevice,
+};
 use super::{IpcOutputMap, OutputId, RenderResult};
 use crate::niri::{Niri, RedrawState, State};
 use crate::render_helpers::{resources, shaders, RenderCtx, RenderTarget};
@@ -70,22 +76,31 @@ impl EventSource for FdEventSource {
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> CalloopResult<()> {
         let token = token_factory.token();
-        poll.register(self.fd, Interest::READ, PollMode::Level, token)
+        unsafe {
+            let fd = BorrowedFd::borrow_raw(self.fd);
+            poll.register(fd, Interest::READ, PollMode::Level, token)
+        }
     }
 
     fn reregister(
         &mut self,
         poll: &mut Poll,
         token_factory: &mut TokenFactory,
-    ) -> std::io::Result<()> {
+    ) -> CalloopResult<()> {
         let token = token_factory.token();
-        poll.reregister(self.fd, Interest::READ, PollMode::Level, token)
+        unsafe {
+            let fd = BorrowedFd::borrow_raw(self.fd);
+            poll.reregister(fd, Interest::READ, PollMode::Level, token)
+        }
     }
 
-    fn unregister(&mut self, poll: &mut Poll) -> std::io::Result<()> {
-        poll.unregister(self.fd)
+    fn unregister(&mut self, poll: &mut Poll) -> CalloopResult<()> {
+        unsafe {
+            let fd = BorrowedFd::borrow_raw(self.fd);
+            poll.unregister(fd)
+        }
     }
 }
 
@@ -102,7 +117,7 @@ pub struct Anland {
     damage_tracker: Option<OutputDamageTracker>,
     dmabuf_global: Option<DmabufGlobal>,
 
-    dmabuf_textures: Vec<GlesTexture>,
+    dmabufs: Vec<Dmabuf>,
 
     reconnect_timer_token: Option<RegistrationToken>,
     buf_ready_source_token: Option<RegistrationToken>,
@@ -110,11 +125,9 @@ pub struct Anland {
 
     ipc_outputs: Arc<Mutex<IpcOutputMap>>,
 
-    buffer_age: u8,
+    last_buffer_idx: i32,
     debug_tint: bool,
 }
-
-use smithay::backend::renderer::gles::GlesTexture;
 
 impl Anland {
     pub fn new(socket_path: String) -> anyhow::Result<Self> {
@@ -132,7 +145,7 @@ impl Anland {
         let context =
             EGLContext::new(&display).context("error creating EGL context")?;
         let renderer =
-            GlesRenderer::new(context).context("error creating renderer")?;
+            unsafe { GlesRenderer::new(context) }.context("error creating renderer")?;
 
         Ok(Self {
             ctx,
@@ -141,12 +154,12 @@ impl Anland {
             output: None,
             damage_tracker: None,
             dmabuf_global: None,
-            dmabuf_textures: Vec::new(),
+            dmabufs: Vec::new(),
             reconnect_timer_token: None,
             buf_ready_source_token: None,
             data_source_token: None,
             ipc_outputs: Arc::new(Mutex::new(HashMap::new())),
-            buffer_age: 0,
+            last_buffer_idx: -1,
             debug_tint: false,
         })
     }
@@ -156,7 +169,7 @@ impl Anland {
 
         let info = self.ctx.screen_info();
         let (w, h) = (info.width as i32, info.height as i32);
-        let refresh = (info.refresh / 1000) as i32;
+        let refresh = info.refresh as i32;
 
         let output = Output::new(
             "anland".to_string(),
@@ -196,7 +209,7 @@ impl Anland {
                 modes: vec![niri_ipc::Mode {
                     width: w as u16,
                     height: h as u16,
-                    refresh_rate: (info.refresh / 1000) as u16,
+                    refresh_rate: info.refresh,
                     is_preferred: true,
                 }],
                 current_mode: Some(0),
@@ -263,7 +276,19 @@ impl Anland {
         if let Ok(token) = niri.event_loop.insert_source(
             timer,
             move |_, _, state| {
-                state.backend.anland().try_reconnect(&mut state.niri);
+                let connected = {
+                    let anland = state.backend.anland();
+                    let was_fallback = anland.ctx.is_fallback();
+                    anland.try_reconnect(&mut state.niri);
+                    was_fallback && !anland.ctx.is_fallback()
+                };
+                if connected {
+                    // Make the touch seat exist so subsequent touch events
+                    // aren't dropped before the first wl_touch client binds.
+                    state.process_input_event::<AnlandInput>(SmithayInputEvent::DeviceAdded {
+                        device: AnlandVirtualDevice,
+                    });
+                }
                 TimeoutAction::ToDuration(Duration::from_millis(200))
             },
         ) {
@@ -289,7 +314,7 @@ impl Anland {
             return;
         }
 
-        self.dmabuf_textures.clear();
+        self.dmabufs.clear();
 
         for i in 0..count {
             let raw_fd = self.ctx.dmabuf_fd_at(i as i32);
@@ -301,14 +326,14 @@ impl Anland {
                 None => continue,
             };
             match self.import_raw_dmabuf(raw_fd, &info) {
-                Ok(texture) => self.dmabuf_textures.push(texture),
+                Ok(dmabuf) => self.dmabufs.push(dmabuf),
                 Err(e) => warn!("failed to import dmabuf {}: {e:?}", i),
             }
         }
 
         info!(
             "connected to anland consumer: {} buffers, {}x{}",
-            self.dmabuf_textures.len(),
+            self.dmabufs.len(),
             self.ctx.screen_info().width,
             self.ctx.screen_info().height,
         );
@@ -321,35 +346,23 @@ impl Anland {
         &mut self,
         raw_fd: RawFd,
         info: &anland_sys::buf_info,
-    ) -> anyhow::Result<GlesTexture> {
+    ) -> anyhow::Result<Dmabuf> {
         let owned_fd = unsafe { OwnedFd::from_raw_fd(raw_fd) };
 
         let fourcc = protocol_format_to_fourcc(info.format);
 
         let mut builder = Dmabuf::builder(
-            info.width,
-            info.height,
+            Size::from((info.width as i32, info.height as i32)),
             fourcc,
+            smithay::reexports::gbm::Modifier::from(info.modifier),
             smithay::backend::allocator::dmabuf::DmabufFlags::empty(),
         );
 
-        builder.add_plane(
-            owned_fd,
-            info.offset,
-            info.stride,
-            smithay::reexports::gbm::Modifier::from(info.modifier),
-        );
+        builder.add_plane(owned_fd, 0, info.offset, info.stride);
 
-        let dmabuf = builder
+        builder
             .build()
-            .context("failed to build Dmabuf from raw fd")?;
-
-        let texture = self
-            .renderer
-            .import_dmabuf(&dmabuf, None)
-            .map_err(|e| anyhow::anyhow!("import_dmabuf failed: {e:?}"))?;
-
-        Ok(texture)
+            .context("failed to build Dmabuf from raw fd")
     }
 
     // -------------------------------------------------------------------
@@ -388,12 +401,16 @@ impl Anland {
         }
         let source = FdEventSource::new(fd);
         if let Ok(token) = niri.event_loop.insert_source(source, move |_, _, state| {
-            let anland = state.backend.anland();
-            loop {
-                match anland.ctx.poll_input_event(16) {
-                    Some(event) => anland.handle_input_event(&mut state.niri, event),
-                    None => break,
-                }
+            // Non-blocking drain: with a 16ms poll here the callback would hold the
+            // event loop while a motion stream is active (events arrive every ~8ms),
+            // starving the buffer_ready source so the consumer gets no render-done
+            // fence until the gesture ends -> sparse frames and 5s fallback timeouts.
+            let events = {
+                let anland = state.backend.anland();
+                anland.poll_input(0)
+            };
+            for event in events {
+                state.process_input_event(event);
             }
         }) {
             self.data_source_token = Some(token);
@@ -404,7 +421,32 @@ impl Anland {
     // Input dispatch
     // -------------------------------------------------------------------
 
-    fn handle_input_event(&mut self, _niri: &mut Niri, event: InputEvent) {
+    /// Poll the daemon for queued input and return the translated smithay
+    /// events. Non-input notifications (display refresh, clipboard) are
+    /// handled internally and not forwarded.
+    fn poll_input(&mut self, timeout: i32) -> Vec<SmithayInputEvent<AnlandInput>> {
+        let mut out = Vec::new();
+        loop {
+            let Some(event) = self.ctx.poll_input_event(timeout) else {
+                break;
+            };
+            if self.handle_special_event(&event) {
+                continue;
+            }
+            match self.to_smithay_event(&event) {
+                Some(smithay_event) => out.push(smithay_event),
+                None => self.ctx.handle_unhandled_event(&event),
+            }
+        }
+        out
+    }
+
+    fn screen_size(&self) -> (f64, f64) {
+        let info = self.ctx.screen_info();
+        (info.width as f64, info.height as f64)
+    }
+
+    fn handle_special_event(&mut self, event: &InputEvent) -> bool {
         let u = unsafe {
             let u: InputEventUnion = std::mem::zeroed();
             let mut u = u;
@@ -417,30 +459,10 @@ impl Anland {
         };
 
         match event.type_ {
-            INPUT_TYPE_TOUCH => {
-                let t = unsafe { u.touch };
-                debug!(
-                    "touch: action={} x={} y={} id={}",
-                    t.action, t.x, t.y, t.pointer_id
-                );
-            }
-            INPUT_TYPE_KEY => {
-                let k = unsafe { u.key };
-                debug!("key: action={} keycode={}", k.action, k.keycode);
-            }
-            INPUT_TYPE_POINTER_MOTION => {
-                debug!("pointer motion");
-            }
-            INPUT_TYPE_POINTER_BUTTON => {
-                debug!("pointer button");
-            }
-            INPUT_TYPE_POINTER_AXIS => {
-                debug!("pointer axis");
-            }
-            INPUT_TYPE_TOUCH_FRAME => {}
             INPUT_TYPE_DISPLAY_REFRESH => {
                 let d = unsafe { u.display };
                 debug!("display refresh: {} mHz", d.refresh_mhz);
+                true
             }
             INPUT_TYPE_CLIPBOARD => {
                 let c = unsafe { u.clipboard };
@@ -449,10 +471,134 @@ impl Anland {
                     self.ctx.poll_input_event_extend_data(&mut buf, 1000);
                     debug!("clipboard: {} bytes", c.size);
                 }
+                true
             }
-            _ => {
-                self.ctx.handle_unhandled_event(&event);
+            _ => false,
+        }
+    }
+
+    /// Translate a raw Anland input event into a smithay input event niri can
+    /// process. Returns `None` for events that carry no input (unknown or
+    /// already handled as special).
+    fn to_smithay_event(&self, event: &InputEvent) -> Option<SmithayInputEvent<AnlandInput>> {
+        let u = unsafe {
+            let u: InputEventUnion = std::mem::zeroed();
+            let mut u = u;
+            std::ptr::copy_nonoverlapping(
+                &event.touch as *const InputTouch as *const u8,
+                &mut u as *mut InputEventUnion as *mut u8,
+                std::mem::size_of::<InputEventUnion>(),
+            );
+            u
+        };
+
+        let time = get_monotonic_time().as_micros() as u64;
+
+        match event.type_ {
+            INPUT_TYPE_TOUCH => {
+                let t = unsafe { u.touch };
+                debug!(
+                    "touch: action={} x={} y={} id={}",
+                    t.action, t.x, t.y, t.pointer_id
+                );
+                let slot = t.pointer_id.max(0) as u32;
+                let (screen_w, screen_h) = self.screen_size();
+                match t.action {
+                    0 => Some(SmithayInputEvent::TouchDown {
+                        event: AnlandTouchDownEvent {
+                            time,
+                            slot,
+                            x: t.x as f64,
+                            y: t.y as f64,
+                            screen_w,
+                            screen_h,
+                        },
+                    }),
+                    1 => Some(SmithayInputEvent::TouchUp {
+                        event: AnlandTouchUpEvent { time, slot },
+                    }),
+                    2 => Some(SmithayInputEvent::TouchMotion {
+                        event: AnlandTouchMotionEvent {
+                            time,
+                            slot,
+                            x: t.x as f64,
+                            y: t.y as f64,
+                            screen_w,
+                            screen_h,
+                        },
+                    }),
+                    _ => None,
+                }
             }
+            INPUT_TYPE_KEY => {
+                let k = unsafe { u.key };
+                debug!("key: action={} keycode={}", k.action, k.keycode);
+                Some(SmithayInputEvent::Keyboard {
+                    event: AnlandKeyboardEvent {
+                        time,
+                        key_code: k.keycode.max(0) as u32,
+                        state: match k.action {
+                            0 => KeyState::Pressed,
+                            _ => KeyState::Released,
+                        },
+                    },
+                })
+            }
+            INPUT_TYPE_POINTER_MOTION => {
+                let m = unsafe { u.pointer_motion };
+                debug!(
+                    "pointer motion: x={} y={} dx={} dy={}",
+                    m.x, m.y, m.dx, m.dy
+                );
+                let (screen_w, screen_h) = self.screen_size();
+                Some(SmithayInputEvent::PointerMotionAbsolute {
+                    event: AnlandPointerMotionEvent {
+                        time,
+                        x: m.x as f64,
+                        y: m.y as f64,
+                        screen_w,
+                        screen_h,
+                    },
+                })
+            }
+            INPUT_TYPE_POINTER_BUTTON => {
+                let b = unsafe { u.pointer_button };
+                debug!("pointer button: button={} pressed={}", b.button, b.pressed);
+                Some(SmithayInputEvent::PointerButton {
+                    event: AnlandPointerButtonEvent {
+                        time,
+                        button_code: b.button,
+                        state: if b.pressed != 0 {
+                            ButtonState::Pressed
+                        } else {
+                            ButtonState::Released
+                        },
+                    },
+                })
+            }
+            INPUT_TYPE_POINTER_AXIS => {
+                let a = unsafe { u.pointer_axis };
+                debug!(
+                    "pointer axis: axis={} value={} discrete={}",
+                    a.axis, a.value, a.discrete
+                );
+                Some(SmithayInputEvent::PointerAxis {
+                    event: AnlandPointerAxisEvent {
+                        time,
+                        axis: if a.axis == 0 {
+                            Axis::Vertical
+                        } else {
+                            Axis::Horizontal
+                        },
+                        value: a.value as f64,
+                        discrete: a.discrete,
+                    },
+                })
+            }
+            INPUT_TYPE_TOUCH_FRAME => Some(SmithayInputEvent::TouchFrame {
+                event: AnlandTouchFrameEvent { time },
+            }),
+            _ => None,
         }
     }
 
@@ -473,9 +619,18 @@ impl Anland {
         }
 
         let idx = self.ctx.selected_buffer_index();
-        if idx < 0 || idx as usize >= self.dmabuf_textures.len() {
+        if idx < 0 || idx as usize >= self.dmabufs.len() {
             return RenderResult::Skipped;
         }
+
+        // Only report a buffer age of 1 to the damage tracker when we're
+        // rendering into the same buffer as the previous frame. The consumer
+        // hands out buffers through its shared-memory index, so consecutive
+        // frames usually land on different dmabufs; claiming age 1 there would
+        // make the tracker repaint only the damaged region onto a buffer that
+        // still holds stale content, producing flicker.
+        let age = if idx == self.last_buffer_idx { 1 } else { 0 };
+        self.last_buffer_idx = idx;
 
         let ctx = RenderCtx {
             renderer: &mut self.renderer,
@@ -484,8 +639,7 @@ impl Anland {
         };
         let elements = niri.render_to_vec(ctx, output, true);
 
-        let texture = &self.dmabuf_textures[idx as usize];
-        let mut target = match self.renderer.bind(texture) {
+        let mut target = match self.renderer.bind(&mut self.dmabufs[idx as usize]) {
             Ok(t) => t,
             Err(e) => {
                 warn!("error binding dmabuf: {e:?}");
@@ -497,7 +651,7 @@ impl Anland {
         let res = match damage_tracker.render_output(
             &mut self.renderer,
             &mut target,
-            self.buffer_age,
+            age,
             &elements,
             [0.0, 0.0, 0.0, 1.0],
         ) {
@@ -508,11 +662,12 @@ impl Anland {
             }
         };
 
+        if let Err(err) = res.sync.wait() {
+            warn!("error waiting for frame completion: {err:?}");
+        }
+
         niri.update_primary_scanout_output(output, &res.states);
 
-        unsafe {
-            gl::Flush();
-        }
         self.ctx.set_render_fence(-1);
         self.ctx.trigger_refresh();
 
@@ -535,7 +690,6 @@ impl Anland {
         }
         output_state.frame_callback_sequence =
             output_state.frame_callback_sequence.wrapping_add(1);
-        self.buffer_age = 1;
 
         RenderResult::Submitted
     }
@@ -572,8 +726,6 @@ impl Anland {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-use smithay::backend::dmabuf::DmabufFeedback;
 
 fn protocol_format_to_fourcc(format: u32) -> Fourcc {
     match format {
