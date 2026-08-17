@@ -15,6 +15,13 @@
  * caller's reconnect loop stays responsive when no consumer is present yet. */
 #define HANDSHAKE_TIMEOUT_MS 100
 
+/* Screen geometry used when the daemon has no consumer connected yet. The real
+ * size is picked up from the daemon-pushed SCREEN_INFO the moment a consumer
+ * connects (see read_pending_screen_info). */
+#define FALLBACK_SCREEN_WIDTH  1080
+#define FALLBACK_SCREEN_HEIGHT 2400
+#define FALLBACK_REFRESH_MHZ   60000
+
 struct display_ctx {
     int      ctrl_fd;
     int      data_fd;
@@ -168,6 +175,39 @@ static int receive_dmabufs(display_ctx *ctx)
     return 0;
 }
 
+/*
+ * Drain a daemon-pushed SCREEN_INFO from ctrl_fd, if one is pending, updating the
+ * context's screen geometry. The daemon pushes SCREEN_INFO to a producer that was
+ * registered before any consumer connected, the moment a consumer shows up. Use
+ * MSG_PEEK so non-SCREEN_INFO messages (e.g. FDS_READY) are left for pickup_fds().
+ */
+static void read_pending_screen_info(display_ctx *ctx)
+{
+    struct pollfd pfd = { .fd = ctx->ctrl_fd, .events = POLLIN };
+    if (poll(&pfd, 1, 0) <= 0)
+        return;
+
+    uint8_t buf[sizeof(struct ctrl_msg) + sizeof(struct screen_info)];
+    ssize_t n = recv(ctx->ctrl_fd, buf, sizeof(buf), MSG_PEEK | MSG_DONTWAIT);
+    if (n < (ssize_t)sizeof(struct ctrl_msg))
+        return;
+
+    struct ctrl_msg resp;
+    memcpy(&resp, buf, sizeof(resp));
+    if (resp.type != CTRL_MSG_SCREEN_INFO || resp.size != sizeof(struct screen_info))
+        return;
+
+    if (recv_all(ctx->ctrl_fd, buf, sizeof(struct ctrl_msg) + sizeof(struct screen_info)) < 0)
+        return;
+
+    struct screen_info si;
+    memcpy(&si, buf + sizeof(struct ctrl_msg), sizeof(si));
+    ctx->screen_w = si.width;
+    ctx->screen_h = si.height;
+    ctx->pixel_format = si.format;
+    ctx->refresh = si.refresh;
+}
+
 int connect_to_deamon(display_ctx **out, const char *socket_path)
 {
     display_ctx *ctx = calloc(1, sizeof(*ctx));
@@ -194,25 +234,38 @@ int connect_to_deamon(display_ctx **out, const char *socket_path)
     if (send_all(ctx->ctrl_fd, &hdr, sizeof(hdr)) < 0)
         goto fail;
 
-    uint8_t buf[sizeof(struct ctrl_msg) + sizeof(struct screen_info)];
-    if (recv_all(ctx->ctrl_fd, buf, sizeof(buf)) < 0)
-        goto fail;
+    /* Wait (bounded) for the daemon's SCREEN_INFO reply. If a consumer is already
+     * up this arrives immediately; if not, the daemon holds the reply until a
+     * consumer connects. Never block indefinitely: boot with a fallback screen and
+     * pick up the real size from the reconnect loop (see try_exit_fallback). */
+    struct pollfd pfd = { .fd = ctx->ctrl_fd, .events = POLLIN };
+    if (poll(&pfd, 1, HANDSHAKE_TIMEOUT_MS) > 0) {
+        uint8_t buf[sizeof(struct ctrl_msg) + sizeof(struct screen_info)];
+        if (recv_all(ctx->ctrl_fd, buf, sizeof(buf)) < 0)
+            goto fail;
 
-    struct ctrl_msg resp;
-    memcpy(&resp, buf, sizeof(resp));
-    if (resp.type != CTRL_MSG_SCREEN_INFO || resp.size != sizeof(struct screen_info))
-        goto fail;
+        struct ctrl_msg resp;
+        memcpy(&resp, buf, sizeof(resp));
+        if (resp.type != CTRL_MSG_SCREEN_INFO || resp.size != sizeof(struct screen_info))
+            goto fail;
 
-    struct screen_info si;
-    memcpy(&si, buf + sizeof(struct ctrl_msg), sizeof(si));
-    ctx->screen_w = si.width;
-    ctx->screen_h = si.height;
-    ctx->pixel_format = si.format;
-    ctx->refresh = si.refresh;
+        struct screen_info si;
+        memcpy(&si, buf + sizeof(struct ctrl_msg), sizeof(si));
+        ctx->screen_w = si.width;
+        ctx->screen_h = si.height;
+        ctx->pixel_format = si.format;
+        ctx->refresh = si.refresh;
+    } else {
+        ctx->screen_w = FALLBACK_SCREEN_WIDTH;
+        ctx->screen_h = FALLBACK_SCREEN_HEIGHT;
+        ctx->pixel_format = 0;
+        ctx->refresh = FALLBACK_REFRESH_MHZ;
+    }
 
-    // Daemon handshake only: screen info is in hand, but the consumer fds and
-    // dmabufs are deliberately left for try_exit_fallback() so the backend brings
-    // the consumer up through the single reconnect path. Stay in fallback.
+    // Daemon handshake only: screen info is in hand (real or fallback), but the
+    // consumer fds and dmabufs are deliberately left for try_exit_fallback() so
+    // the backend brings the consumer up through the single reconnect path. Stay
+    // in fallback.
     *out = ctx;
     return 0;
 
@@ -400,11 +453,18 @@ int try_exit_fallback(display_ctx *ctx)
     if (!ctx->fallback)
         return 0;
 
+    // Refresh screen geometry if the daemon already pushed a SCREEN_INFO, then
+    // again after pickup_fds: the daemon delivers FDS_READY before SCREEN_INFO, so
+    // a reconnect tick racing the consumer's connect may see either ordering.
+    read_pending_screen_info(ctx);
+
     // Step 1: ask the daemon to hand over the consumer-side fds.
     if (pickup_fds(ctx) < 0) {
         release_consumer_resources(ctx);
         return -1;
     }
+
+    read_pending_screen_info(ctx);
 
     // Step 2: immediately pull the dmabuf set the consumer pushes right after the
     // fd handshake. Only leave fallback once both fds and dmabufs are in hand, so

@@ -338,8 +338,54 @@ impl Anland {
             self.ctx.screen_info().height,
         );
 
+        self.update_output_mode();
+
         self.register_buffer_ready_source(niri);
         self.register_input_source(niri);
+    }
+
+    /*
+     * The output may have been created with the fallback screen (no consumer was
+     * connected when the compositor booted). Once the consumer is up, refresh the
+     * output mode with its real screen size.
+     */
+    fn update_output_mode(&mut self) {
+        let (w, h) = (
+            self.ctx.screen_info().width as i32,
+            self.ctx.screen_info().height as i32,
+        );
+        let refresh = self.ctx.screen_info().refresh as i32;
+
+        let Some(output) = self.output.clone() else { return };
+
+        let changed = match output.current_mode() {
+            Some(m) => m.size.w != w || m.size.h != h || m.refresh != refresh,
+            None => true,
+        };
+        if !changed {
+            return;
+        }
+
+        info!("anland consumer screen is now {}x{}", w, h);
+
+        let mode = Mode {
+            size: Size::from((w, h)),
+            refresh,
+        };
+        output.change_current_state(Some(mode), None, None, None);
+        output.set_preferred(mode);
+
+        let mut ipc = self.ipc_outputs.lock().unwrap();
+        if let Some(ipc_output) = ipc.values_mut().find(|o| o.name == output.name()) {
+            ipc_output.modes = vec![niri_ipc::Mode {
+                width: w as u16,
+                height: h as u16,
+                refresh_rate: self.ctx.screen_info().refresh,
+                is_preferred: true,
+            }];
+            ipc_output.current_mode = Some(0);
+            ipc_output.logical = Some(logical_output(&output));
+        }
     }
 
     fn import_raw_dmabuf(
