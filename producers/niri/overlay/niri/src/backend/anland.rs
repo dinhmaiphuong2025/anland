@@ -422,7 +422,7 @@ impl Anland {
         // removing it would leave two sources polling the same fd — the first
         // drains the eventfd and the second blocks on it, stalling the loop.
         if let Some(token) = self.buf_ready_source_token.take() {
-            let _ = niri.event_loop.remove_source(token);
+            let _ = niri.event_loop.remove(token);
         }
         let fd = self.ctx.buffer_ready_fd();
         if fd < 0 {
@@ -452,7 +452,7 @@ impl Anland {
         // See register_buffer_ready_source: drop the previous connection's source
         // before installing a fresh one on the new consumer's data fd.
         if let Some(token) = self.data_source_token.take() {
-            let _ = niri.event_loop.remove_source(token);
+            let _ = niri.event_loop.remove(token);
         }
         let fd = self.ctx.data_fd();
         if fd < 0 {
