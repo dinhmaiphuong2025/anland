@@ -1,7 +1,5 @@
 use std::ffi::{c_char, c_int, c_void};
 use std::os::fd::RawFd;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
 // Raw C bindings
@@ -238,7 +236,6 @@ pub struct ScreenInfo {
 
 pub struct AnlandContext {
     ctx: *mut display_ctx,
-    fallback_flag: Arc<AtomicBool>,
 }
 
 // SAFETY: display_ctx is not Send/Sync by itself, but the C library is
@@ -254,10 +251,7 @@ impl AnlandContext {
         if ret != 0 || ctx.is_null() {
             return Err("failed to connect to anland daemon".into());
         }
-        Ok(Self {
-            ctx,
-            fallback_flag: Arc::new(AtomicBool::new(true)),
-        })
+        Ok(Self { ctx })
     }
 
     pub fn screen_info(&self) -> ScreenInfo {
@@ -277,16 +271,18 @@ impl AnlandContext {
     }
 
     pub fn is_fallback(&self) -> bool {
-        self.fallback_flag.load(Ordering::Relaxed)
+        // The C side owns the authoritative fallback state (set by enter_fallback()
+        // on consumer loss, cleared by try_exit_fallback()). Reading it directly is
+        // required: the reconnect timer gates on this and the cached flag was never
+        // updated when C entered fallback, which froze the reconnect loop forever.
+        unsafe { is_fallback(self.ctx) }
     }
 
     pub fn try_exit_fallback(&mut self) -> Result<(), ()> {
         let ret = unsafe { try_exit_fallback(self.ctx) };
         if ret == 0 {
-            self.fallback_flag.store(false, Ordering::Relaxed);
             Ok(())
         } else {
-            self.fallback_flag.store(true, Ordering::Relaxed);
             Err(())
         }
     }
