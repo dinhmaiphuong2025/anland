@@ -3,8 +3,10 @@
 #include "socket_utils.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
@@ -21,6 +23,10 @@
 #define FALLBACK_SCREEN_WIDTH  1080
 #define FALLBACK_SCREEN_HEIGHT 2400
 #define FALLBACK_REFRESH_MHZ   60000
+
+/* State-machine logging: goes to the compositor's stderr/journal so the
+ * producer's connect/reconnect handshake can be followed without adb. */
+#define ANLAND_LOG(fmt, ...) fprintf(stderr, "anland: " fmt "\n", ##__VA_ARGS__)
 
 struct display_ctx {
     int      ctrl_fd;
@@ -76,6 +82,8 @@ static void enter_fallback(display_ctx *ctx)
 
     release_consumer_resources(ctx);
 
+    ANLAND_LOG("consumer lost, entering fallback");
+
     if (ctx->fallback_cb)
         ctx->fallback_cb(ctx->fallback_userdata);
 }
@@ -103,6 +111,7 @@ static int pickup_fds(display_ctx *ctx)
     if (n <= 0 || resp.type != CTRL_MSG_FDS_READY || fd_count < 5) {
         for (int i = 0; i < fd_count; i++)
             close(fds[i]);
+        ANLAND_LOG("pickup_fds failed (n=%d, type=%u, fds=%d)", n, n > 0 ? resp.type : 0, fd_count);
         return -1;
     }
 
@@ -115,11 +124,23 @@ static int pickup_fds(display_ctx *ctx)
     ctx->shm_fd           = fds[3];
     ctx->audio_fd         = fds[4];
 
+    /* The producer must never block its event loop on the buffer-ready eventfd: a
+     * stale event source may have already drained the counter, and a blocking read
+     * would stall the compositor. The data_fd reads are all poll-guarded, so it is
+     * left blocking (recv_all has no EAGAIN handling). */
+    {
+        int flags = fcntl(ctx->buf_ready_efd, F_GETFL);
+        if (flags >= 0)
+            fcntl(ctx->buf_ready_efd, F_SETFL, flags | O_NONBLOCK);
+    }
+
     ctx->shm_ptr = mmap(NULL, sizeof(uint32_t), PROT_READ, MAP_SHARED, ctx->shm_fd, 0);
     if (ctx->shm_ptr == MAP_FAILED) {
         ctx->shm_ptr = NULL;
         return -1;
     }
+
+    ANLAND_LOG("picked up consumer fds");
     return 0;
 }
 
@@ -172,6 +193,8 @@ static int receive_dmabufs(display_ctx *ctx)
         ctx->dmabuf_infos[i] = infos[i];
     }
     ctx->buf_count = count;
+
+    ANLAND_LOG("received %d dmabufs", count);
     return 0;
 }
 
@@ -266,6 +289,8 @@ int connect_to_deamon(display_ctx **out, const char *socket_path)
     // consumer fds and dmabufs are deliberately left for try_exit_fallback() so
     // the backend brings the consumer up through the single reconnect path. Stay
     // in fallback.
+    ANLAND_LOG("daemon handshake done, screen %ux%u fmt=%u refresh=%u",
+               ctx->screen_w, ctx->screen_h, ctx->pixel_format, ctx->refresh);
     *out = ctx;
     return 0;
 
@@ -475,6 +500,8 @@ int try_exit_fallback(display_ctx *ctx)
     }
 
     ctx->fallback = false;
+
+    ANLAND_LOG("left fallback, consumer ready");
     return 0;
 }
 

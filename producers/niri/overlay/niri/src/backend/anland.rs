@@ -315,6 +315,7 @@ impl Anland {
         }
 
         self.dmabufs.clear();
+        self.last_buffer_idx = -1;
 
         for i in 0..count {
             let raw_fd = self.ctx.dmabuf_fd_at(i as i32);
@@ -416,6 +417,13 @@ impl Anland {
     // -------------------------------------------------------------------
 
     fn register_buffer_ready_source(&mut self, niri: &mut Niri) {
+        // A previous consumer connection may have left a source registered on an
+        // fd that is now closed (and possibly reused). Re-registering without
+        // removing it would leave two sources polling the same fd — the first
+        // drains the eventfd and the second blocks on it, stalling the loop.
+        if let Some(token) = self.buf_ready_source_token.take() {
+            let _ = niri.event_loop.remove_source(token);
+        }
         let fd = self.ctx.buffer_ready_fd();
         if fd < 0 {
             return;
@@ -441,6 +449,11 @@ impl Anland {
     }
 
     fn register_input_source(&mut self, niri: &mut Niri) {
+        // See register_buffer_ready_source: drop the previous connection's source
+        // before installing a fresh one on the new consumer's data fd.
+        if let Some(token) = self.data_source_token.take() {
+            let _ = niri.event_loop.remove_source(token);
+        }
         let fd = self.ctx.data_fd();
         if fd < 0 {
             return;
