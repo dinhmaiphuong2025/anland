@@ -166,12 +166,16 @@ static void handle_client_data(daemon_ctx *ctx, struct client *c)
             memcpy(&si, payload, sizeof(si));
             /* Always accept the consumer's screen info, even if it differs from a
              * previous connection — the Android display may have rotated or switched
-             * resolution. Overwrite and forward to any waiting producer. */
+             * resolution. Overwrite and forward to the producer so it can resize its
+             * output. The producer's ctrl_fd is only drained while it is in fallback
+             * (see read_pending_screen_info in display_producer.c), so a push here
+             * always precedes that drain; keep the waiting-producer path for the
+             * producer-connected-before-any-consumer case. */
             ctx->stored_screen = si;
             ctx->has_screen_info = true;
             fprintf(stderr, "daemon: screen info %ux%u fmt=%u\n",
                     si.width, si.height, si.format);
-            if (ctx->producer_waiting_screen && ctx->producer) {
+            if (ctx->producer) {
                 send_screen_info_msg(ctx, ctx->producer->ctrl_fd);
                 ctx->producer_waiting_screen = false;
             }
