@@ -129,14 +129,8 @@ public final class SystemIME {
             for (KeyEvent e : events) {
                 int evdev = KeyCodeMapper.getScanCode(e.getKeyCode());
                 if (evdev == -1) continue;
-                int meta = e.getMetaState();
-                boolean shift = (meta & (KeyEvent.META_SHIFT_ON
-                        | KeyEvent.META_SHIFT_LEFT_ON
-                        | KeyEvent.META_SHIFT_RIGHT_ON)) != 0;
-                if (shift) mNative.sendKey(0, 42); // LEFTSHIFT down
-                mNative.sendKey(0, evdev);
-                mNative.sendKey(1, evdev);
-                if (shift) mNative.sendKey(1, 42); // LEFTSHIFT up
+                int action = e.getAction() == KeyEvent.ACTION_DOWN ? 0 : 1;
+                mNative.sendKey(action, evdev);
             }
         } else {
             // Fallback for unmapped chars (CJK, emoji, ...): send as TEXT_INPUT.
@@ -217,10 +211,12 @@ public final class SystemIME {
      * own, so nothing accumulates between commits.
      */
     private final class ForwardingInputConnection extends BaseInputConnection {
-        // Last text forwarded via commitText, for dedup (Gboard may call
-        // setComposingText + commitText, or sendKeyEvent + commitText, for the
-        // same character — we only forward once).
-        private String lastCommitted = "";
+        // Dedup: Gboard may call commitText multiple times for the same character
+        // (e.g. commit → delete → recommit for auto-correct).  Skip text that was
+        // forwarded within the last DEDUP_WINDOW_MS.
+        private static final long DEDUP_WINDOW_MS = 150L;
+        private String lastSent = "";
+        private long lastSentTime = 0L;
 
         ForwardingInputConnection(View target) {
             super(target, false);
@@ -229,22 +225,20 @@ public final class SystemIME {
         @Override
         public boolean commitText(CharSequence text, int newCursorPosition) {
             final String s = text == null ? "" : text.toString();
-            // If a bar modifier (CTRL/ALT/...) is held, combine it with the typed
-            // character and send as a key combo instead of inserting text.
             if (maybeSendModifierCombo(s)) {
-                lastCommitted = "";
+                lastSent = "";
                 return true;
             }
-            // Dedup: skip if we already forwarded this exact text.
-            if (s.equals(lastCommitted)) return true;
+            long now = System.currentTimeMillis();
+            if (s.equals(lastSent) && (now - lastSentTime) < DEDUP_WINDOW_MS) {
+                return true;
+            }
             sendText(s);
-            lastCommitted = s;
+            lastSent = s;
+            lastSentTime = now;
             return true;
         }
 
-        // Do not forward composing text — we only send on commit to avoid
-        // double-typing (Gboard calls setComposingText then commitText for each
-        // character). The composing preview is a local IME concern only.
         @Override
         public boolean setComposingText(CharSequence text, int newCursorPosition) {
             return true;
@@ -266,7 +260,6 @@ public final class SystemIME {
             for (int i = 0; i < afterLength; i++) {
                 tapKey(EVDEV_DELETE);
             }
-            lastCommitted = "";
             return true;
         }
 
@@ -281,7 +274,6 @@ public final class SystemIME {
             for (int i = 0; i < afterLength; i++) {
                 tapKey(EVDEV_DELETE);
             }
-            lastCommitted = "";
             return true;
         }
 
@@ -294,11 +286,9 @@ public final class SystemIME {
         public boolean sendKeyEvent(KeyEvent event) {
             final int evdev = toEvdevKey(event.getKeyCode());
             if (evdev == 0) {
-                // Character key (e.g. KEYCODE_A..Z): commitText will forward it.
-                // Swallow here to avoid double-send.
+                // Character key: commitText forwards it.  Swallow here.
                 return true;
             }
-            // Editing key (Enter, Backspace, Tab, arrows, ...): forward as key tap.
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 mNative.sendKey(0, evdev);
             } else if (event.getAction() == KeyEvent.ACTION_UP) {
@@ -307,7 +297,6 @@ public final class SystemIME {
                     mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
                 } else {
                     mMirror.setLength(0);
-                    lastCommitted = "";
                 }
             }
             return true;
