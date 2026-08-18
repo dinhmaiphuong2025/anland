@@ -219,6 +219,10 @@ public final class SystemIME {
     private final class ForwardingInputConnection extends BaseInputConnection {
         // What we have already forwarded for the in-progress composition.
         private final StringBuilder composing = new StringBuilder();
+        // Last text we forwarded via commitText, for dedup (Gboard sometimes
+        // commitText's exactly what it just setComposingText'd, which would
+        // otherwise double-type every character).
+        private String lastCommitted = "";
 
         ForwardingInputConnection(View target) {
             super(target, false);
@@ -231,16 +235,24 @@ public final class SystemIME {
             // character and send as a key combo instead of inserting text.
             if (maybeSendModifierCombo(s)) {
                 composing.setLength(0);
+                lastCommitted = "";
                 return true;
             }
             // Fast path: the commit just finalizes the current composition
             // unchanged — already forwarded, so only drop the tracker.
             if (composing.length() > 0 && composing.toString().equals(s)) {
                 composing.setLength(0);
+                lastCommitted = s;
+                return true;
+            }
+            // Dedup: Gboard sometimes commitText's what it just composed.
+            if (s.equals(lastCommitted)) {
+                composing.setLength(0);
                 return true;
             }
             eraseComposing();
             sendText(s);
+            lastCommitted = s;
             return true;
         }
 
@@ -272,6 +284,7 @@ public final class SystemIME {
             for (int i = 0; i < afterLength; i++) {
                 tapKey(EVDEV_DELETE);
             }
+            lastCommitted = "";
             return true;
         }
 
@@ -286,6 +299,7 @@ public final class SystemIME {
             for (int i = 0; i < afterLength; i++) {
                 tapKey(EVDEV_DELETE);
             }
+            lastCommitted = "";
             return true;
         }
 
@@ -330,6 +344,7 @@ public final class SystemIME {
                 } else {
                     mMirror.setLength(0);
                     composing.setLength(0);
+                    lastCommitted = "";
                 }
             }
             return true;
