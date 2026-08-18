@@ -217,11 +217,9 @@ public final class SystemIME {
      * own, so nothing accumulates between commits.
      */
     private final class ForwardingInputConnection extends BaseInputConnection {
-        // What we have already forwarded for the in-progress composition.
-        private final StringBuilder composing = new StringBuilder();
-        // Last text we forwarded via commitText, for dedup (Gboard sometimes
-        // commitText's exactly what it just setComposingText'd, which would
-        // otherwise double-type every character).
+        // Last text forwarded via commitText, for dedup (Gboard may call
+        // setComposingText + commitText, or sendKeyEvent + commitText, for the
+        // same character — we only forward once).
         private String lastCommitted = "";
 
         ForwardingInputConnection(View target) {
@@ -234,42 +232,26 @@ public final class SystemIME {
             // If a bar modifier (CTRL/ALT/...) is held, combine it with the typed
             // character and send as a key combo instead of inserting text.
             if (maybeSendModifierCombo(s)) {
-                composing.setLength(0);
                 lastCommitted = "";
                 return true;
             }
-            // Fast path: the commit just finalizes the current composition
-            // unchanged — already forwarded, so only drop the tracker.
-            if (composing.length() > 0 && composing.toString().equals(s)) {
-                composing.setLength(0);
-                lastCommitted = s;
-                return true;
-            }
-            // Dedup: Gboard sometimes commitText's what it just composed.
-            if (s.equals(lastCommitted)) {
-                composing.setLength(0);
-                return true;
-            }
-            eraseComposing();
+            // Dedup: skip if we already forwarded this exact text.
+            if (s.equals(lastCommitted)) return true;
             sendText(s);
             lastCommitted = s;
             return true;
         }
 
+        // Do not forward composing text — we only send on commit to avoid
+        // double-typing (Gboard calls setComposingText then commitText for each
+        // character). The composing preview is a local IME concern only.
         @Override
         public boolean setComposingText(CharSequence text, int newCursorPosition) {
-            final String s = text == null ? "" : text.toString();
-            if (maybeSendModifierCombo(s)) {
-                composing.setLength(0);
-                return true;
-            }
-            replaceComposing(s);
             return true;
         }
 
         @Override
         public boolean finishComposingText() {
-            composing.setLength(0); // accepted as-is; keep what we forwarded
             return true;
         }
 
@@ -303,24 +285,8 @@ public final class SystemIME {
             return true;
         }
 
-        // The IME reclaims text it previously committed as a fresh composing region
-        // (e.g. backspacing into a finished word: it deletes a char, then re-composes
-        // the remainder before replacing it). We keep no Editable, so the base class
-        // can't honour this — and because our composing tracker is empty at this
-        // point, the follow-up setComposingText would diff against "" and *append*
-        // the replacement instead of overwriting, turning "shado"+"shad" into
-        // "shadoshad". Re-seed the tracker with the region's text so replaceComposing()
-        // backspaces the difference. The cursor always sits at the tail of what we've
-        // sent, so the region is the last (end - start) chars of the mirror — reading
-        // it as a length keeps us correct whether the IME's indices are document- or
-        // word-relative.
         @Override
         public boolean setComposingRegion(int start, int end) {
-            final int len = end - start;
-            if (len >= 0 && len <= mMirror.length()) {
-                composing.setLength(0);
-                composing.append(mMirror, mMirror.length() - len, mMirror.length());
-            }
             return true;
         }
 
@@ -328,64 +294,25 @@ public final class SystemIME {
         public boolean sendKeyEvent(KeyEvent event) {
             final int evdev = toEvdevKey(event.getKeyCode());
             if (evdev == 0) {
-                return super.sendKeyEvent(event);
+                // Character key (e.g. KEYCODE_A..Z): commitText will forward it.
+                // Swallow here to avoid double-send.
+                return true;
             }
+            // Editing key (Enter, Backspace, Tab, arrows, ...): forward as key tap.
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 mNative.sendKey(0, evdev);
             } else if (event.getAction() == KeyEvent.ACTION_UP) {
                 mNative.sendKey(1, evdev);
-                // Keep the mirror consistent with a raw key edit. A backspace pops the
-                // tail; anything else (Enter, Tab, arrows, ...) moves the cursor or
-                // inserts content our tail-only model can't track, so drop the mirror
-                // and composing tracker rather than risk seeding a bad region later.
-                if (evdev == EVDEV_BACKSPACE) {
-                    if (mMirror.length() > 0)
-                        mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
+                if (evdev == EVDEV_BACKSPACE && mMirror.length() > 0) {
+                    mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
                 } else {
                     mMirror.setLength(0);
-                    composing.setLength(0);
                     lastCommitted = "";
                 }
             }
             return true;
         }
 
-        // Forward only the delta between the previously-sent composition and the
-        // new one: backspace the changed tail, then send the new tail.
-        private void replaceComposing(String next) {
-            final String prev = composing.toString();
-            int prefix = 0;
-            final int min = Math.min(prev.length(), next.length());
-            while (prefix < min && prev.charAt(prefix) == next.charAt(prefix)) {
-                prefix++;
-            }
-            if (prefix > 0 && Character.isHighSurrogate(prev.charAt(prefix - 1))) {
-                prefix--; // never split a surrogate pair
-            }
-            final int erase = prev.codePointCount(prefix, prev.length());
-            for (int i = 0; i < erase; i++) {
-                if (mMirror.length() > 0) {
-                    mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
-                }
-                tapKey(EVDEV_BACKSPACE);
-            }
-            if (prefix < next.length()) {
-                sendText(next.substring(prefix));
-            }
-            composing.setLength(0);
-            composing.append(next);
-        }
-
-        private void eraseComposing() {
-            final int erase = composing.codePointCount(0, composing.length());
-            for (int i = 0; i < erase; i++) {
-                if (mMirror.length() > 0) {
-                    mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
-                }
-                tapKey(EVDEV_BACKSPACE);
-            }
-            composing.setLength(0);
-        }
     }
 
     boolean isImeVisible() {
