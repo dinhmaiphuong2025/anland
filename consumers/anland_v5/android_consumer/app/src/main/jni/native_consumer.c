@@ -619,7 +619,7 @@ static void *render_thread_func(void *arg)
         ANativeWindowBuffer *anb = NULL;
         int acqfence = -1;
         if (api.dequeueBuffer(s->window, &anb, &acqfence) != 0 || !anb) {
-            usleep(16000);
+            usleep(1000);
             continue;
         }
         /* Emulate ANativeWindow_lock: CPU-wait the acquire fence so the buffer is
@@ -641,7 +641,7 @@ static void *render_thread_func(void *arg)
 
         if (idx < 0) {
             api.queueBuffer(s->window, anb, -1);
-            usleep(16000);
+            usleep(1000);
             continue;
         }
 
