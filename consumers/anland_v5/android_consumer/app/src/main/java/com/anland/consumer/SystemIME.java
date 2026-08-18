@@ -122,7 +122,26 @@ public final class SystemIME {
         if (mMirror.length() > MIRROR_CAP) {
             mMirror.delete(0, mMirror.length() - MIRROR_CAP);
         }
-        mNative.sendTextInput(text.getBytes(StandardCharsets.UTF_8));
+        // Convert text to key events via KeyCharacterMap so the remote receives
+        // proper keycodes with correct modifier state (e.g. Shift for uppercase).
+        KeyEvent[] events = mVirtualKcm.getEvents(text.toCharArray());
+        if (events != null) {
+            for (KeyEvent e : events) {
+                int evdev = KeyCodeMapper.getScanCode(e.getKeyCode());
+                if (evdev == -1) continue;
+                int meta = e.getMetaState();
+                boolean shift = (meta & (KeyEvent.META_SHIFT_ON
+                        | KeyEvent.META_SHIFT_LEFT_ON
+                        | KeyEvent.META_SHIFT_RIGHT_ON)) != 0;
+                if (shift) mNative.sendKey(0, 42); // LEFTSHIFT down
+                mNative.sendKey(0, evdev);
+                mNative.sendKey(1, evdev);
+                if (shift) mNative.sendKey(1, 42); // LEFTSHIFT up
+            }
+        } else {
+            // Fallback for unmapped chars (CJK, emoji, ...): send as TEXT_INPUT.
+            mNative.sendTextInput(text.getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     private void tapKey(int evdevCode) {
