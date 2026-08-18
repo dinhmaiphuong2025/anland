@@ -1498,6 +1498,10 @@ public class MainActivity extends Activity
         if (surfaceReady) {
             mNative.stop();
             applyConnectionConfig();
+            int sw = surfaceView.getWidth();
+            int sh = surfaceView.getHeight();
+            if (sw > 0 && sh > 0)
+                mNative.setScreenSize(sw, sh);
             startNative(surfaceView.getHolder().getSurface());
             pushRefreshRate();
             applyMicState();
@@ -1654,6 +1658,12 @@ public class MainActivity extends Activity
         Log.i(TAG, "surfaceChanged: " + width + "x" + height);
         viewWidth = width;
         viewHeight = height;
+        // The surface's buffer geometry stays pinned to the previous
+        // setBuffersGeometry() size across a rotation, so ANativeWindow_getWidth
+        // would report the stale portrait size on re-grab. Drive the screen size
+        // from the actual surface dimensions instead.
+        if (mNative != null && width > 0 && height > 0)
+            mNative.setScreenSize(width, height);
         updateDisplayRotation();
         ensurePointerPosition();
         surfaceReady = true;

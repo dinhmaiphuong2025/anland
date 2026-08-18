@@ -83,6 +83,12 @@ struct consumer_state {
     char cfg_bridge_path[512];
     int  cfg_custom_width;
     int  cfg_custom_height;
+    /* Actual surface size as reported by the Java layer (SurfaceHolder
+     * surfaceChanged). This is authoritative over ANativeWindow_getWidth/Height,
+     * which after a rotation still report the buffer geometry pinned by the
+     * previous setBuffersGeometry() call. Guarded by cfg_lock. */
+    int  cfg_screen_width;
+    int  cfg_screen_height;
 
     /* Pointer-motion delta tracking (per-instance). */
     bool  motion_has_last;
@@ -437,11 +443,16 @@ static int do_connect(struct consumer_state *s)
     pthread_mutex_lock(&s->cfg_lock);
     int cw = s->cfg_custom_width;
     int ch = s->cfg_custom_height;
+    int sw = s->cfg_screen_width;
+    int sh = s->cfg_screen_height;
     pthread_mutex_unlock(&s->cfg_lock);
 
     if (cw > 0 && ch > 0) {
         s->screen_w = cw;
         s->screen_h = ch;
+    } else if (sw > 0 && sh > 0) {
+        s->screen_w = sw;
+        s->screen_h = sh;
     } else {
        s->screen_w = ANativeWindow_getWidth(win);
        s->screen_h = ANativeWindow_getHeight(win);
@@ -788,6 +799,20 @@ Java_com_anland_consumer_Native_nativeSetCustomResolution(
     s->cfg_custom_height = height;
     pthread_mutex_unlock(&s->cfg_lock);
     LOGI("custom resolution: %dx%d", width, height);
+}
+
+JNIEXPORT void JNICALL
+Java_com_anland_consumer_Native_nativeSetScreenSize(
+    JNIEnv* env, jclass clazz, jlong handle, jint width, jint height)
+{
+    struct consumer_state *s = STATE(handle);
+    if (!s)
+        return;
+    pthread_mutex_lock(&s->cfg_lock);
+    s->cfg_screen_width = width;
+    s->cfg_screen_height = height;
+    pthread_mutex_unlock(&s->cfg_lock);
+    LOGI("screen size set from Java: %dx%d", width, height);
 }
 
 JNIEXPORT void JNICALL
