@@ -13,6 +13,6 @@ cmake -S "$SCRIPT_DIR" -B "$BUILD_DIR" \
     -DANDROID_PLATFORM=android-30 \
     -DCMAKE_BUILD_TYPE=Release
 
-cmake --build "$BUILD_DIR" --target display_daemon -j$(nproc)
+cmake --build "$BUILD_DIR" --target display_daemon hwinfo_daemon -j$(nproc)
 
-echo "Built: $BUILD_DIR/display_daemon"
+echo "Built: $BUILD_DIR/display_daemon $BUILD_DIR/hwinfo_daemon"

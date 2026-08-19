@@ -8,10 +8,12 @@ OUTPUT="$SCRIPT_DIR/anland-daemon.zip"
 bash "$SCRIPT_DIR/build_daemon_android.sh"
 
 cp "$SCRIPT_DIR/build_daemon_android/display_daemon" "$MODULE_DIR/"
+cp "$SCRIPT_DIR/build_daemon_android/hwinfo_daemon" "$MODULE_DIR/"
 chmod 755 "$MODULE_DIR/display_daemon"
+chmod 755 "$MODULE_DIR/hwinfo_daemon"
 
 rm -f "$OUTPUT"
 cd "$MODULE_DIR"
-zip -r "$OUTPUT" module.prop customize.sh service.sh sepolicy.rule display_daemon
+zip -r "$OUTPUT" module.prop customize.sh service.sh sepolicy.rule display_daemon hwinfo_daemon
 
 echo "Magisk module: $OUTPUT"

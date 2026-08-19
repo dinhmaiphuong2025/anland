@@ -13,6 +13,12 @@ if(ANDROID)
     add_executable(display_daemon daemon/daemon.c)
     target_link_libraries(display_daemon display_daemon_lib socket_utils)
 
+    add_library(hwinfo_daemon_lib STATIC libhwinfo/hwinfo_daemon.c)
+    target_link_libraries(hwinfo_daemon_lib socket_utils)
+
+    add_executable(hwinfo_daemon daemon/hwinfo_main.c)
+    target_link_libraries(hwinfo_daemon hwinfo_daemon_lib socket_utils)
+
     add_library(display_consumer SHARED libdisplay_consumer/display_consumer.c)
     target_link_libraries(display_consumer socket_utils)
 else()
