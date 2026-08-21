@@ -357,6 +357,9 @@ public class MainActivity extends Activity
         // connects, so a window launched while the device is already rotated
         // reports its orientation instead of waiting for the next display event.
         updateDisplayRotation();
+        // Seed the real panel rate too: screen_info carries refresh=0, and
+        // onDisplayChanged may not fire until something switches modes.
+        pushRefreshRate();
         mNative.start(surface, clipboard, this);
     }
 
