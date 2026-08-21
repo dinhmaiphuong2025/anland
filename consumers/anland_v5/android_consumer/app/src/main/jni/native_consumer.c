@@ -65,6 +65,11 @@ struct consumer_state {
     // (re)connect to seed the producer; updated live by nativeSetRefreshRate.
     volatile uint32_t refresh_mhz;
 
+    // Latest Android display rotation (degrees CCW: 0/90/180/270) reported from
+    // Java. Updated live by nativeSendDisplayRotation and seeded on reconnect
+    // like the refresh rate. UINT32_MAX = not yet reported.
+    volatile uint32_t display_rotation_deg;
+
     // Event (output) thread
     pthread_t event_thread;
     volatile bool event_running;
@@ -207,6 +212,20 @@ static void send_refresh_rate(struct consumer_state *s)
     struct InputEvent ev = {
         .type = INPUT_TYPE_DISPLAY_REFRESH,
         .display = { .refresh_mhz = s->refresh_mhz },
+    };
+    push_input_event(s->ctx, &ev);
+}
+
+/* Report the current Android display rotation to the producer over the data
+ * channel, reusing the InputEvent framing (see INPUT_TYPE_DISPLAY_ROTATION).
+ * No-op when disconnected or not yet reported. */
+static void send_display_rotation(struct consumer_state *s)
+{
+    if (!s->ctx || s->display_rotation_deg > 270)
+        return;
+    struct InputEvent ev = {
+        .type = INPUT_TYPE_DISPLAY_ROTATION,
+        .display_rotation = { .angle_deg = s->display_rotation_deg },
     };
     push_input_event(s->ctx, &ev);
 }
@@ -579,6 +598,7 @@ static void on_exit_fallback(void *userdata)
     LOGI("exit fallback triggered");
 
     send_refresh_rate(s);
+    send_display_rotation(s);
 
     JNIEnv *env = NULL;
     if ((*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL) != 0) {
@@ -697,6 +717,7 @@ Java_com_anland_consumer_Native_nativeCreate(JNIEnv *env, jclass clazz)
     strncpy(s->cfg_socket_path, "/data/local/tmp/display_daemon.sock",
             sizeof(s->cfg_socket_path) - 1);
     s->audio = audio_create();
+    s->display_rotation_deg = UINT32_MAX;
     LOGI("instance %p created", (void *)s);
     return (jlong)(uintptr_t)s;
 }
@@ -955,6 +976,19 @@ Java_com_anland_consumer_Native_nativeSetRefreshRate(
     s->refresh_mhz = (uint32_t)(hz * 1000.0f + 0.5f);
     // Apply live if already connected; otherwise do_connect() seeds it.
     send_refresh_rate(s);
+}
+
+JNIEXPORT void JNICALL
+Java_com_anland_consumer_Native_nativeSendDisplayRotation(
+    JNIEnv *env, jclass clazz, jlong handle, jint angle_deg)
+{
+    (void)env; (void)clazz;
+    struct consumer_state *s = STATE(handle);
+    if (!s || angle_deg < 0 || angle_deg > 270 || angle_deg % 90 != 0)
+        return;
+    s->display_rotation_deg = (uint32_t)angle_deg;
+    // Apply live if already connected; otherwise the reconnect seed sends it.
+    send_display_rotation(s);
 }
 
 JNIEXPORT void JNICALL

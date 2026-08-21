@@ -64,6 +64,11 @@ struct buf_info {
 #define INPUT_TYPE_ACTION 10
 #define INPUT_TYPE_RESOURCE 11
 #define INPUT_TYPE_RESOURCE_INVALID 12
+/* Consumer -> producer: the current Android display rotation (Display.getRotation()
+ * scaled to degrees CCW: 0/90/180/270). The compositor mirrors it onto its output
+ * transform so the desktop stays upright when the device rotates. Reuses the
+ * InputEvent framing like INPUT_TYPE_DISPLAY_REFRESH. */
+#define INPUT_TYPE_DISPLAY_ROTATION 13
 
 #define SERVICE_TYPE_CAMERA 1
 
@@ -122,6 +127,9 @@ struct InputEvent {
         struct {
             uint32_t refresh_mhz; // current display refresh rate, milli-Hz
         } display;
+        struct {
+            uint32_t angle_deg; // current display rotation, degrees CCW (0/90/180/270)
+        } display_rotation;
         struct {
             uint32_t size; //这个packet只是通知包 作为header真正数据会集中发送,这里通知随后数据的大小
         } clipboard;

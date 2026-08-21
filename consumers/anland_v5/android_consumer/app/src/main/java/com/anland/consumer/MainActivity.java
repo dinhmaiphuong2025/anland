@@ -239,11 +239,19 @@ public class MainActivity extends Activity
             }
         };
 
-    /** Keep the cached rotation current; see {@link #displayRotation}. */
+    /** Keep the cached rotation current; see {@link #displayRotation}. On every
+     *  change, report the new angle to the producer so the compositor can mirror
+     *  the device orientation onto its output transform (auto-rotate). */
     private void updateDisplayRotation() {
         Display d = getDisplay();
-        if (d != null)
-            displayRotation = d.getRotation();
+        if (d != null) {
+            int rotation = d.getRotation();
+            if (rotation != displayRotation) {
+                displayRotation = rotation;
+                if (mNative != null)
+                    mNative.sendDisplayRotation(rotation * 90);
+            }
+        }
     }
 
     // Called from native on_fallback (display lib dropped the connection). Runs on a
@@ -345,6 +353,10 @@ public class MainActivity extends Activity
             finish();
             return;
         }
+        // Sync the current rotation into the native pipeline before the producer
+        // connects, so a window launched while the device is already rotated
+        // reports its orientation instead of waiting for the next display event.
+        updateDisplayRotation();
         mNative.start(surface, clipboard, this);
     }
 
