@@ -247,6 +247,7 @@ public class MainActivity extends Activity
         if (d != null) {
             int rotation = d.getRotation();
             if (rotation != displayRotation) {
+                dbg("rotation " + displayRotation + " -> " + rotation);
                 displayRotation = rotation;
                 if (mNative != null)
                     mNative.sendDisplayRotation(rotation * 90);
@@ -1515,8 +1516,12 @@ public class MainActivity extends Activity
             applyConnectionConfig();
             int sw = surfaceView.getWidth();
             int sh = surfaceView.getHeight();
-            if (sw > 0 && sh > 0)
+            if (sw > 0 && sh > 0) {
                 mNative.setScreenSize(sw, sh);
+                viewWidth = sw;
+                viewHeight = sh;
+            }
+            dbg("resume start " + sw + "x" + sh);
             startNative(surfaceView.getHolder().getSurface());
             pushRefreshRate();
             applyMicState();
@@ -1684,6 +1689,7 @@ public class MainActivity extends Activity
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
         Log.i(TAG, "surfaceChanged: " + width + "x" + height);
+        dbg("surfaceChanged " + width + "x" + height);
         viewWidth = width;
         viewHeight = height;
         // The surface's buffer geometry stays pinned to the previous
@@ -1707,13 +1713,64 @@ public class MainActivity extends Activity
 
         // ===== 更新屏幕尺寸并重置平滑状态 =====
         updateTouchpadBounds(null);
-        if (mRoot != null)
+        if (mRoot != null) {
             mRoot.post(this::syncPointerCapture);
+            // Rotation race guard: during an orientation change the first
+            // surfaceChanged can still carry the pre-rotation dimensions (the
+            // WM resize transaction lands later). Re-check after the layout
+            // settles and restart with the real size if it moved on.
+            mRoot.postDelayed(this::syncScreenSizeToSurface, 500);
+        }
+    }
+
+    /** Restart the pipeline if the live surface no longer matches the last
+     *  dimensions we sent to the producer. Self-heals missed or stale
+     *  surfaceChanged callbacks around rotation and IME resizes. */
+    private void syncScreenSizeToSurface() {
+        if (!surfaceReady || mNative == null) return;
+        int w = surfaceView.getWidth();
+        int h = surfaceView.getHeight();
+        if (w <= 0 || h <= 0 || (w == viewWidth && h == viewHeight)) return;
+        dbg("size sync " + viewWidth + "x" + viewHeight + " -> " + w + "x" + h);
+        Log.i(TAG, "size sync: " + viewWidth + "x" + viewHeight + " -> " + w + "x" + h);
+        viewWidth = w;
+        viewHeight = h;
+        mNative.setScreenSize(w, h);
+        updateDisplayRotation();
+        mNative.stop();
+        applyConnectionConfig();
+        startNative(surfaceView.getHolder().getSurface());
+        pushRefreshRate();
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        dbg("configChanged orient=" + newConfig.orientation);
+        if (mRoot != null)
+            mRoot.postDelayed(this::syncScreenSizeToSurface, 400);
+    }
+
+    /** Append a line to the app-private debug log. MIUI suppresses logcat for
+     *  background apps, so lifecycle/dimension tracing goes to a file instead:
+     *  /sdcard/Android/data/com.anland.consumer/files/anland_debug.log */
+    private void dbg(String msg) {
+        try {
+            java.io.File dir = getExternalFilesDir(null);
+            if (dir == null) return;
+            java.io.Writer w = new java.io.FileWriter(
+                    new java.io.File(dir, "anland_debug.log"), true);
+            w.write(new java.text.SimpleDateFormat("MM-dd HH:mm:ss.SSS",
+                    java.util.Locale.US).format(new java.util.Date()) + " " + msg + "\n");
+            w.close();
+        } catch (Exception ignored) {
+        }
     }
 
     @Override
     public void surfaceDestroyed(SurfaceHolder holder) {
         surfaceReady = false;
+        dbg("surfaceDestroyed");
         if (immersive != null) immersive.stop();
         releasePointerCapture(false);
         mNative.stop();
