@@ -1550,12 +1550,25 @@ public class MainActivity extends Activity
         if (immersive != null) immersive.stop();
         clearPointerCaptureBackTracking();
         releasePointerCapture(false);
+        // NOTE: the display pipeline is deliberately NOT torn down here. Losing
+        // focus no longer means losing the window: on some ROMs merely opening
+        // the IME (Gboard/Extrakey) steals focus and pauses us, and stopping
+        // mNative here froze the desktop for as long as the keyboard was up.
+        // Real backgrounding is handled in onStop().
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        if (mForceSettings) return;
+        // The window is truly gone from the screen: tear the session down.
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm != null) nm.cancel(NOTIFICATION_ID);
         DisplayManager dm = getSystemService(DisplayManager.class);
         if (dm != null)
             dm.unregisterDisplayListener(displayListener);
-        mNative.stop();
+        if (mNative != null)
+            mNative.stop();
         abandonMediaAudioFocus();
     }
 

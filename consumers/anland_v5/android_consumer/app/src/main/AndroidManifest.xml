@@ -40,6 +40,7 @@
             android:enableOnBackInvokedCallback="false"
             android:screenOrientation="fullUser"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustNothing"
             android:launchMode="singleTask"
             android:resizeableActivity="true">
             <intent-filter>
@@ -60,6 +61,7 @@
             android:enableOnBackInvokedCallback="false"
             android:screenOrientation="fullUser"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustNothing"
             android:launchMode="standard"
             android:documentLaunchMode="always"
             android:resizeableActivity="true"
