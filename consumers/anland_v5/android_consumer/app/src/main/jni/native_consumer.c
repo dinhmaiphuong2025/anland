@@ -4,6 +4,9 @@
 #include <android/native_window_jni.h>
 #include <errno.h>
 #include <poll.h>
+#include <stdio.h>
+#include <time.h>
+#include <stdarg.h>
 #include <jni.h>
 #include <pthread.h>
 #include <stdbool.h>
