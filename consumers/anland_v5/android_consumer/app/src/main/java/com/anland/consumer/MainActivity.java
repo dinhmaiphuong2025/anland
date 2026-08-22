@@ -251,9 +251,35 @@ public class MainActivity extends Activity
                 displayRotation = rotation;
                 if (mNative != null)
                     mNative.sendDisplayRotation(rotation * 90);
+                // The display daemon can deliver the previous session's
+                // SCREEN_INFO/buffer metadata to the producer when the pipeline
+                // reconnects mid-rotation, leaving the output sized for the old
+                // orientation. Re-run a full connect shortly after things settle
+                // so the fresh geometry is the last thing the producer sees.
+                if (mRoot != null) {
+                    mRoot.removeCallbacks(mPostRotationResync);
+                    mRoot.postDelayed(mPostRotationResync, 600);
+                }
             }
         }
     }
+
+    private final Runnable mPostRotationResync = new Runnable() {
+        @Override public void run() {
+            if (!surfaceReady || mNative == null) return;
+            int w = surfaceView.getWidth();
+            int h = surfaceView.getHeight();
+            if (w <= 0 || h <= 0) return;
+            dbg("post-rotation resync " + w + "x" + h);
+            viewWidth = w;
+            viewHeight = h;
+            mNative.setScreenSize(w, h);
+            mNative.stop();
+            applyConnectionConfig();
+            startNative(surfaceView.getHolder().getSurface());
+            pushRefreshRate();
+        }
+    };
 
     // Called from native on_fallback (display lib dropped the connection). Runs on a
     // native worker thread, so hop to the UI thread before touching the toast/finish.
