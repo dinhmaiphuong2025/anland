@@ -551,7 +551,7 @@ public class MainActivity extends Activity
         cursorView.getHolder().setFormat(android.graphics.PixelFormat.RGBA_8888);
         // Above the other SurfaceViews (the desktop feed) but below this
         // window's regular views (extra-keys bar etc.), so chrome stays on top.
-        cursorView.setZOrderMediaLayer(true);
+        cursorView.setZOrderMediaOverlay(true);
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(1, 1);
         root.addView(cursorView, clp);
         cursorView.getHolder().addCallback(new SurfaceHolder.Callback() {
