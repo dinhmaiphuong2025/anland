@@ -900,6 +900,8 @@ public class MainActivity extends Activity
      *  (x - hx, y - hy). Called from the native event thread; translation is a
      *  RenderThread update and does not relayout or invalidate the surface. */
     public void nativeOnCursorPos(float x, float y, int hx, int hy) {
+        cursorX = x;
+        cursorY = y;
         runOnUiThread(() -> {
             if (cursorView == null) return;
             cursorView.setTranslationX(x - hx);
@@ -907,22 +909,30 @@ public class MainActivity extends Activity
         });
     }
 
-    /** Cursor-sprite bitmap redefinition: resize the overlay to the sprite
-     *  dimensions. The pixels themselves were already drawn by native code;
-     *  resizing recreates the surface, whose callback re-attaches it so the
-     *  cached image is re-blitted onto the fresh buffers. */
+    /** Cursor-sprite bitmap redefinition: grow the overlay to fit the sprite
+     *  (grow-only — shrinking would recreate the surface on every icon change
+     *  and stall the native event thread). The pixels themselves were already
+     *  drawn by native code; resizing recreates the surface, whose callback
+     *  re-attaches it so the cached image is re-blitted onto the fresh
+     *  buffers, and the last known position is re-applied. */
     public void nativeOnCursorBitmap(int w, int h, int hx, int hy, byte[] pixels) {
         runOnUiThread(() -> {
             if (cursorView == null || w <= 0 || h <= 0) return;
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) cursorView.getLayoutParams();
-            if (lp.width != w || lp.height != h) {
+            boolean resized = lp.width < w || lp.height < h;
+            if (resized) {
                 lp.width = w;
                 lp.height = h;
                 cursorView.setLayoutParams(lp);
             }
             cursorView.setVisibility(View.VISIBLE);
+            cursorView.setTranslationX(cursorX - hx);
+            cursorView.setTranslationY(cursorY - hy);
         });
     }
+
+    // Last cursor hotspot position received via CURSOR_POS (physical px).
+    private float cursorX, cursorY;
 
     /** Keep the window's pointer-capture state in sync with the saved setting. */
     private void syncPointerCapture() {
