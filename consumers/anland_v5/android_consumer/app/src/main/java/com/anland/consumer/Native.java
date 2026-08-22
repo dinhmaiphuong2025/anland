@@ -41,6 +41,8 @@ public final class Native {
     public void setFocused(boolean focused) { nativeSetFocused(handle, focused); }
     public void setCustomResolution(int width, int height) { nativeSetCustomResolution(handle, width, height); }
     public void setScreenSize(int width, int height) { nativeSetScreenSize(handle, width, height); }
+    /** Attach the cursor-sprite overlay surface (null detaches). */
+    public void setCursorSurface(Surface surface) { nativeSetCursorSurface(handle, surface); }
     public void sendTouch(int action, float x, float y, int pointerId) { nativeSendTouch(handle, action, x, y, pointerId); }
     public void sendTouchFrame() { nativeSendTouchFrame(handle); }
     public void sendKey(int action, int keycode) { nativeSendKey(handle, action, keycode); }
@@ -75,6 +77,7 @@ public final class Native {
     private static native void nativeStop(long handle);
     private static native void nativeSetCustomResolution(long handle, int width, int height);
     private static native void nativeSetScreenSize(long handle, int width, int height);
+    private static native void nativeSetCursorSurface(long handle, Surface surface);
     private static native void nativeSendTouch(long handle, int action, float x, float y, int pointerId);
     private static native void nativeSendTouchFrame(long handle);
     private static native void nativeSendKey(long handle, int action, int keycode);

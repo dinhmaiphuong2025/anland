@@ -45,6 +45,8 @@ public class MainActivity extends Activity
     private static final String TAG = "Anland";
 
     private SurfaceView surfaceView;
+    // Cursor-sprite overlay surface (see creation site for rationale).
+    private SurfaceView cursorView;
     private boolean surfaceReady = false;
     // System-clipboard bridge; also the target for the native clipboard callbacks.
     private Clipboard clipboard;
@@ -538,6 +540,32 @@ public class MainActivity extends Activity
         root.addView(surfaceView, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT));
+
+        // Cursor-sprite overlay ("cursor plane"): a tiny transparent surface
+        // stacked ABOVE the display surface. The compositor streams cursor
+        // position/bitmap events over the data channel and we move/draw this
+        // sprite independently of frame presents, so the pointer never ghosts
+        // or lags behind slow frames (the Android pipeline has no KMS cursor
+        // plane like desktop compositors do).
+        cursorView = new SurfaceView(this);
+        cursorView.getHolder().setFormat(android.graphics.PixelFormat.RGBA_8888);
+        // Above the other SurfaceViews (the desktop feed) but below this
+        // window's regular views (extra-keys bar etc.), so chrome stays on top.
+        cursorView.setZOrderMediaLayer(true);
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(1, 1);
+        root.addView(cursorView, clp);
+        cursorView.getHolder().addCallback(new SurfaceHolder.Callback() {
+            @Override public void surfaceCreated(SurfaceHolder holder) {
+                if (mNative != null) mNative.setCursorSurface(holder.getSurface());
+            }
+            @Override public void surfaceChanged(SurfaceHolder holder, int format, int w, int h) {
+                if (mNative != null) mNative.setCursorSurface(holder.getSurface());
+            }
+            @Override public void surfaceDestroyed(SurfaceHolder holder) {
+                if (mNative != null) mNative.setCursorSurface(null);
+            }
+        });
+
         // 1x1 so the IME target never overlaps the surface and steals touches.
         root.addView(systemIme.getInputView(), new FrameLayout.LayoutParams(1, 1));
 
@@ -865,6 +893,34 @@ public class MainActivity extends Activity
                 if (mRoot != null)
                     mRoot.post(this::syncPointerCapture);
             }
+        });
+    }
+
+    /** Cursor-sprite move: place the overlay so its hotspot lands at
+     *  (x - hx, y - hy). Called from the native event thread; translation is a
+     *  RenderThread update and does not relayout or invalidate the surface. */
+    public void nativeOnCursorPos(float x, float y, int hx, int hy) {
+        runOnUiThread(() -> {
+            if (cursorView == null) return;
+            cursorView.setTranslationX(x - hx);
+            cursorView.setTranslationY(y - hy);
+        });
+    }
+
+    /** Cursor-sprite bitmap redefinition: resize the overlay to the sprite
+     *  dimensions. The pixels themselves were already drawn by native code;
+     *  resizing recreates the surface, whose callback re-attaches it so the
+     *  cached image is re-blitted onto the fresh buffers. */
+    public void nativeOnCursorBitmap(int w, int h, int hx, int hy, byte[] pixels) {
+        runOnUiThread(() -> {
+            if (cursorView == null || w <= 0 || h <= 0) return;
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) cursorView.getLayoutParams();
+            if (lp.width != w || lp.height != h) {
+                lp.width = w;
+                lp.height = h;
+                cursorView.setLayoutParams(lp);
+            }
+            cursorView.setVisibility(View.VISIBLE);
         });
     }
 

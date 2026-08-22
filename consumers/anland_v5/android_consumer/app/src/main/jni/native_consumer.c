@@ -96,6 +96,15 @@ struct consumer_state {
     // like the refresh rate. UINT32_MAX = not yet reported.
     volatile uint32_t display_rotation_deg;
 
+    // Cursor sprite plane: the producer streams CURSOR_BITMAP events; we keep
+    // the latest RGBA image and blit it into the small overlay surface owned
+    // by MainActivity's cursorView. Positioning is done on the Java side by
+    // translating the view, so a move never touches this surface.
+    ANativeWindow *cursor_win;
+    uint8_t  *cursor_px;
+    uint32_t  cursor_len;
+    uint32_t  cursor_w, cursor_h, cursor_hx, cursor_hy;
+
     // Event (output) thread
     pthread_t event_thread;
     volatile bool event_running;
@@ -256,6 +265,61 @@ static void send_display_rotation(struct consumer_state *s)
     push_input_event(s->ctx, &ev);
 }
 
+/* Blit the cached cursor image into the cursor overlay surface. The surface
+ * geometry is forced to the bitmap size; rows are copied honouring the
+ * ANativeWindow stride. Safe to call with no surface attached (no-op). */
+static void cursor_draw(struct consumer_state *s)
+{
+    pthread_mutex_lock(&s->cfg_lock);
+    ANativeWindow *win = s->cursor_win;
+    uint32_t w = s->cursor_w, h = s->cursor_h;
+    uint8_t *px = s->cursor_px;
+    if (!win || w == 0 || h == 0 || !px) {
+        pthread_mutex_unlock(&s->cfg_lock);
+        return;
+    }
+    ANativeWindow_acquire(win);
+    pthread_mutex_unlock(&s->cfg_lock);
+
+    ANativeWindow_setBuffersGeometry(win, w, h, WINDOW_FORMAT_RGBA_8888);
+    ANativeWindow_Buffer buf;
+    if (ANativeWindow_lock(win, &buf, NULL) == 0) {
+        uint32_t copy_w = (uint32_t)buf.width < w ? (uint32_t)buf.width : w;
+        uint32_t copy_h = (uint32_t)buf.height < h ? (uint32_t)buf.height : h;
+        for (uint32_t y = 0; y < copy_h; y++) {
+            const uint8_t *src = px + y * w * 4;
+            uint8_t *dst = (uint8_t *)buf.bits + (size_t)y * buf.stride * 4;
+            memcpy(dst, src, copy_w * 4);
+        }
+        ANativeWindow_unlockAndPost(win);
+    } else {
+        LOGE("cursor_draw: lock failed");
+    }
+    ANativeWindow_release(win);
+}
+
+/* Cache a cursor bitmap delivered by a CURSOR_BITMAP output event and redraw
+ * the sprite. Called from the event thread. */
+static void cursor_store_bitmap(struct consumer_state *s, uint32_t w, uint32_t h,
+                                uint32_t hx, uint32_t hy,
+                                const uint8_t *px, uint32_t len)
+{
+    pthread_mutex_lock(&s->cfg_lock);
+    if (len > s->cursor_len) {
+        free(s->cursor_px);
+        s->cursor_px = malloc(len ? len : 1);
+    }
+    s->cursor_len = len;
+    if (len)
+        memcpy(s->cursor_px, px, len);
+    s->cursor_w = w;
+    s->cursor_h = h;
+    s->cursor_hx = hx;
+    s->cursor_hy = hy;
+    pthread_mutex_unlock(&s->cfg_lock);
+    cursor_draw(s);
+}
+
 /*
  * Event thread: listens for output events (clipboard, etc.) from the producer
  * on the data_fd. Runs while s->event_running is true.
@@ -282,12 +346,19 @@ static void *event_thread_func(void *arg)
 
     /* CONSUMER_VAR_* callbacks land on the owning MainActivity (var, value). */
     jmethodID setVarMethod = NULL;
+    jmethodID curPosMethod = NULL;
+    jmethodID curBmpMethod = NULL;
     if (s->activity_obj) {
         jclass actClass = (*env)->GetObjectClass(env, s->activity_obj);
         setVarMethod = (*env)->GetMethodID(env, actClass, "nativeSetConsumerVar", "(II)V");
-        (*env)->DeleteLocalRef(env, actClass);
         if (!setVarMethod)
             LOGE("event thread: nativeSetConsumerVar not found");
+        /* Cursor-sprite plane callbacks: position moves + bitmap redefinition. */
+        curPosMethod = (*env)->GetMethodID(env, actClass, "nativeOnCursorPos", "(FFII)V");
+        curBmpMethod = (*env)->GetMethodID(env, actClass, "nativeOnCursorBitmap", "(IIII[B)V");
+        if (!curPosMethod || !curBmpMethod)
+            LOGE("event thread: cursor callbacks not found");
+        (*env)->DeleteLocalRef(env, actClass);
     }
 
     while (s->event_running) {
@@ -327,6 +398,38 @@ static void *event_thread_func(void *arg)
             if (setVarMethod && s->activity_obj)
                 (*env)->CallVoidMethod(env, s->activity_obj, setVarMethod,
                                        (jint)ev.set_consumer_var.var, (jint)ev.set_consumer_var.value);
+        } else if (ev.type == OUTPUT_TYPE_CURSOR_POS) {
+            /* Cursor sprite move: forward to the UI thread which translates
+             * the overlay view so its hotspot lands on (x - hx, y - hy). */
+            if (curPosMethod && s->activity_obj)
+                (*env)->CallVoidMethod(env, s->activity_obj, curPosMethod,
+                                       ev.cursor_pos.x, ev.cursor_pos.y,
+                                       (jint)ev.cursor_pos.hx, (jint)ev.cursor_pos.hy);
+        } else if (ev.type == OUTPUT_TYPE_CURSOR_BITMAP) {
+            /* Payload: { uint32 w, h, hx, hy } + w*h RGBA8888 bytes. Store it
+             * and redraw into the cursor surface (also re-applied whenever the
+             * SurfaceView's surface is recreated after a resize). */
+            uint32_t hdr[4];
+            uint32_t pixels = ev.clipboard.size;
+            if (pixels > 0 && pixels <= (64 * 1024 * 1024)) {
+                uint8_t *buf = malloc(16 + pixels);
+                if (buf && poll_output_event_extend_data(s->ctx, buf, 16 + pixels, 5000) == 1) {
+                    memcpy(hdr, buf, 16);
+                    cursor_store_bitmap(s, hdr[0], hdr[1], hdr[2], hdr[3],
+                                        buf + 16, pixels);
+                    if (curBmpMethod && s->activity_obj) {
+                        jbyteArray arr = (*env)->NewByteArray(env, pixels);
+                        if (arr) {
+                            (*env)->SetByteArrayRegion(env, arr, 0, pixels, (jbyte *)(buf + 16));
+                            (*env)->CallVoidMethod(env, s->activity_obj, curBmpMethod,
+                                                   (jint)hdr[0], (jint)hdr[1],
+                                                   (jint)hdr[2], (jint)hdr[3], arr);
+                            (*env)->DeleteLocalRef(env, arr);
+                        }
+                    }
+                }
+                free(buf);
+            }
         } else {
             /* Unknown or zero-length event: drain any trailing data if size > 0 */
             LOGI("event thread: unknown output event type=%u size=%u", ev.type, ev.clipboard.size);
@@ -632,6 +735,18 @@ static void on_exit_fallback(void *userdata)
     send_refresh_rate(s);
     send_display_rotation(s);
 
+    /* Announce the cursor-sprite capability so the producer switches from
+     * in-frame software cursor rendering to CURSOR_POS/CURSOR_BITMAP output
+     * events. Re-sent after every fallback: the producer resets its cached
+     * state on each reconnect. */
+    {
+        struct InputEvent ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.type = INPUT_TYPE_CAPS;
+        ev.input_caps.caps = CONSUMER_CAP_CURSOR_PLANE;
+        push_input_event(s->ctx, &ev);
+    }
+
     JNIEnv *env = NULL;
     if ((*g_jvm)->AttachCurrentThread(g_jvm, &env, NULL) != 0) {
         LOGE("on_exit_fallback: AttachCurrentThread failed");
@@ -783,6 +898,16 @@ Java_com_anland_consumer_Native_nativeDestroy(JNIEnv *env, jclass clazz, jlong h
         ANativeWindow_release(s->window);
         s->window = NULL;
     }
+    /* Cursor sprite surface + cached bitmap. */
+    pthread_mutex_lock(&s->cfg_lock);
+    if (s->cursor_win) {
+        ANativeWindow_release(s->cursor_win);
+        s->cursor_win = NULL;
+    }
+    free(s->cursor_px);
+    s->cursor_px = NULL;
+    s->cursor_len = 0;
+    pthread_mutex_unlock(&s->cfg_lock);
     pthread_mutex_unlock(&s->lock);
 
     audio_destroy(s->audio);
@@ -870,6 +995,38 @@ Java_com_anland_consumer_Native_nativeSetScreenSize(
     pthread_mutex_unlock(&s->cfg_lock);
     LOGI("screen size set from Java: %dx%d", width, height);
     dbg_file("jni setScreenSize %dx%d", width, height);
+}
+
+/* Attach/detach the cursor overlay surface. Passing NULL detaches. On attach
+ * the cached bitmap (if any) is redrawn immediately, which also covers the
+ * surface-recreated-after-resize case on the Java side. */
+JNIEXPORT void JNICALL
+Java_com_anland_consumer_Native_nativeSetCursorSurface(
+    JNIEnv *env, jclass clazz, jlong handle, jobject jsurface)
+{
+    struct consumer_state *s = STATE(handle);
+    if (!s)
+        return;
+
+    pthread_mutex_lock(&s->cfg_lock);
+    if (s->cursor_win) {
+        ANativeWindow_release(s->cursor_win);
+        s->cursor_win = NULL;
+    }
+    pthread_mutex_unlock(&s->cfg_lock);
+
+    if (!jsurface)
+        return;
+
+    ANativeWindow *win = ANativeWindow_fromSurface(env, jsurface);
+    if (!win) {
+        LOGE("cursor surface: ANativeWindow_fromSurface failed");
+        return;
+    }
+    pthread_mutex_lock(&s->cfg_lock);
+    s->cursor_win = win;
+    pthread_mutex_unlock(&s->cfg_lock);
+    cursor_draw(s);
 }
 
 JNIEXPORT void JNICALL
