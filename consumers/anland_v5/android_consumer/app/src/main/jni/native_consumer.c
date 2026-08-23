@@ -267,7 +267,13 @@ static void send_display_rotation(struct consumer_state *s)
 
 /* Blit the cached cursor image into the cursor overlay surface. The surface
  * geometry is forced to the bitmap size; rows are copied honouring the
- * ANativeWindow stride. Safe to call with no surface attached (no-op). */
+ * ANativeWindow stride.
+ *
+ * The cfg_lock is held for the WHOLE operation: cursor_store_bitmap() frees
+ * cursor_px under the same lock, so releasing it before the row-copy would
+ * race a concurrent bitmap delivery into freed memory. Bitmap blits are rare
+ * (cursor-image changes only), so the extended critical section costs
+ * nothing in practice. */
 static void cursor_draw(struct consumer_state *s)
 {
     pthread_mutex_lock(&s->cfg_lock);
@@ -279,7 +285,6 @@ static void cursor_draw(struct consumer_state *s)
         return;
     }
     ANativeWindow_acquire(win);
-    pthread_mutex_unlock(&s->cfg_lock);
 
     ANativeWindow_setBuffersGeometry(win, w, h, WINDOW_FORMAT_RGBA_8888);
     ANativeWindow_Buffer buf;
@@ -296,6 +301,7 @@ static void cursor_draw(struct consumer_state *s)
         LOGE("cursor_draw: lock failed");
     }
     ANativeWindow_release(win);
+    pthread_mutex_unlock(&s->cfg_lock);
 }
 
 /* Cache a cursor bitmap delivered by a CURSOR_BITMAP output event and redraw
