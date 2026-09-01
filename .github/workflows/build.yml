@@ -2,7 +2,7 @@ name: Build APK and Daemon
 
 on:
   push:
-    branches: [ main ]
+    branches: [ niri, main ]
   workflow_dispatch:
 
 jobs:
