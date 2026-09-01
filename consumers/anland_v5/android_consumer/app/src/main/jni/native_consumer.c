@@ -189,8 +189,8 @@ static int collect_dmabufs(struct consumer_state *s)
             }
         }
 
-        /* cancel it back so the next dequeue rotates to another slot without posting garbage to SurfaceFlinger */
-        api.cancelBuffer(win, anb, -1);
+        /* post it back so the next dequeue rotates to another slot */
+        api.queueBuffer(win, anb, -1);
 
         if (dup_found)
             continue;
