@@ -288,7 +288,9 @@ public class MainActivity extends Activity
         super.onNewIntent(intent);
         setIntent(intent);
         if (intent != null && "OPEN_HUD_EDITOR".equals(intent.getAction())) {
+            mForceSettings = false;
             if (mRoot != null && mHudOverlay != null) {
+                mHudOverlay.setVisibility(View.VISIBLE);
                 mRoot.post(() -> mHudOverlay.setEditMode(true));
             }
         }
@@ -453,6 +455,7 @@ public class MainActivity extends Activity
         if (launch != null) {
             if ("OPEN_HUD_EDITOR".equals(launch.getAction())) {
                 mPendingOpenHudEditor = true;
+                mForceSettings = false;
             }
             String sock = launch.getStringExtra(EXTRA_SOCKET_PATH);
             if (sock != null && !sock.trim().isEmpty())
@@ -587,7 +590,7 @@ public class MainActivity extends Activity
             }
             @Override
             public void sendMouseMotion(float dx, float dy) {
-                if (mNative != null) mNative.sendMouseMotion(0, 0, dx, dy);
+                sendCapturedTouchpadMotion(dx, dy);
             }
             @Override
             public void sendMouseButton(int button, boolean pressed) {
