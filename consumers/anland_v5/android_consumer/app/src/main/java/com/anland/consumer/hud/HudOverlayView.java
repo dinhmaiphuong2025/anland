@@ -47,6 +47,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     private boolean mIsEditMode = false;
     private HudButton mSelectedButton = null;
+    private final List<HudButton> mActiveModifiers = new ArrayList<>();
     private View mSelectedView = null;
 
     private final SnapGeometryEngine mSnapEngine;
@@ -147,7 +148,15 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mDockStripView = new HudDockStripView(getContext(), getActiveLayout(), new HudDockStripView.DockActionListener() {
             @Override
             public void onDockItemClick(HudButton item) {
-                if (!mIsEditMode) dispatchHudAction(item.action);
+                if (!mIsEditMode) {
+                    if (HudAction.TYPE_MODIFIER.equals(item.action.type)) {
+                        if (mActiveModifiers.contains(item)) mActiveModifiers.remove(item);
+                        else mActiveModifiers.add(item);
+                        rebuildActiveLayout();
+                    } else {
+                        dispatchHudAction(item.action);
+                    }
+                }
             }
             @Override
             public void onDockItemLongPress(HudButton item) {
@@ -322,26 +331,31 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     @Override
     public boolean hasActiveModifier() {
-        return false; // To be implemented with active modifier tracking
+        return mActiveModifiers != null && !mActiveModifiers.isEmpty();
     }
 
     @Override
     public void sendKeyComboFromExternal(int evdevScancode) {
         if (mHost != null) {
+            for (HudButton mod : mActiveModifiers) mHost.sendKey(0, mod.action.code);
             mHost.sendKey(0, evdevScancode);
-            postDelayed(() -> mHost.sendKey(1, evdevScancode), 40);
+            mHost.sendKey(1, evdevScancode);
+            for (int i = mActiveModifiers.size() - 1; i >= 0; i--) mHost.sendKey(1, mActiveModifiers.get(i).action.code);
+            mActiveModifiers.clear();
+            rebuildActiveLayout();
         }
     }
 
     @Override
     public void reset() {
-        // Reset any locked modifiers
+        mActiveModifiers.clear();
+        rebuildActiveLayout();
     }
 
     public void rebuildActiveLayout() {
         mFloatingContainer.removeAllViews();
         HudLayout layout = getActiveLayout();
-        mDockStripView.rebuildItems();
+        mDockStripView.rebuildItems(mActiveModifiers);
 
         for (HudButton b : layout.floatingButtons) {
             View widgetView;
@@ -379,11 +393,17 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     }
                 });
             } else {
-                widgetView = new HudFreeformButtonView(getContext(), b, new HudFreeformButtonView.ButtonActionListener() {
+                widgetView = new HudFreeformButtonView(getContext(), b, mActiveModifiers.contains(b), new HudFreeformButtonView.ButtonActionListener() {
                     @Override
                     public void onButtonPress(HudButton btn, boolean isDown) {
                         if (!mIsEditMode) {
-                            if (HudAction.TYPE_KEY.equals(btn.action.type) || HudAction.TYPE_MODIFIER.equals(btn.action.type)) {
+                            if (HudAction.TYPE_MODIFIER.equals(btn.action.type)) {
+                                if (isDown) {
+                                    if (mActiveModifiers.contains(btn)) mActiveModifiers.remove(btn);
+                                    else mActiveModifiers.add(btn);
+                                    rebuildActiveLayout();
+                                }
+                            } else if (HudAction.TYPE_KEY.equals(btn.action.type)) {
                                 if (mHost != null) mHost.sendKey(isDown ? 0 : 1, btn.action.code);
                             } else if (isDown) {
                                 dispatchHudAction(btn.action);
@@ -521,17 +541,23 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private void dispatchHudAction(HudAction action) {
         if (action == null || mHost == null) return;
         if (HudAction.TYPE_KEY.equals(action.type)) {
+            for (HudButton mod : mActiveModifiers) mHost.sendKey(0, mod.action.code);
             mHost.sendKey(0, action.code);
-            postDelayed(() -> mHost.sendKey(1, action.code), 40);
+            postDelayed(() -> { mHost.sendKey(1, action.code); for (int i = mActiveModifiers.size() - 1; i >= 0; i--) mHost.sendKey(1, mActiveModifiers.get(i).action.code); mActiveModifiers.clear(); rebuildActiveLayout(); }, 40);
         } else if (HudAction.TYPE_MODIFIER.equals(action.type)) {
+            for (HudButton mod : mActiveModifiers) mHost.sendKey(0, mod.action.code);
             mHost.sendKey(0, action.code);
-            postDelayed(() -> mHost.sendKey(1, action.code), 40);
+            postDelayed(() -> { mHost.sendKey(1, action.code); for (int i = mActiveModifiers.size() - 1; i >= 0; i--) mHost.sendKey(1, mActiveModifiers.get(i).action.code); mActiveModifiers.clear(); rebuildActiveLayout(); }, 40);
         } else if (HudAction.TYPE_COMBO.equals(action.type)) {
+            for (HudButton mod : mActiveModifiers) mHost.sendKey(0, mod.action.code);
             for (int k : action.comboKeys) mHost.sendKey(0, k);
             postDelayed(() -> {
                 for (int i = action.comboKeys.size() - 1; i >= 0; i--) {
                     mHost.sendKey(1, action.comboKeys.get(i));
                 }
+                for (int i = mActiveModifiers.size() - 1; i >= 0; i--) mHost.sendKey(1, mActiveModifiers.get(i).action.code);
+                mActiveModifiers.clear();
+                rebuildActiveLayout();
             }, 50);
         } else if (HudAction.TYPE_TEXT.equals(action.type)) {
             mHost.sendTextInput(action.text.getBytes());
