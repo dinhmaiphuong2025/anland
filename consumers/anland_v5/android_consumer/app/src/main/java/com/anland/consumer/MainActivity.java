@@ -474,6 +474,9 @@ public class MainActivity extends Activity
         // socket, bring it to the front and drop this (freshly spawned) task.
         MainActivity existing = sWindowsBySocket.get(resolveSocketPath());
         if (existing != null && existing != this && !existing.isFinishing()) {
+            if (mPendingOpenHudEditor) {
+                existing.onNewIntent(launch);
+            }
             ActivityManager am = getSystemService(ActivityManager.class);
             if (am != null) am.moveTaskToFront(existing.getTaskId(), 0);
             finishAndRemoveTask();
