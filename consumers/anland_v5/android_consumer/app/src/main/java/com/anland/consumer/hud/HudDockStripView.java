@@ -83,6 +83,23 @@ public final class HudDockStripView extends HorizontalScrollView {
         }
     }
 
+    public void setModifierActiveState(int evdev, boolean active) {
+        List<HudButton> items = mLayout.dockItems;
+        for (int i = 0; i < items.size(); i++) {
+            HudButton item = items.get(i);
+            if (item.action != null && HudAction.TYPE_MODIFIER.equals(item.action.type) && item.action.code == evdev) {
+                if (i < mRow.getChildCount()) {
+                    View v = mRow.getChildAt(i);
+                    if (v instanceof Button) {
+                        Button btn = (Button) v;
+                        btn.setTextColor(active ? 0xFF80DEEA : item.textColor);
+                        btn.setBackgroundColor(active ? 0x6680DEEA : (item.bgColor != 0 ? item.bgColor : 0x22FFFFFF));
+                    }
+                }
+            }
+        }
+    }
+
     private int dp(int val) {
         return Math.round(val * getResources().getDisplayMetrics().density);
     }

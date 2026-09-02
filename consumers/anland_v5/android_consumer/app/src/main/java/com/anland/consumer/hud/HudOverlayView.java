@@ -384,7 +384,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private void setModifierActive(ModState state, boolean active) {
         state.active = active;
         if (!active) state.locked = false;
-        // Visual feedback: no buttons to update in HUD (floating buttons draw themselves)
+        if (mDockStripView != null) {
+            mDockStripView.setModifierActiveState(state.evdev, active);
+        }
     }
 
     private void sendWithModifiers(Runnable emit) {
@@ -606,11 +608,14 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private void dispatchHudAction(HudAction action) {
         if (action == null || mHost == null) return;
         if (HudAction.TYPE_KEY.equals(action.type)) {
-            mHost.sendKey(0, action.code);
-            postDelayed(() -> mHost.sendKey(1, action.code), 40);
+            sendWithModifiers(() -> {
+                if (mHost != null) {
+                    mHost.sendKey(0, action.code);
+                    mHost.sendKey(1, action.code);
+                }
+            });
         } else if (HudAction.TYPE_MODIFIER.equals(action.type)) {
-            mHost.sendKey(0, action.code);
-            postDelayed(() -> mHost.sendKey(1, action.code), 40);
+            toggleModifier(action.code);
         } else if (HudAction.TYPE_COMBO.equals(action.type)) {
             for (int k : action.comboKeys) mHost.sendKey(0, k);
             postDelayed(() -> {
@@ -619,7 +624,11 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 }
             }, 50);
         } else if (HudAction.TYPE_TEXT.equals(action.type)) {
-            mHost.sendTextInput(action.text.getBytes());
+            sendWithModifiers(() -> {
+                if (mHost != null) {
+                    mHost.sendTextInput(action.text.getBytes());
+                }
+            });
         } else if (HudAction.TYPE_SYSTEM.equals(action.type)) {
             if ("toggle_ime".equals(action.systemCommand)) mHost.toggleSystemKeyboard();
             else if ("toggle_vk".equals(action.systemCommand)) mHost.toggleVirtualKeyboard();
