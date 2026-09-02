@@ -274,7 +274,8 @@ public class MainActivity extends Activity
             captureMouseForced = false;
             if (mRoot != null)
                 mRoot.post(this::syncPointerCapture);
-            if (!isSocketFile(resolveSocketPath())) {
+            boolean isEditingHud = (mHudOverlay != null && mHudOverlay.isEditMode()) || mPendingOpenHudEditor;
+            if (!isSocketFile(resolveSocketPath()) && !isEditingHud) {
                 //exit
                 android.widget.Toast.makeText(this, "Deamon Down",
                         android.widget.Toast.LENGTH_SHORT).show();
@@ -299,7 +300,7 @@ public class MainActivity extends Activity
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        boolean isEditingHud = mHudOverlay != null && mHudOverlay.isEditMode();
+        boolean isEditingHud = (mHudOverlay != null && mHudOverlay.isEditMode()) || mPendingOpenHudEditor;
         if (!isSocketFile(resolveSocketPath()) && !isEditingHud) {
             //exit
             android.widget.Toast.makeText(this, "Deamon Down",
@@ -371,10 +372,13 @@ public class MainActivity extends Activity
     // socket is still a live socket. The daemon can go down after launch, so
     // re-check on every (re)connect; if it is gone, report it and exit the window.
     private void startNative(android.view.Surface surface) {
+        boolean isEditingHud = (mHudOverlay != null && mHudOverlay.isEditMode()) || mPendingOpenHudEditor;
         if (!isSocketFile(resolveSocketPath())) {
-            android.widget.Toast.makeText(this, "Deamon Down",
-                    android.widget.Toast.LENGTH_SHORT).show();
-            finish();
+            if (!isEditingHud) {
+                android.widget.Toast.makeText(this, "Deamon Down",
+                        android.widget.Toast.LENGTH_SHORT).show();
+                finish();
+            }
             return;
         }
         // Sync the current rotation into the native pipeline before the producer
