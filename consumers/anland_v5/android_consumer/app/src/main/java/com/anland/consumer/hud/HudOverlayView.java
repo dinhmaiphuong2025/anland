@@ -54,6 +54,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private final SnapGeometryEngine mSnapEngine;
     private final Paint mGuidePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mSelectBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mGridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final List<Float> mActiveVerticalGuides = new ArrayList<>();
     private final List<Float> mActiveHorizontalGuides = new ArrayList<>();
 
@@ -91,6 +92,10 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mSelectBorderPaint.setColor(0xFF80DEEA);
         mSelectBorderPaint.setStrokeWidth(3f);
         mSelectBorderPaint.setStyle(Paint.Style.STROKE);
+
+        mGridPaint.setColor(0x22FFFFFF);
+        mGridPaint.setStrokeWidth(1f);
+        mGridPaint.setStyle(Paint.Style.STROKE);
 
         setWillNotDraw(false);
         loadProfile();
@@ -563,17 +568,32 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (mIsEditMode) {
-            // Draw magnetic guidelines
-            for (float x : mActiveVerticalGuides) {
-                canvas.drawLine(x, 0, x, getHeight(), mGuidePaint);
+            float density = getResources().getDisplayMetrics().density;
+            float w = getWidth();
+            float h = getHeight();
+
+            // 1. Semi-transparent dark scrim overlay (backdrop)
+            canvas.drawColor(0xBB11111B);
+
+            // 2. Blueprint subtle grid (32dp steps)
+            float step = 32f * density;
+            for (float gx = step; gx < w; gx += step) {
+                canvas.drawLine(gx, 0, gx, h, mGridPaint);
             }
-            for (float y : mActiveHorizontalGuides) {
-                canvas.drawLine(0, y, getWidth(), y, mGuidePaint);
+            for (float gy = step; gy < h; gy += step) {
+                canvas.drawLine(0, gy, w, gy, mGridPaint);
             }
 
-            // Draw bounding border around selected view
+            // 3. Draw magnetic guidelines
+            for (float x : mActiveVerticalGuides) {
+                canvas.drawLine(x, 0, x, h, mGuidePaint);
+            }
+            for (float y : mActiveHorizontalGuides) {
+                canvas.drawLine(0, y, w, y, mGuidePaint);
+            }
+
+            // 4. Draw bounding border around selected view
             if (mSelectedView != null) {
-                float density = getResources().getDisplayMetrics().density;
                 RectF r = new RectF(mSelectedView.getX() - 3 * density,
                         mSelectedView.getY() - 3 * density,
                         mSelectedView.getX() + mSelectedView.getWidth() + 3 * density,
