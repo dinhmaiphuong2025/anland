@@ -12,6 +12,7 @@ import java.util.List;
  */
 public final class HudLayout {
     public boolean dockEnabled = true;
+    public boolean dockScrollable = false;
     public int dockHeightDp = 40;
     public int dockBgColor = 0xCC11111B;
     public List<HudButton> dockItems = new ArrayList<>();
@@ -22,6 +23,7 @@ public final class HudLayout {
     public JSONObject toJSON() throws JSONException {
         JSONObject obj = new JSONObject();
         obj.put("dock_enabled", dockEnabled);
+        obj.put("dock_scrollable", dockScrollable);
         obj.put("dock_height_dp", dockHeightDp);
         obj.put("dock_bg_color", dockBgColor);
 
@@ -40,6 +42,7 @@ public final class HudLayout {
         if (obj == null) return new HudLayout();
         HudLayout l = new HudLayout();
         l.dockEnabled = obj.optBoolean("dock_enabled", true);
+        l.dockScrollable = obj.optBoolean("dock_scrollable", false);
         l.dockHeightDp = obj.optInt("dock_height_dp", 40);
         l.dockBgColor = obj.optInt("dock_bg_color", 0xCC11111B);
 
