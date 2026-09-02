@@ -69,6 +69,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     public HudOverlayView(Context context, SharedPreferences prefs, HudHost host) {
         super(context);
         this.mPrefs = prefs;
+        if (!prefs.getBoolean("use_hud_overlay", false)) { setVisibility(GONE); } else { setVisibility(VISIBLE); }
         this.mHost = host;
         this.mSnapEngine = new SnapGeometryEngine(getResources().getDisplayMetrics().density);
 

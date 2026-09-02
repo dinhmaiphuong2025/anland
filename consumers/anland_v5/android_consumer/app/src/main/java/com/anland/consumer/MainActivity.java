@@ -287,8 +287,8 @@ public class MainActivity extends Activity
         super.onNewIntent(intent);
         setIntent(intent);
         if (intent != null && "OPEN_HUD_EDITOR".equals(intent.getAction())) {
-            if (mHudOverlay != null) {
-                mHudOverlay.setEditMode(true);
+            if (mRoot != null && mHudOverlay != null) {
+                mRoot.post(() -> mHudOverlay.setEditMode(true));
             }
         }
     }
@@ -450,6 +450,11 @@ public class MainActivity extends Activity
         // check below sees this window's target socket.
         Intent launch = getIntent();
         if (launch != null) {
+            if ("OPEN_HUD_EDITOR".equals(launch.getAction())) {
+                if (mRoot != null && mHudOverlay != null) {
+                    mRoot.post(() -> mHudOverlay.setEditMode(true));
+                }
+            }
             String sock = launch.getStringExtra(EXTRA_SOCKET_PATH);
             if (sock != null && !sock.trim().isEmpty())
                 mSocketOverride = sock.trim();
@@ -562,11 +567,16 @@ public class MainActivity extends Activity
 
         mRoot = root;
         mDensity = getResources().getDisplayMetrics().density;
+        if (mHudOverlay != null) {
+            boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
+            mHudOverlay.setVisibility(useHud ? View.VISIBLE : View.GONE);
+        }
         mKeyboardFloating = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getBoolean(KEY_KEYBOARD_FLOATING, false);
         buildExtraKeysBar();
 
         // HUD Overlay View (Floating custom buttons, TrackPoint, Super Gesture & Pinned Dock)
+        boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
         mHudOverlay = new com.anland.consumer.hud.HudOverlayView(this, getSharedPreferences(PREFS_NAME, MODE_PRIVATE), new com.anland.consumer.hud.HudOverlayView.HudHost() {
             @Override
             public void sendKey(int action, int evdevCode) {
@@ -605,6 +615,7 @@ public class MainActivity extends Activity
                 relayout();
             }
         });
+        mHudOverlay.setVisibility(useHud ? View.VISIBLE : View.GONE);
         root.addView(mHudOverlay, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
@@ -1617,6 +1628,10 @@ public class MainActivity extends Activity
 
         // Pick up a Keyboard-floating toggle made in Settings: update the bar's
         // backdrop and re-run the layout so the surface margin tracks the new mode.
+        if (mHudOverlay != null) {
+            boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
+            mHudOverlay.setVisibility(useHud ? View.VISIBLE : View.GONE);
+        }
         mKeyboardFloating = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getBoolean(KEY_KEYBOARD_FLOATING, false);
         if (extraKeysBar != null)
@@ -1956,7 +1971,11 @@ public class MainActivity extends Activity
         int barH = barVisible ? mBarHeight : 0;
         // Floating mode: keyboard + bar overlay the display, so the surface keeps
         // its full size (target 0). Default mode: shrink the surface above both.
-        int target = mKeyboardFloating ? 0 : (mImeBottom + barH);
+        int hudDockH = 0;
+        if (mHudOverlay != null && mHudOverlay.getVisibility() == View.VISIBLE && getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false)) {
+            hudDockH = mHudOverlay.getActiveLayout().dockHeightDp > 0 ? Math.round(mHudOverlay.getActiveLayout().dockHeightDp * mDensity) : 0;
+        }
+        int target = mKeyboardFloating ? 0 : (mImeBottom + barH + hudDockH);
 
         FrameLayout.LayoutParams lp =
             (FrameLayout.LayoutParams) surfaceView.getLayoutParams();
