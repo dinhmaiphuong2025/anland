@@ -28,16 +28,12 @@ public final class HudFreeformButtonView extends View {
     private float mDownY;
     private boolean mPopupTriggered;
 
-    private boolean mIsActiveModifier;
-
-    public HudFreeformButtonView(Context context, HudButton model, boolean isActiveModifier, ButtonActionListener listener) {
-        mIsActiveModifier = isActiveModifier;
+    public HudFreeformButtonView(Context context, HudButton model, ButtonActionListener listener) {
         super(context);
         this.mModel = model;
         this.mListener = listener;
 
-        mTextPaint.setColor(model.textColor != 0 ? model.textColor : Color.WHITE);
-        if (mIsActiveModifier) mTextPaint.setColor(0xFF80DEEA);
+        mTextPaint.setColor(Color.WHITE);
         mTextPaint.setTextAlign(Paint.Align.CENTER);
         mTextPaint.setFakeBoldText(true);
     }
@@ -64,7 +60,7 @@ public final class HudFreeformButtonView extends View {
 
         // Fill
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mIsPressed ? mModel.activeColor : (mIsActiveModifier ? 0xFF7F7F7F : mModel.bgColor));
+        mPaint.setColor(mIsPressed ? mModel.activeColor : mModel.bgColor);
         mPaint.setAlpha(Math.round(mModel.opacity * 255));
         float corner = mModel.cornerRadiusDp * density;
         canvas.drawRoundRect(mBounds, corner, corner, mPaint);
@@ -76,7 +72,7 @@ public final class HudFreeformButtonView extends View {
         canvas.drawRoundRect(mBounds, corner, corner, mPaint);
 
         // Text
-        mTextPaint.setColor(mIsPressed ? 0xFF11111B : (mIsActiveModifier ? 0xFF80DEEA : mModel.textColor));
+        mTextPaint.setColor(mIsPressed ? 0xFF11111B : mModel.textColor);
         mTextPaint.setTextSize(Math.min(w, h) * 0.35f);
         float textY = h * 0.5f - ((mTextPaint.descent() + mTextPaint.ascent()) * 0.5f);
         canvas.drawText(mModel.label != null ? mModel.label : "BTN", w * 0.5f, textY, mTextPaint);

@@ -314,7 +314,7 @@ public class SettingsActivity extends Activity {
         raiseDesktopSwitch.setPadding(0, dp(8), 0, 0);
         raiseDesktopSwitch.setChecked(!prefs.getBoolean(KEY_KEYBOARD_FLOATING, false));
         raiseDesktopSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_KEYBOARD_FLOATING, !checked).apply());
         root.addView(raiseDesktopSwitch);
 
@@ -345,7 +345,7 @@ public class SettingsActivity extends Activity {
         immersiveSwitch.setPadding(0, 0, 0, 0);
         immersiveSwitch.setChecked(prefs.getBoolean(KEY_IMMERSIVE_ENABLED, false));
         immersiveSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_IMMERSIVE_ENABLED, checked).apply());
         root.addView(immersiveSwitch);
 
@@ -444,7 +444,7 @@ public class SettingsActivity extends Activity {
             cancel();
             listeningBinding = null;
             SharedPreferences.Editor edit =
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS);
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
             edit.putInt(keyPref, keycode);
             if (scanPref != null)
                 edit.putInt(scanPref, scancode);
@@ -488,7 +488,7 @@ public class SettingsActivity extends Activity {
         accessibilitySwitch.setPadding(0, dp(16), 0, 0);
         accessibilitySwitch.setChecked(prefs.getBoolean(KEY_ACCESSIBILITY_ENABLED, false));
         accessibilitySwitch.setOnCheckedChangeListener((v, checked) -> {
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_ACCESSIBILITY_ENABLED, checked).apply();
             if (checked) {
                 KeyInterceptor.launch(SettingsActivity.this);
@@ -562,7 +562,7 @@ public class SettingsActivity extends Activity {
             backOpensExtraKeysSwitch.setPadding(0, dp(16), 0, 0);
             backOpensExtraKeysSwitch.setChecked(prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true));
             backOpensExtraKeysSwitch.setOnCheckedChangeListener((v, checked) ->
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putBoolean(KEY_BACK_OPENS_EXTRA_KEYS, checked).apply());
             root.addView(backOpensExtraKeysSwitch);
 
@@ -595,7 +595,7 @@ public class SettingsActivity extends Activity {
         modeSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(android.widget.AdapterView<?> parent, View v, int pos, long id) {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putString(KEY_EXTRA_KEYS_MODE, EXTRA_KEYS_MODES[pos]).apply();
             }
             @Override
@@ -648,7 +648,7 @@ public class SettingsActivity extends Activity {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void afterTextChanged(Editable s) {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putString(KEY_EXTRA_KEYS_LAYOUT, s.toString()).apply();
                 updateLayoutStatus(layoutStatus, s.toString());
             }
@@ -711,7 +711,7 @@ public class SettingsActivity extends Activity {
         spinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putString(KEY_ORIENTATION, ORIENTATION_VALUES[pos]).apply();
             }
             @Override
@@ -736,7 +736,7 @@ public class SettingsActivity extends Activity {
         notificationSwitch.setPadding(0, dp(8), 0, 0);
         notificationSwitch.setChecked(prefs.getBoolean(KEY_NOTIFICATION_ENABLED, true));
         notificationSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_NOTIFICATION_ENABLED, checked).apply());
         root.addView(notificationSwitch);
 
@@ -761,7 +761,7 @@ public class SettingsActivity extends Activity {
         touchpadModeSwitch.setPadding(0, dp(8), 0, 0);
         touchpadModeSwitch.setChecked(prefs.getBoolean(KEY_TOUCHPAD_MODE, false));
         touchpadModeSwitch.setOnCheckedChangeListener((v, checked) ->
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                         .putBoolean(KEY_TOUCHPAD_MODE, checked).apply());
         root.addView(touchpadModeSwitch);
 
@@ -780,7 +780,7 @@ public class SettingsActivity extends Activity {
         pointerCaptureSwitch.setPadding(0, dp(8), 0, 0);
         pointerCaptureSwitch.setChecked(prefs.getBoolean(KEY_POINTER_CAPTURE, false));
         pointerCaptureSwitch.setOnCheckedChangeListener((v, checked) ->
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                         .putBoolean(KEY_POINTER_CAPTURE, checked).apply());
         root.addView(pointerCaptureSwitch);
 
@@ -817,7 +817,7 @@ public class SettingsActivity extends Activity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 float val = 0.5f + progress * 0.05f;
                 accelValue.setText(getString(R.string.mouse_accel_value, val));
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                         .putFloat(KEY_MOUSE_ACCEL, val).apply();
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
@@ -833,7 +833,7 @@ public class SettingsActivity extends Activity {
         reverseScrollSwitch.setPadding(0, dp(8), 0, 0);
         reverseScrollSwitch.setChecked(prefs.getBoolean(KEY_SCROLL_REVERSE, false));
         reverseScrollSwitch.setOnCheckedChangeListener((v, checked) ->
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                         .putBoolean(KEY_SCROLL_REVERSE, checked).apply());
         root.addView(reverseScrollSwitch);
 
@@ -852,7 +852,7 @@ public class SettingsActivity extends Activity {
         disableMultiFingerSwitch.setChecked(prefs.getBoolean(
                 KEY_DISABLE_MULTI_FINGER_GESTURES, false));
         disableMultiFingerSwitch.setOnCheckedChangeListener((v, checked) ->
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                         .putBoolean(KEY_DISABLE_MULTI_FINGER_GESTURES, checked).apply());
         root.addView(disableMultiFingerSwitch);
 
@@ -910,7 +910,7 @@ public class SettingsActivity extends Activity {
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 float val = min + progress * step;
                 value.setText(getString(valueFormatRes, val));
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                         .putFloat(key, val).apply();
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
@@ -951,7 +951,7 @@ public class SettingsActivity extends Activity {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void afterTextChanged(Editable s) {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putString(KEY_SOCKET_PATH, s.toString().trim()).apply();
             }
         });
@@ -997,7 +997,7 @@ public class SettingsActivity extends Activity {
         rootSwitch.setPadding(0, dp(16), 0, 0);
         rootSwitch.setChecked(prefs.getBoolean(KEY_USE_ROOT, true));
         rootSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_USE_ROOT, checked).apply());
         root.addView(rootSwitch);
 
@@ -1017,7 +1017,7 @@ public class SettingsActivity extends Activity {
         micSwitch.setPadding(0, dp(16), 0, 0);
         micSwitch.setChecked(prefs.getBoolean(KEY_MIC_ENABLED, false));
         micSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_MIC_ENABLED, checked).apply());
         root.addView(micSwitch);
 
@@ -1038,7 +1038,7 @@ public class SettingsActivity extends Activity {
         cameraSwitch.setPadding(0, dp(16), 0, 0);
         cameraSwitch.setChecked(prefs.getBoolean(KEY_CAMERA_ENABLED, false));
         cameraSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_CAMERA_ENABLED, checked).apply());
         root.addView(cameraSwitch);
 
@@ -1059,7 +1059,7 @@ public class SettingsActivity extends Activity {
         keepaliveSwitch.setPadding(0, dp(16), 0, 0);
         keepaliveSwitch.setChecked(prefs.getBoolean(KEY_AUDIO_KEEPALIVE, false));
         keepaliveSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_AUDIO_KEEPALIVE, checked).apply());
         root.addView(keepaliveSwitch);
 
@@ -1235,7 +1235,7 @@ public class SettingsActivity extends Activity {
         sp.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putInt(key, LATENCY_MS[pos]).apply();
             }
             @Override
