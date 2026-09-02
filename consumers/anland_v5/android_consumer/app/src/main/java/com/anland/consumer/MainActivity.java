@@ -2032,6 +2032,22 @@ public class MainActivity extends Activity
 
     // Construct the extra-keys bar from the user's saved JSON layout and add it to
     // the content root (hidden). The bar height mirrors Termux at 37.5dp/row and
+    private void toggleVirtualKeyboard() {
+        if (virtualKeyboardView.getVisibility() == View.VISIBLE) {
+            virtualKeyboardView.setVisibility(View.GONE);
+        } else {
+            Log.d("VirtualKeyboard", "toggle: showing keyboard, mRoot="
+                    + mRoot.getWidth() + "x" + mRoot.getHeight());
+            virtualKeyboardView.setVisibility(View.VISIBLE);
+            virtualKeyboardView.bringToFront();
+            positionVirtualKeyboard();
+            InputMethodManager imm = getSystemService(InputMethodManager.class);
+            if (imm != null && getCurrentFocus() != null) {
+                imm.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
+            }
+        }
+    }
+
     // scales with the parsed row count. Records the layout JSON it was built from.
     private void buildExtraKeysBar() {
         extraKeysBar = new ExtraKeysBar(this, new ExtraKeysBar.Sender() {
@@ -2043,21 +2059,7 @@ public class MainActivity extends Activity
             @Override public void toggleKeyboard() { systemIme.toggleSystemKeyboard(); }
             // Pulling up on the ⌨ key toggles the floating virtual keyboard.
             @Override public void toggleVirtualKeyboard() {
-                if (virtualKeyboardView.getVisibility() == View.VISIBLE) {
-                    virtualKeyboardView.setVisibility(View.GONE);
-                } else {
-                    Log.d("VirtualKeyboard", "toggle: showing keyboard, mRoot="
-                            + mRoot.getWidth() + "x" + mRoot.getHeight());
-                    virtualKeyboardView.setVisibility(View.VISIBLE);
-                    virtualKeyboardView.bringToFront();
-                    // Re-position it (in case screen size changed)
-                    positionVirtualKeyboard();
-                    // Hide the system IME to avoid overlap with the floating keyboard.
-                    InputMethodManager imm = getSystemService(InputMethodManager.class);
-                    if (imm != null && getCurrentFocus() != null) {
-                        imm.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
-                    }
-                }
+                MainActivity.this.toggleVirtualKeyboard();
             }
             @Override public void openSettings() {
                 startActivity(new Intent(MainActivity.this, SettingsActivity.class));
@@ -2394,6 +2396,12 @@ public class MainActivity extends Activity
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (mHudOverlay != null && mHudOverlay.isEditMode()) {
+            if (keyCode == KeyEvent.KEYCODE_BACK) {
+                mHudOverlay.setEditMode(false);
+                return true;
+            }
+        }
         // First: the immersive toggle is the way out of a session that has taken
         // every input device, so nothing else may consume it.
         if (immersive != null && immersive.handleKey(event))
@@ -2506,26 +2514,6 @@ public class MainActivity extends Activity
     public boolean isAccessibilityInterceptEnabled() {
         return getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .getBoolean(KEY_ACCESSIBILITY_ENABLED, false);
-    }
-
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (mHudOverlay != null && mHudOverlay.isEditMode()) {
-            if (keyCode == KeyEvent.KEYCODE_BACK) {
-                mHudOverlay.setEditMode(false);
-                return true;
-            }
-        }
-        if (immersive != null && immersive.handleKey(event))
-            return true;
-        if (handlePointerCaptureBackKey(event))
-            return true;
-        if (keyCode == KeyEvent.KEYCODE_BACK && isMouseKeyEvent(event))
-            return true;
-        if (handleSoftKeyboardToggleKey(event))
-            return true;
-        forwardKeyToLinux(event);
-        return true;
     }
 
     @Override
