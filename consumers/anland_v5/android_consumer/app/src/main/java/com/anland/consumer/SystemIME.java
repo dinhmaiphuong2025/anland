@@ -99,10 +99,11 @@ public final class SystemIME {
         // live through our InputConnection.
         hiddenInput.setImeOptions(EditorInfo.IME_FLAG_NO_EXTRACT_UI
             | EditorInfo.IME_FLAG_NO_FULLSCREEN
-            | EditorInfo.IME_FLAG_NO_ENTER_ACTION);
+            | EditorInfo.IME_FLAG_NO_ENTER_ACTION
+            | EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
         hiddenInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT
             | android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
-            | android.text.InputType.TYPE_TEXT_VARIATION_NORMAL);
+            | android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
     }
 
     // Mirror of the text we have pushed to the remote via the IME path, with the
@@ -227,6 +228,9 @@ public final class SystemIME {
             final String s = text == null ? "" : text.toString();
             if (maybeSendModifierCombo(s)) {
                 lastSent = "";
+                if (imm != null) {
+                    imm.restartInput(hiddenInput);
+                }
                 return true;
             }
             long now = System.currentTimeMillis();
@@ -237,6 +241,21 @@ public final class SystemIME {
             lastSent = s;
             lastSentTime = now;
             return true;
+        }
+
+        @Override
+        public CharSequence getTextBeforeCursor(int n, int flags) {
+            return "";
+        }
+
+        @Override
+        public CharSequence getTextAfterCursor(int n, int flags) {
+            return "";
+        }
+
+        @Override
+        public CharSequence getSelectedText(int flags) {
+            return null;
         }
 
         @Override
