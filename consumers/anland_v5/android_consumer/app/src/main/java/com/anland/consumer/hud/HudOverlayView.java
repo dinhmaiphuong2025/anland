@@ -25,7 +25,7 @@ import java.util.List;
  * Root Overlay View managing Execution Mode and Fullscreen HUD Editor Mode (PUBG/FreeFire style).
  * Handles separate Portrait/Landscape layouts, dynamic collision snapping, guidelines, and property inspector.
  */
-public final class HudOverlayView extends FrameLayout {
+public final class HudOverlayView extends FrameLayout implements IModifierProvider {
 
     public interface HudHost {
         void sendKey(int action, int evdevCode); // 0=down, 1=up
@@ -281,6 +281,60 @@ public final class HudOverlayView extends FrameLayout {
         b.setTextColor(Color.WHITE);
         b.setPadding(dp(6), dp(4), dp(6), dp(4));
         return b;
+    }
+
+    @Override
+    protected void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        rebuildActiveLayout();
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        if (w > 0 && h > 0 && (w != oldw || h != oldh)) {
+            HudLayout layout = getActiveLayout();
+            for (int i = 0; i < mFloatingContainer.getChildCount(); i++) {
+                View view = mFloatingContainer.getChildAt(i);
+                if (i < layout.floatingButtons.size()) {
+                    HudButton model = layout.floatingButtons.get(i);
+                    float density = getResources().getDisplayMetrics().density;
+                    int bw = Math.round(model.widthDp * density);
+                    int bh = Math.round(model.heightDp * density);
+                    view.setX(model.posXPercent * w - bw * 0.5f);
+                    view.setY(model.posYPercent * h - bh * 0.5f);
+                }
+            }
+        }
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (mIsEditMode) {
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                selectButton(null, null);
+            }
+            return true;
+        }
+        return super.onTouchEvent(event);
+    }
+
+    @Override
+    public boolean hasActiveModifier() {
+        return false; // To be implemented with active modifier tracking
+    }
+
+    @Override
+    public void sendKeyComboFromExternal(int evdevScancode) {
+        if (mHost != null) {
+            mHost.sendKey(0, evdevScancode);
+            postDelayed(() -> mHost.sendKey(1, evdevScancode), 40);
+        }
+    }
+
+    @Override
+    public void reset() {
+        // Reset any locked modifiers
     }
 
     public void rebuildActiveLayout() {

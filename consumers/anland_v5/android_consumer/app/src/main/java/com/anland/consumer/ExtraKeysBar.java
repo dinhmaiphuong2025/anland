@@ -34,7 +34,9 @@ import java.util.Map;
  * MainActivity's native methods directly. Ordinary keys are sent as evdev
  * scancodes (down+up); text keys ('/', '-', '|') are sent as UTF-8 text.
  */
-public class ExtraKeysBar extends GridLayout {
+import com.anland.consumer.hud.IModifierProvider;
+
+public class ExtraKeysBar extends GridLayout implements IModifierProvider {
 
     /** Bridge to the host: native key/text injection, IME toggle and settings. */
     public interface Sender {
@@ -514,18 +516,14 @@ public class ExtraKeysBar extends GridLayout {
         }
     }
 
-    /** True if any modifier (CTRL/ALT/SHIFT) is currently active. */
+    @Override
     public boolean hasActiveModifier() {
         for (ModState m : mModifiers.values())
             if (m.active) return true;
         return false;
     }
 
-    /**
-     * Send an evdev key wrapped by the currently-active modifiers, then clear the
-     * unlocked ones. Used to combine a soft-keyboard character with a held bar
-     * modifier (e.g. bar CTRL + IME 'c' -> Ctrl+C).
-     */
+    @Override
     public void sendKeyComboFromExternal(int evdev) {
         sendWithModifiers(() -> {
             mSender.key(0, evdev);
@@ -533,7 +531,7 @@ public class ExtraKeysBar extends GridLayout {
         });
     }
 
-    /** Release any held modifiers (e.g. when the bar is hidden). */
+    @Override
     public void reset() {
         stopScheduled();
         dismissPopup();

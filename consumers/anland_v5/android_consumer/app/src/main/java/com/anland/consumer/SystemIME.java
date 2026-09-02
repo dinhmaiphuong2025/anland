@@ -15,6 +15,8 @@ import android.widget.EditText;
 
 import java.nio.charset.StandardCharsets;
 
+import com.anland.consumer.hud.IModifierProvider;
+
 /**
  * Bridges the Android system soft keyboard to the remote compositor.
  *
@@ -34,9 +36,7 @@ public final class SystemIME {
 
     /** Callback surface SystemIME needs from its host (MainActivity). */
     public interface Host {
-        /** The current extra-keys bar, or null if none is built. */
-        ExtraKeysBar getExtraKeysBar();
-        /** IME shown/hidden via the toggle; host syncs the bar / surface layout. */
+        IModifierProvider getActiveModifierProvider();
         void onImeVisibilityChanged(boolean visible);
     }
 
@@ -156,14 +156,14 @@ public final class SystemIME {
      * true if the input was consumed this way, false to fall back to plain text.
      */
     private boolean maybeSendModifierCombo(String s) {
-        ExtraKeysBar bar = host.getExtraKeysBar();
-        if (bar == null || !bar.hasActiveModifier()
+        IModifierProvider tracker = host.getActiveModifierProvider();
+        if (tracker == null || !tracker.hasActiveModifier()
                 || s == null || s.isEmpty())
             return false;
         for (int i = 0; i < s.length(); i++) {
             int evdev = charToEvdev(s.charAt(i));
             if (evdev != -1) {
-                bar.sendKeyComboFromExternal(evdev);
+                tracker.sendKeyComboFromExternal(evdev);
                 return true;
             }
         }
