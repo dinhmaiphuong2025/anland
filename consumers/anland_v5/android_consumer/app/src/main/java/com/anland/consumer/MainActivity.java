@@ -97,6 +97,7 @@ public class MainActivity extends Activity
     private boolean mForceSettings = false;
     private static final String KEY_ACCESSIBILITY_ENABLED = "accessibility_key_intercept";
     private static final String KEY_EXTRA_KEYS_MODE = "extra_keys_mode";
+    private com.anland.consumer.hud.HudOverlayView mHudOverlay;
     private static final String KEY_BACK_OPENS_EXTRA_KEYS = "back_opens_extra_keys";
     private static final String KEY_EXTRA_KEYS_LAYOUT = "extra_keys_layout";
     // Linux input-event-codes.h: KEY_BACK (the browser-back key).
@@ -279,6 +280,17 @@ public class MainActivity extends Activity
                 finish();
             }
         });
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent != null && "OPEN_HUD_EDITOR".equals(intent.getAction())) {
+            if (mHudOverlay != null) {
+                mHudOverlay.setEditMode(true);
+            }
+        }
     }
 
     @Override
@@ -548,14 +560,55 @@ public class MainActivity extends Activity
         // 1x1 so the IME target never overlaps the surface and steals touches.
         root.addView(systemIme.getInputView(), new FrameLayout.LayoutParams(1, 1));
 
-        // Bottom extra-keys bar (Termux-style). Hidden by default; toggled by the
-        // settings switch and synced in onResume. The layout (and thus the row
-        // count / height) comes from the user's JSON config; see buildExtraKeysBar.
         mRoot = root;
         mDensity = getResources().getDisplayMetrics().density;
         mKeyboardFloating = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getBoolean(KEY_KEYBOARD_FLOATING, false);
         buildExtraKeysBar();
+
+        // HUD Overlay View (Floating custom buttons, TrackPoint, Super Gesture & Pinned Dock)
+        mHudOverlay = new com.anland.consumer.hud.HudOverlayView(this, getSharedPreferences(PREFS_NAME, MODE_PRIVATE), new com.anland.consumer.hud.HudOverlayView.HudHost() {
+            @Override
+            public void sendKey(int action, int evdevCode) {
+                if (mNative != null) mNative.sendKey(action, evdevCode);
+            }
+            @Override
+            public void sendTextInput(byte[] utf8) {
+                if (mNative != null) mNative.sendTextInput(utf8);
+            }
+            @Override
+            public void sendMouseMotion(float dx, float dy) {
+                if (mNative != null) mNative.sendMouseMotion(0, 0, dx, dy);
+            }
+            @Override
+            public void sendMouseButton(int button, boolean pressed) {
+                if (mNative != null) mNative.sendMouseButton(button, pressed);
+            }
+            @Override
+            public void sendMouseScroll(int axis, float value) {
+                if (mNative != null) mNative.sendMouseScroll(axis, value);
+            }
+            @Override
+            public void toggleSystemKeyboard() {
+                if (systemIme != null) systemIme.toggleSystemKeyboard();
+            }
+            @Override
+            public void toggleVirtualKeyboard() {
+                MainActivity.this.toggleVirtualKeyboard();
+            }
+            @Override
+            public void openSettings() {
+                startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+            }
+            @Override
+            public void onLayoutSaved() {
+                relayout();
+            }
+        });
+        root.addView(mHudOverlay, new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.MATCH_PARENT
+        ));
 
         // ADDED: Create VirtualKeyboardView (hidden initially)
         virtualKeyboardView = new VirtualKeyboardView(this);
@@ -605,13 +658,6 @@ public class MainActivity extends Activity
         surfaceView.getHolder().addCallback(this);
 
         root.setOnApplyWindowInsetsListener((v, insets) -> {
-            // When the IME hides by any means (toggle, system back, or the IME's
-            // own close button), release the hidden input so its focus state
-            // stays in sync — otherwise reopening needs a second press.
-            // Ignore the initial hidden-inset dispatch while a show request is
-            // settling.  That dispatch can arrive between requestFocus() and
-            // showSoftInput(), and disabling the target there makes the first
-            // bound-key press appear to do nothing.
             boolean imeWasVisible = mImeBottom > 0;
             if (!insets.isVisible(WindowInsets.Type.ime()) && imeWasVisible) {
                 View focused = getCurrentFocus();
@@ -620,6 +666,9 @@ public class MainActivity extends Activity
                     surfaceView.requestFocus();
             }
             applyImeInset(insets);
+            if (mHudOverlay != null) {
+                mHudOverlay.applyImeBottom(mImeBottom);
+            }
             return v.onApplyWindowInsets(insets);
         });
 
@@ -2460,7 +2509,30 @@ public class MainActivity extends Activity
     }
 
     @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (mHudOverlay != null && mHudOverlay.isEditMode()) {
+            if (keyCode == KeyEvent.KEYCODE_BACK) {
+                mHudOverlay.setEditMode(false);
+                return true;
+            }
+        }
+        if (immersive != null && immersive.handleKey(event))
+            return true;
+        if (handlePointerCaptureBackKey(event))
+            return true;
+        if (keyCode == KeyEvent.KEYCODE_BACK && isMouseKeyEvent(event))
+            return true;
+        if (handleSoftKeyboardToggleKey(event))
+            return true;
+        forwardKeyToLinux(event);
+        return true;
+    }
+
+    @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
+        if (mHudOverlay != null && mHudOverlay.isEditMode()) {
+            if (keyCode == KeyEvent.KEYCODE_BACK) return true;
+        }
         if (immersive != null && immersive.handleKey(event))
             return true;
         if (handlePointerCaptureBackKey(event))
