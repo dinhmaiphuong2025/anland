@@ -44,10 +44,10 @@ public final class HudDockStripView extends HorizontalScrollView {
         } else {
             addView(mRow, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
-        rebuildItems(java.util.Collections.emptyList());
+        rebuildItems();
     }
 
-    public void rebuildItems(java.util.List<HudButton> activeModifiers) {
+    public void rebuildItems() {
         mRow.removeAllViews();
         List<HudButton> items = mLayout.dockItems;
         for (int i = 0; i < items.size(); i++) {
@@ -55,9 +55,8 @@ public final class HudDockStripView extends HorizontalScrollView {
             Button btn = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
             btn.setText(item.label != null ? item.label : "");
             btn.setTextSize(12);
-            boolean isActive = activeModifiers.contains(item);
-            btn.setTextColor(isActive ? 0xFF80DEEA : item.textColor);
-            btn.setBackgroundColor(isActive ? 0xFF7F7F7F : (item.bgColor != 0 ? item.bgColor : 0x22FFFFFF));
+            btn.setTextColor(item.textColor);
+            btn.setBackgroundColor(item.bgColor != 0 ? item.bgColor : 0x22FFFFFF);
             btn.setPadding(dp(6), dp(4), dp(6), dp(4));
 
             int width = ViewGroup.LayoutParams.WRAP_CONTENT;

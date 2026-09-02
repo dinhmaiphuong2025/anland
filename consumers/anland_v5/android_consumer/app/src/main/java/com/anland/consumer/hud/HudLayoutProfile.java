@@ -21,91 +21,23 @@ public final class HudLayoutProfile {
     private void initDefaults() {
         // --- Portrait Default ---
         initDockDefaults(portraitLayout);
-        
-        // Portrait floating buttons
-        HudButton pSuperGesture = new HudButton();
-        pSuperGesture.widgetType = HudButton.WIDGET_SUPER_GESTURE;
-        pSuperGesture.label = "SUPER";
-        pSuperGesture.posXPercent = 0.88f;
-        pSuperGesture.posYPercent = 0.40f;
-        pSuperGesture.widthDp = 58;
-        pSuperGesture.heightDp = 58;
-        pSuperGesture.cornerRadiusDp = 29; // circular
-        pSuperGesture.bgColor = 0xE61E1E2E;
-        pSuperGesture.action = HudAction.modifier(125); // Super key
-        portraitLayout.floatingButtons.add(pSuperGesture);
 
-        HudButton pOverview = new HudButton();
-        pOverview.label = "OVERVIEW";
-        pOverview.posXPercent = 0.88f;
-        pOverview.posYPercent = 0.50f;
-        pOverview.widthDp = 68;
-        pOverview.heightDp = 38;
-        pOverview.action = HudAction.combo(125, 24); // Super + O
-        portraitLayout.floatingButtons.add(pOverview);
-
-        HudButton pTerm = new HudButton();
-        pTerm.label = "TERM";
-        pTerm.posXPercent = 0.88f;
-        pTerm.posYPercent = 0.58f;
-        pTerm.widthDp = 68;
-        pTerm.heightDp = 38;
-        pTerm.action = HudAction.combo(125, 28); // Super + Enter
-        portraitLayout.floatingButtons.add(pTerm);
-
-        HudButton pClose = new HudButton();
-        pClose.label = "CLOSE";
-        pClose.posXPercent = 0.88f;
-        pClose.posYPercent = 0.66f;
-        pClose.widthDp = 68;
-        pClose.heightDp = 38;
-        pClose.bgColor = 0xE6882020;
-        pClose.action = HudAction.combo(125, 42, 16); // Super + Shift + Q
-        portraitLayout.floatingButtons.add(pClose);
+        // Portrait floating buttons: only TrackPoint
+        HudButton pTrackpoint = new HudButton();
+        pTrackpoint.widgetType = HudButton.WIDGET_TRACKPOINT;
+        pTrackpoint.label = "MOUSE";
+        pTrackpoint.posXPercent = 0.08f;
+        pTrackpoint.posYPercent = 0.55f;
+        pTrackpoint.widthDp = 60;
+        pTrackpoint.heightDp = 60;
+        pTrackpoint.cornerRadiusDp = 30;
+        pTrackpoint.bgColor = 0xE6CC2222;
+        portraitLayout.floatingButtons.add(pTrackpoint);
 
         // --- Landscape Default ---
         initDockDefaults(landscapeLayout);
 
-        HudButton lSuperGesture = new HudButton();
-        lSuperGesture.widgetType = HudButton.WIDGET_SUPER_GESTURE;
-        lSuperGesture.label = "SUPER";
-        lSuperGesture.posXPercent = 0.92f;
-        lSuperGesture.posYPercent = 0.40f;
-        lSuperGesture.widthDp = 60;
-        lSuperGesture.heightDp = 60;
-        lSuperGesture.cornerRadiusDp = 30;
-        lSuperGesture.bgColor = 0xE61E1E2E;
-        lSuperGesture.action = HudAction.modifier(125);
-        landscapeLayout.floatingButtons.add(lSuperGesture);
-
-        HudButton lOverview = new HudButton();
-        lOverview.label = "OVERVIEW";
-        lOverview.posXPercent = 0.92f;
-        lOverview.posYPercent = 0.53f;
-        lOverview.widthDp = 72;
-        lOverview.heightDp = 38;
-        lOverview.action = HudAction.combo(125, 24);
-        landscapeLayout.floatingButtons.add(lOverview);
-
-        HudButton lTerm = new HudButton();
-        lTerm.label = "TERM";
-        lTerm.posXPercent = 0.92f;
-        lTerm.posYPercent = 0.63f;
-        lTerm.widthDp = 72;
-        lTerm.heightDp = 38;
-        lTerm.action = HudAction.combo(125, 28);
-        landscapeLayout.floatingButtons.add(lTerm);
-
-        HudButton lClose = new HudButton();
-        lClose.label = "CLOSE";
-        lClose.posXPercent = 0.92f;
-        lClose.posYPercent = 0.73f;
-        lClose.widthDp = 72;
-        lClose.heightDp = 38;
-        lClose.bgColor = 0xE6882020;
-        lClose.action = HudAction.combo(125, 42, 16);
-        landscapeLayout.floatingButtons.add(lClose);
-
+        // Landscape floating buttons: only TrackPoint
         HudButton lTrackpoint = new HudButton();
         lTrackpoint.widgetType = HudButton.WIDGET_TRACKPOINT;
         lTrackpoint.label = "MOUSE";

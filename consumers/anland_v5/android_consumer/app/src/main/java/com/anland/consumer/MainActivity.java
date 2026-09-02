@@ -98,6 +98,7 @@ public class MainActivity extends Activity
     private static final String KEY_ACCESSIBILITY_ENABLED = "accessibility_key_intercept";
     private static final String KEY_EXTRA_KEYS_MODE = "extra_keys_mode";
     private com.anland.consumer.hud.HudOverlayView mHudOverlay;
+    private boolean mPendingOpenHudEditor = false;
     private static final String KEY_BACK_OPENS_EXTRA_KEYS = "back_opens_extra_keys";
     private static final String KEY_EXTRA_KEYS_LAYOUT = "extra_keys_layout";
     // Linux input-event-codes.h: KEY_BACK (the browser-back key).
@@ -451,9 +452,7 @@ public class MainActivity extends Activity
         Intent launch = getIntent();
         if (launch != null) {
             if ("OPEN_HUD_EDITOR".equals(launch.getAction())) {
-                if (mRoot != null && mHudOverlay != null) {
-                    mRoot.post(() -> mHudOverlay.setEditMode(true));
-                }
+                mPendingOpenHudEditor = true;
             }
             String sock = launch.getStringExtra(EXTRA_SOCKET_PATH);
             if (sock != null && !sock.trim().isEmpty())
@@ -620,6 +619,11 @@ public class MainActivity extends Activity
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
         ));
+
+        if (mPendingOpenHudEditor) {
+            mPendingOpenHudEditor = false;
+            mRoot.post(() -> mHudOverlay.setEditMode(true));
+        }
 
         // ADDED: Create VirtualKeyboardView (hidden initially)
         virtualKeyboardView = new VirtualKeyboardView(this);
