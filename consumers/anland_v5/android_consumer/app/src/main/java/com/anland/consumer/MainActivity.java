@@ -299,7 +299,8 @@ public class MainActivity extends Activity
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (!isSocketFile(resolveSocketPath())) {
+        boolean isEditingHud = mHudOverlay != null && mHudOverlay.isEditMode();
+        if (!isSocketFile(resolveSocketPath()) && !isEditingHud) {
             //exit
             android.widget.Toast.makeText(this, "Deamon Down",
                     android.widget.Toast.LENGTH_SHORT).show();
@@ -479,7 +480,7 @@ public class MainActivity extends Activity
         // pipeline. If it is not: a parameter launch has nowhere to fall back to
         // (toast and quit); a plain launcher start bounces to Settings so the user
         // can fix the path.
-        if (!isSocketFile(resolveSocketPath())) {
+        if (!isSocketFile(resolveSocketPath()) && !mPendingOpenHudEditor) {
             if (mSocketOverride != null) {
                 android.widget.Toast.makeText(this, "Socket Not Found",
                         android.widget.Toast.LENGTH_SHORT).show();
@@ -1635,7 +1636,7 @@ public class MainActivity extends Activity
 
         // Pick up a Keyboard-floating toggle made in Settings: update the bar's
         // backdrop and re-run the layout so the surface margin tracks the new mode.
-        if (mHudOverlay != null) {
+        if (mHudOverlay != null && !mHudOverlay.isEditMode()) {
             boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
             mHudOverlay.setVisibility(useHud ? View.VISIBLE : View.GONE);
         }
