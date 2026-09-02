@@ -542,7 +542,7 @@ public class SettingsActivity extends Activity {
             btnEditHud.setOnClickListener(v -> {
                 Intent intent = new Intent(this, MainActivity.class);
                 intent.setAction("OPEN_HUD_EDITOR");
-                intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_SINGLE_TOP);
                 startActivity(intent);
                 finish();
             });

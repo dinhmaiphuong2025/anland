@@ -61,11 +61,12 @@ public final class TrackpointNubView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        float density = getResources().getDisplayMetrics().density;
         float w = getWidth();
         float h = getHeight();
         float cx = w * 0.5f;
         float cy = h * 0.5f;
-        float radius = Math.min(w, h) * 0.5f - 2;
+        float radius = Math.min(w, h) * 0.5f - 3 * density;
 
         // Outer base ring
         mPaint.setStyle(Paint.Style.FILL);
@@ -74,12 +75,12 @@ public final class TrackpointNubView extends View {
 
         // Outer rim stroke
         mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(2f);
+        mPaint.setStrokeWidth(2f * density);
         mPaint.setColor(0x88FFFFFF);
         canvas.drawCircle(cx, cy, radius, mPaint);
 
         // Center Nub / Nipple
-        float nubRadius = radius * 0.55f;
+        float nubRadius = radius * 0.45f;
         float nubCx = cx + mCurrentOffsetX;
         float nubCy = cy + mCurrentOffsetY;
 
@@ -90,11 +91,13 @@ public final class TrackpointNubView extends View {
         // Nub textured grip dots
         mPaint.setColor(0xFFFFFFFF);
         mPaint.setStyle(Paint.Style.FILL);
-        canvas.drawCircle(nubCx, nubCy, 2.5f, mPaint);
-        canvas.drawCircle(nubCx - 6, nubCy, 2f, mPaint);
-        canvas.drawCircle(nubCx + 6, nubCy, 2f, mPaint);
-        canvas.drawCircle(nubCx, nubCy - 6, 2f, mPaint);
-        canvas.drawCircle(nubCx, nubCy + 6, 2f, mPaint);
+        float dotR = Math.max(1.5f, 2f * density);
+        float dotOffset = nubRadius * 0.4f;
+        canvas.drawCircle(nubCx, nubCy, dotR * 1.1f, mPaint);
+        canvas.drawCircle(nubCx - dotOffset, nubCy, dotR, mPaint);
+        canvas.drawCircle(nubCx + dotOffset, nubCy, dotR, mPaint);
+        canvas.drawCircle(nubCx, nubCy - dotOffset, dotR, mPaint);
+        canvas.drawCircle(nubCx, nubCy + dotOffset, dotR, mPaint);
     }
 
     @Override
@@ -141,11 +144,14 @@ public final class TrackpointNubView extends View {
     }
 
     private void updateOffset(float dx, float dy) {
-        float maxRadius = Math.min(getWidth(), getHeight()) * 0.35f;
+        float density = getResources().getDisplayMetrics().density;
+        float radius = Math.min(getWidth(), getHeight()) * 0.5f - 3 * density;
+        float nubRadius = radius * 0.45f;
+        float maxAllowedTravel = Math.max(0, radius - nubRadius);
         float dist = (float) Math.hypot(dx, dy);
-        if (dist > maxRadius && dist > 0) {
-            dx = (dx / dist) * maxRadius;
-            dy = (dy / dist) * maxRadius;
+        if (dist > maxAllowedTravel && dist > 0) {
+            dx = (dx / dist) * maxAllowedTravel;
+            dy = (dy / dist) * maxAllowedTravel;
         }
         mCurrentOffsetX = dx;
         mCurrentOffsetY = dy;

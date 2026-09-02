@@ -118,6 +118,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     public void setEditMode(boolean editMode) {
         this.mIsEditMode = editMode;
+        if (editMode) {
+            setVisibility(VISIBLE);
+        }
         if (editMode && !mProfile.firstTimeNoticeShown) {
             showFirstTimeNoticeDialog();
         }
@@ -149,8 +152,12 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     private void initViews() {
         removeAllViews();
+        setClipChildren(false);
+        setClipToPadding(false);
 
         mFloatingContainer = new FrameLayout(getContext());
+        mFloatingContainer.setClipChildren(false);
+        mFloatingContainer.setClipToPadding(false);
         addView(mFloatingContainer, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         // Dock Strip Container (Pinned at bottom)
