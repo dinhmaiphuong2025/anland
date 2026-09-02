@@ -1,0 +1,77 @@
+package com.anland.consumer.hud;
+
+import android.content.Context;
+import android.graphics.Color;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.HorizontalScrollView;
+import android.widget.LinearLayout;
+
+import java.util.List;
+
+/**
+ * Pinned Dock Strip View (Extensible Gboard tracking bar).
+ * Supports horizontal scrolling, drag-reordering, popup keys, and action dispatching.
+ */
+public final class HudDockStripView extends HorizontalScrollView {
+
+    public interface DockActionListener {
+        void onDockItemClick(HudButton item);
+        void onDockItemLongPress(HudButton item);
+    }
+
+    private final HudLayout mLayout;
+    private final DockActionListener mListener;
+    private final LinearLayout mRow;
+
+    public HudDockStripView(Context context, HudLayout layout, DockActionListener listener) {
+        super(context);
+        this.mLayout = layout;
+        this.mListener = listener;
+        setHorizontalScrollBarEnabled(false);
+
+        mRow = new LinearLayout(context);
+        mRow.setOrientation(LinearLayout.HORIZONTAL);
+        mRow.setGravity(Gravity.CENTER_VERTICAL);
+        mRow.setBackgroundColor(layout.dockBgColor);
+        mRow.setPadding(dp(4), dp(2), dp(4), dp(2));
+
+        addView(mRow, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        rebuildItems();
+    }
+
+    public void rebuildItems() {
+        mRow.removeAllViews();
+        List<HudButton> items = mLayout.dockItems;
+        for (int i = 0; i < items.size(); i++) {
+            HudButton item = items.get(i);
+            Button btn = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
+            btn.setText(item.label != null ? item.label : "");
+            btn.setTextSize(12);
+            btn.setTextColor(item.textColor);
+            btn.setBackgroundColor(item.bgColor != 0 ? item.bgColor : 0x22FFFFFF);
+            btn.setPadding(dp(6), dp(4), dp(6), dp(4));
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, dp(mLayout.dockHeightDp - 6));
+            lp.setMargins(dp(2), 0, dp(2), 0);
+            btn.setLayoutParams(lp);
+
+            btn.setOnClickListener(v -> {
+                if (mListener != null) mListener.onDockItemClick(item);
+            });
+            btn.setOnLongClickListener(v -> {
+                if (mListener != null) mListener.onDockItemLongPress(item);
+                return true;
+            });
+
+            mRow.addView(btn);
+        }
+    }
+
+    private int dp(int val) {
+        return Math.round(val * getResources().getDisplayMetrics().density);
+    }
+}

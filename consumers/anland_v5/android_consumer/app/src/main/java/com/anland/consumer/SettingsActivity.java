@@ -516,6 +516,29 @@ public class SettingsActivity extends Activity {
         header.setPadding(0, dp(24), 0, dp(8));
         root.addView(header);
 
+        // === Open Visual HUD Layout Editor ===
+        Button btnEditHud = new Button(this);
+        btnEditHud.setText("OPEN VISUAL HUD LAYOUT EDITOR");
+        btnEditHud.setTextColor(Color.WHITE);
+        btnEditHud.setTextSize(14);
+        btnEditHud.setBackgroundColor(0xFF1565C0);
+        btnEditHud.setPadding(0, dp(12), 0, dp(12));
+        btnEditHud.setOnClickListener(v -> {
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.setAction("OPEN_HUD_EDITOR");
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+            finish();
+        });
+        root.addView(btnEditHud);
+
+        TextView hudHint = new TextView(this);
+        hudHint.setText("Design on-screen buttons, Super gesture nub, ThinkPad trackpoint and Gboard docked strip with live dragging, snapping and precise numeric properties.");
+        hudHint.setTextSize(12);
+        hudHint.setTextColor(Color.GRAY);
+        hudHint.setPadding(0, dp(4), 0, dp(12));
+        root.addView(hudHint);
+
         // === Extra keys bar mode selector ===
         TextView modeLabel = new TextView(this);
         modeLabel.setText(R.string.extra_keys_mode_label);
