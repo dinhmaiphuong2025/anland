@@ -508,6 +508,7 @@ public class SettingsActivity extends Activity {
 
     private void buildExtraKeysSection(LinearLayout root) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean useHud = prefs.getBoolean("use_hud_overlay", false);
 
         TextView header = new TextView(this);
         header.setText(R.string.section_extra_keys);
@@ -516,38 +517,72 @@ public class SettingsActivity extends Activity {
         header.setPadding(0, dp(24), 0, dp(8));
         root.addView(header);
 
-        // === Open Visual HUD Layout Editor ===
-        Button btnEditHud = new Button(this);
-        btnEditHud.setText("OPEN VISUAL HUD LAYOUT EDITOR");
-        btnEditHud.setTextColor(Color.WHITE);
-        btnEditHud.setTextSize(14);
-        btnEditHud.setBackgroundColor(0xFF1565C0);
-        btnEditHud.setPadding(0, dp(12), 0, dp(12));
-        btnEditHud.setOnClickListener(v -> {
-            Intent intent = new Intent(this, MainActivity.class);
-            intent.setAction("OPEN_HUD_EDITOR");
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(intent);
-            finish();
+        // === Master Switch for HUD Overlay ===
+        android.widget.Switch hudSwitch = new android.widget.Switch(this);
+        hudSwitch.setText("Enable Custom HUD Controls (Floating & Dynamic Dock)");
+        hudSwitch.setTextSize(14);
+        hudSwitch.setChecked(useHud);
+        hudSwitch.setPadding(0, dp(8), 0, dp(16));
+        hudSwitch.setOnCheckedChangeListener((v, checked) -> {
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putBoolean("use_hud_overlay", checked).apply();
+            // Rebuild section to show/hide relevant controls
+            showKeyboardPage();
         });
-        root.addView(btnEditHud);
+        root.addView(hudSwitch);
 
-        TextView hudHint = new TextView(this);
-        hudHint.setText("Design on-screen buttons, Super gesture nub, ThinkPad trackpoint and Gboard docked strip with live dragging, snapping and precise numeric properties.");
-        hudHint.setTextSize(12);
-        hudHint.setTextColor(Color.GRAY);
-        hudHint.setPadding(0, dp(4), 0, dp(12));
-        root.addView(hudHint);
+        if (useHud) {
+            // === Open Visual HUD Layout Editor ===
+            Button btnEditHud = new Button(this);
+            btnEditHud.setText("OPEN VISUAL HUD LAYOUT EDITOR");
+            btnEditHud.setTextColor(Color.WHITE);
+            btnEditHud.setTextSize(14);
+            btnEditHud.setBackgroundColor(0xFF1565C0);
+            btnEditHud.setPadding(0, dp(12), 0, dp(12));
+            btnEditHud.setOnClickListener(v -> {
+                Intent intent = new Intent(this, MainActivity.class);
+                intent.setAction("OPEN_HUD_EDITOR");
+                intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                startActivity(intent);
+                finish();
+            });
+            root.addView(btnEditHud);
 
-        // === Extra keys bar mode selector ===
+            TextView hudHint = new TextView(this);
+            hudHint.setText("Design on-screen buttons, Super gesture nub, ThinkPad trackpoint and Gboard docked strip with live dragging, snapping and precise numeric properties.");
+            hudHint.setTextSize(12);
+            hudHint.setTextColor(Color.GRAY);
+            hudHint.setPadding(0, dp(4), 0, dp(12));
+            root.addView(hudHint);
+        } else {
+            // === Back key opens extra keys bar (Legacy only) ===
+            android.widget.Switch backOpensExtraKeysSwitch = new android.widget.Switch(this);
+            backOpensExtraKeysSwitch.setText(R.string.back_opens_switch);
+            backOpensExtraKeysSwitch.setTextSize(14);
+            backOpensExtraKeysSwitch.setPadding(0, dp(16), 0, 0);
+            backOpensExtraKeysSwitch.setChecked(prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true));
+            backOpensExtraKeysSwitch.setOnCheckedChangeListener((v, checked) ->
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                    .putBoolean(KEY_BACK_OPENS_EXTRA_KEYS, checked).apply());
+            root.addView(backOpensExtraKeysSwitch);
+
+            TextView backOpensExtraKeysHint = new TextView(this);
+            backOpensExtraKeysHint.setText(R.string.back_opens_hint);
+            backOpensExtraKeysHint.setTextSize(12);
+            backOpensExtraKeysHint.setTextColor(Color.GRAY);
+            backOpensExtraKeysHint.setPadding(0, dp(4), 0, dp(8));
+            root.addView(backOpensExtraKeysHint);
+        }
+
+        // === Extra keys bar mode selector (Shared) ===
         TextView modeLabel = new TextView(this);
         modeLabel.setText(R.string.extra_keys_mode_label);
         modeLabel.setTextSize(14);
         modeLabel.setPadding(0, dp(8), 0, dp(4));
         root.addView(modeLabel);
 
-        Spinner modeSpinner = new Spinner(this);
-        modeSpinner.setAdapter(new ArrayAdapter<>(this,
+        android.widget.Spinner modeSpinner = new android.widget.Spinner(this);
+        modeSpinner.setAdapter(new android.widget.ArrayAdapter<>(this,
             android.R.layout.simple_spinner_dropdown_item,
             getResources().getStringArray(R.array.extra_keys_mode_options)));
 
@@ -557,14 +592,14 @@ public class SettingsActivity extends Activity {
             if (EXTRA_KEYS_MODES[i].equals(curMode)) { modeIdx = i; break; }
         }
         modeSpinner.setSelection(modeIdx);
-        modeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        modeSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
-            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+            public void onItemSelected(android.widget.AdapterView<?> parent, View v, int pos, long id) {
                 getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putString(KEY_EXTRA_KEYS_MODE, EXTRA_KEYS_MODES[pos]).apply();
             }
             @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
         });
         root.addView(modeSpinner);
 
@@ -574,29 +609,13 @@ public class SettingsActivity extends Activity {
         modeHint.setTextColor(Color.GRAY);
         modeHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(modeHint);
-
-        // === Back key opens extra keys bar ===
-        Switch backOpensExtraKeysSwitch = new Switch(this);
-        backOpensExtraKeysSwitch.setText(R.string.back_opens_switch);
-        backOpensExtraKeysSwitch.setTextSize(14);
-        backOpensExtraKeysSwitch.setPadding(0, dp(16), 0, 0);
-        backOpensExtraKeysSwitch.setChecked(prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true));
-        backOpensExtraKeysSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putBoolean(KEY_BACK_OPENS_EXTRA_KEYS, checked).apply());
-        root.addView(backOpensExtraKeysSwitch);
-
-        TextView backOpensExtraKeysHint = new TextView(this);
-        backOpensExtraKeysHint.setText(R.string.back_opens_hint);
-        backOpensExtraKeysHint.setTextSize(12);
-        backOpensExtraKeysHint.setTextColor(Color.GRAY);
-        backOpensExtraKeysHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(backOpensExtraKeysHint);
-
     }
 
     private void buildCustomLayoutSection(LinearLayout root) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean useHud = prefs.getBoolean("use_hud_overlay", false);
+        if (useHud) return; // Hide legacy JSON editor when HUD is enabled
+
 
         TextView layoutHeader = new TextView(this);
         layoutHeader.setText(R.string.section_custom_layout);

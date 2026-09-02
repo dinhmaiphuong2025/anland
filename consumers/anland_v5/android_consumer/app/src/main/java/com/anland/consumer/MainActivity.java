@@ -2135,7 +2135,12 @@ public class MainActivity extends Activity
     // ---- SystemIME.Host ----
 
     @Override
-    public ExtraKeysBar getExtraKeysBar() {
+    public com.anland.consumer.hud.IModifierProvider getActiveModifierProvider() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean useHud = prefs.getBoolean("use_hud_overlay", false);
+        if (useHud && mHudOverlay != null) {
+            return mHudOverlay; // Assuming mHudOverlay implements IModifierProvider
+        }
         return extraKeysBar;
     }
 
