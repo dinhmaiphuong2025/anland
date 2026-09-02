@@ -38,7 +38,12 @@ public final class HudDockStripView extends HorizontalScrollView {
         mRow.setBackgroundColor(layout.dockBgColor);
         mRow.setPadding(dp(4), dp(2), dp(4), dp(2));
 
-        addView(mRow, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (!mLayout.dockScrollable) {
+            addView(mRow, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            setFillViewport(true);
+        } else {
+            addView(mRow, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
         rebuildItems();
     }
 
@@ -54,8 +59,15 @@ public final class HudDockStripView extends HorizontalScrollView {
             btn.setBackgroundColor(item.bgColor != 0 ? item.bgColor : 0x22FFFFFF);
             btn.setPadding(dp(6), dp(4), dp(6), dp(4));
 
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, dp(mLayout.dockHeightDp - 6));
+            int width = ViewGroup.LayoutParams.WRAP_CONTENT;
+            float weight = 0f;
+            if (item.widthDp > 0) {
+                width = dp(item.widthDp);
+            } else if (!mLayout.dockScrollable) {
+                weight = 1f;
+                width = 0;
+            }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(width, dp(mLayout.dockHeightDp - 6), weight);
             lp.setMargins(dp(2), 0, dp(2), 0);
             btn.setLayoutParams(lp);
 
