@@ -56,12 +56,20 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     private final SnapGeometryEngine mSnapEngine;
     private final Paint mGuidePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    // Self-edge guides are drawn in a different color so the user can
+    // distinguish "the canvas edge my button snapped to" (green, sibling)
+    // from "the edge of the button I am dragging" (cyan, self).
+    private final Paint mSelfGuidePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mSelectBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mGridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mBannerFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mBannerTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final List<Float> mActiveVerticalGuides = new ArrayList<>();
     private final List<Float> mActiveHorizontalGuides = new ArrayList<>();
+    // Self-edge guides (cạnh nút đang kéo). Tách riêng để vẽ khác màu với
+    // sibling guides (cạnh của nút khác trên màn hình).
+    private final List<Float> mActiveSelfVerticalGuides = new ArrayList<>();
+    private final List<Float> mActiveSelfHorizontalGuides = new ArrayList<>();
 
     // UI Sub-containers
     private FrameLayout mFloatingContainer;
@@ -93,6 +101,11 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mGuidePaint.setStrokeWidth(2f);
         mGuidePaint.setStyle(Paint.Style.STROKE);
         mGuidePaint.setPathEffect(new DashPathEffect(new float[]{8, 8}, 0));
+
+        mSelfGuidePaint.setColor(0xFF80DEEA); // Cyan: cạnh của nút đang kéo
+        mSelfGuidePaint.setStrokeWidth(2.5f);
+        mSelfGuidePaint.setStyle(Paint.Style.STROKE);
+        mSelfGuidePaint.setPathEffect(new DashPathEffect(new float[]{4, 4}, 0));
 
         mSelectBorderPaint.setColor(0xFF80DEEA);
         mSelectBorderPaint.setStrokeWidth(3f);
@@ -455,6 +468,12 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mFloatingContainer.removeAllViews();
         HudLayout layout = getActiveLayout();
         mDockStripView.rebuildItems();
+        // Dock strip is only useful in edit mode (so the user can rebind the
+        // keys). In production we hand off the screen real estate to the
+        // legacy ExtraKeysBar, which is what the user actually asked for.
+        if (mDockStripView != null) {
+            mDockStripView.setVisibility(mIsEditMode ? VISIBLE : GONE);
+        }
 
         for (HudButton b : layout.floatingButtons) {
             View widgetView;
@@ -549,10 +568,31 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     selectButton(model, view);
                     mTouchDownX = rawX;
                     mTouchDownY = rawY;
-                    mInitialBtnLeft = view.getX();
-                    mInitialBtnTop = view.getY();
+                    // Recompute initial position from the percentage model every
+                    // time the user starts dragging. View.getX() can be stale
+                    // after orientation changes or after rebuildActiveLayout
+                    // queued a post() that has not run yet, so trusting the
+                    // model is the only way to keep the view and the touch
+                    // delta in lock-step.
+                    int parentW = getWidth();
+                    int parentH = getHeight();
+                    if (parentW > 0 && parentH > 0) {
+                        mInitialBtnLeft = model.posXPercent * parentW - view.getWidth() * 0.5f;
+                        mInitialBtnTop = model.posYPercent * parentH - view.getHeight() * 0.5f;
+                        // Snap the view itself to the recomputed position so
+                        // that subsequent getX()/getY() calls also return this
+                        // value (the system View.setX() is a no-op when the
+                        // new value is identical to the current one).
+                        view.setX(mInitialBtnLeft);
+                        view.setY(mInitialBtnTop);
+                    } else {
+                        mInitialBtnLeft = view.getX();
+                        mInitialBtnTop = view.getY();
+                    }
                     mActiveVerticalGuides.clear();
                     mActiveHorizontalGuides.clear();
+                    mActiveSelfVerticalGuides.clear();
+                    mActiveSelfHorizontalGuides.clear();
                     invalidate();
                     return true;
 
@@ -572,10 +612,23 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     model.posXPercent = (snap.snappedX + view.getWidth() * 0.5f) / getWidth();
                     model.posYPercent = (snap.snappedY + view.getHeight() * 0.5f) / getHeight();
 
+                    // Sibling guides: xanh lá, snap-to-other-buttons
                     mActiveVerticalGuides.clear();
                     mActiveVerticalGuides.addAll(snap.verticalGuidelines);
                     mActiveHorizontalGuides.clear();
                     mActiveHorizontalGuides.addAll(snap.horizontalGuidelines);
+                    // Self guides: cyan, các cạnh của chính nút đang kéo (left,
+                    // right, center X, top, bottom, center Y). Luôn vẽ để
+                    // người dùng thấy được vị trí nút khi kéo thả, kể cả khi
+                    // không có sibling nào gần.
+                    mActiveSelfVerticalGuides.clear();
+                    mActiveSelfVerticalGuides.add(snap.snappedX);
+                    mActiveSelfVerticalGuides.add(snap.snappedX + view.getWidth());
+                    mActiveSelfVerticalGuides.add(snap.snappedX + view.getWidth() * 0.5f);
+                    mActiveSelfHorizontalGuides.clear();
+                    mActiveSelfHorizontalGuides.add(snap.snappedY);
+                    mActiveSelfHorizontalGuides.add(snap.snappedY + view.getHeight());
+                    mActiveSelfHorizontalGuides.add(snap.snappedY + view.getHeight() * 0.5f);
                     invalidate();
                     return true;
 
@@ -583,6 +636,8 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 case MotionEvent.ACTION_CANCEL:
                     mActiveVerticalGuides.clear();
                     mActiveHorizontalGuides.clear();
+                    mActiveSelfVerticalGuides.clear();
+                    mActiveSelfHorizontalGuides.clear();
                     invalidate();
                     return true;
             }
@@ -633,11 +688,19 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             }
 
             // 3. Draw magnetic guidelines
+            // 3a. Sibling guides (xanh lá) - snap với nút khác / mép canvas
             for (float x : mActiveVerticalGuides) {
                 canvas.drawLine(x, 0, x, h, mGuidePaint);
             }
             for (float y : mActiveHorizontalGuides) {
                 canvas.drawLine(0, y, w, y, mGuidePaint);
+            }
+            // 3b. Self guides (cyan) - các cạnh của chính nút đang kéo
+            for (float x : mActiveSelfVerticalGuides) {
+                canvas.drawLine(x, 0, x, h, mSelfGuidePaint);
+            }
+            for (float y : mActiveSelfHorizontalGuides) {
+                canvas.drawLine(0, y, w, y, mSelfGuidePaint);
             }
 
             // 4. Draw bounding border around selected view

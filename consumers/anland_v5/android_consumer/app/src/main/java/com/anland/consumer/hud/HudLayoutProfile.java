@@ -19,10 +19,19 @@ public final class HudLayoutProfile {
     }
 
     private void initDefaults() {
+        // Reset to a clean state: no leftover floating buttons, no leftover
+        // dock items. The HUD editor can rebuild whatever the user wants
+        // from this minimal starting point.
+        portraitLayout = new HudLayout();
+        landscapeLayout = new HudLayout();
+
         // --- Portrait Default ---
+        // Only TrackPoint remains on screen by default. The dock strip is
+        // hidden at runtime (see HudOverlayView.rebuildActiveLayout), so the
+        // dock items below are only kept for editor-time rebinding and for
+        // backward-compatible JSON migration.
         initDockDefaults(portraitLayout);
 
-        // Portrait floating buttons: only TrackPoint
         HudButton pTrackpoint = new HudButton();
         pTrackpoint.widgetType = HudButton.WIDGET_TRACKPOINT;
         pTrackpoint.label = "MOUSE";
@@ -37,7 +46,6 @@ public final class HudLayoutProfile {
         // --- Landscape Default ---
         initDockDefaults(landscapeLayout);
 
-        // Landscape floating buttons: only TrackPoint
         HudButton lTrackpoint = new HudButton();
         lTrackpoint.widgetType = HudButton.WIDGET_TRACKPOINT;
         lTrackpoint.label = "MOUSE";

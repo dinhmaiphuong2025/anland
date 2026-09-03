@@ -63,7 +63,7 @@ public final class HudKeyPickerDialog {
         // Content Container
         LinearLayout contentContainer = new LinearLayout(context);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
-        contentContainer.setMinimumHeight(dp(context, 320));
+        contentContainer.setMinimumHeight(dp(context, 480));
         root.addView(contentContainer);
 
         AlertDialog dialog = builder.setView(root).create();
@@ -109,9 +109,9 @@ public final class HudKeyPickerDialog {
     private static Button createTabButton(Context ctx, String text) {
         Button b = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
         b.setText(text);
-        b.setTextSize(11);
+        b.setTextSize(12);
         b.setTextColor(0xFF888888);
-        b.setPadding(dp(ctx, 6), dp(ctx, 4), dp(ctx, 6), dp(ctx, 4));
+        b.setPadding(dp(ctx, 10), dp(ctx, 6), dp(ctx, 10), dp(ctx, 6));
         b.setBackgroundColor(Color.TRANSPARENT);
         return b;
     }
@@ -144,6 +144,7 @@ public final class HudKeyPickerDialog {
         grid.setHorizontalSpacing(dp(ctx, 8));
         grid.setVerticalSpacing(dp(ctx, 8));
         grid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
+        grid.setColumnWidth(dp(ctx, 96));
 
         grid.setAdapter(new BaseAdapter() {
             @Override public int getCount() { return entries.size(); }
@@ -153,10 +154,11 @@ public final class HudKeyPickerDialog {
                 Button btn = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
                 KeyEntry entry = entries.get(i);
                 btn.setText(entry.label);
-                btn.setTextSize(12);
+                btn.setTextSize(14);
                 btn.setTextColor(Color.WHITE);
                 btn.setBackgroundColor(0xFF2A2B3D);
-                btn.setPadding(dp(ctx, 4), dp(ctx, 8), dp(ctx, 4), dp(ctx, 8));
+                btn.setPadding(dp(ctx, 4), dp(ctx, 12), dp(ctx, 4), dp(ctx, 12));
+                btn.setMinHeight(dp(ctx, 48));
                 btn.setOnClickListener(v -> {
                     dialog.dismiss();
                     if (listener != null) {
@@ -169,7 +171,7 @@ public final class HudKeyPickerDialog {
 
         scroll.addView(grid);
         container.addView(scroll, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 320)));
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 480)));
     }
 
     private static List<KeyEntry> getWmKeys() {

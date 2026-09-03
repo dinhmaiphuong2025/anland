@@ -34,6 +34,13 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
     private HudButton mActiveButton;
     private final InspectorCallback mCallback;
+    // Guard flag: true while we are programmatically setting EditText / SeekBar
+    // values inside bindButton(). The TextWatcher on mLabelInput and the seek
+    // listeners otherwise fire on every setText(), which would call back into
+    // mCallback.onModelChanged() and round-trip through HudOverlayView's
+    // rebuildActiveLayout(), ultimately resulting in a re-entrant bind and
+    // either a stack overflow or a runaway model update.
+    private boolean mIsProgrammaticChange = false;
 
     private TextView mTitleText;
     private EditText mLabelInput;
@@ -145,6 +152,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override public void afterTextChanged(Editable s) {
+                if (mIsProgrammaticChange) return;
                 if (mActiveButton != null && !s.toString().equals(mActiveButton.label)) {
                     mActiveButton.label = s.toString();
                     if (mCallback != null) mCallback.onModelChanged(mActiveButton);
@@ -277,7 +285,16 @@ public final class HudPropertyInspectorView extends LinearLayout {
         }
         setVisibility(VISIBLE);
         mTitleText.setText(b.widgetType.toUpperCase() + " PROPERTIES");
-        mLabelInput.setText(b.label != null ? b.label : "");
+        // Setting label text would otherwise re-trigger the TextWatcher and
+        // call back into onModelChanged -> rebuildActiveLayout -> bindButton
+        // in a tight loop. The flag is reset by syncSliderAndInput too, so
+        // both blocks share the same suppression window.
+        mIsProgrammaticChange = true;
+        try {
+            mLabelInput.setText(b.label != null ? b.label : "");
+        } finally {
+            mIsProgrammaticChange = false;
+        }
 
         syncSliderAndInput(mWidthSeekBar, mWidthInput, b.widthDp, 20, 240);
         syncSliderAndInput(mHeightSeekBar, mHeightInput, b.heightDp, 20, 240);
@@ -302,7 +319,12 @@ public final class HudPropertyInspectorView extends LinearLayout {
         }
         setVisibility(VISIBLE);
         mTitleText.setText("DOCK BUTTON PROPERTIES");
-        mLabelInput.setText(b.label != null ? b.label : "");
+        mIsProgrammaticChange = true;
+        try {
+            mLabelInput.setText(b.label != null ? b.label : "");
+        } finally {
+            mIsProgrammaticChange = false;
+        }
         mBtnPickMainAction.setText("Action: " + b.action.type.toUpperCase() + " (" + (b.action.code > 0 ? b.action.code : "") + ")");
         mSuperGestureOptions.setVisibility(GONE);
         if (mSizeSection != null) mSizeSection.setVisibility(GONE);
@@ -349,6 +371,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override public void afterTextChanged(Editable s) {
+                if (mIsProgrammaticChange) return;
                 try {
                     int val = Integer.parseInt(s.toString());
                     val = Math.max(min, Math.min(max, val));
@@ -364,8 +387,16 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
     private void syncSliderAndInput(SeekBar bar, EditText input, int value, int min, int max) {
         int clamped = Math.max(min, Math.min(max, value));
-        bar.setProgress(clamped - min);
-        input.setText(String.valueOf(clamped));
+        // Suppress the per-EditText / per-SeekBar listeners so they do not
+        // re-enter the callback chain (the model already carries the same
+        // value we are writing back to the views).
+        mIsProgrammaticChange = true;
+        try {
+            bar.setProgress(clamped - min);
+            input.setText(String.valueOf(clamped));
+        } finally {
+            mIsProgrammaticChange = false;
+        }
     }
 
     private EditText createExactNumberInput() {

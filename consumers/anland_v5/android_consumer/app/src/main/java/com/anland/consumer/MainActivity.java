@@ -349,6 +349,7 @@ public class MainActivity extends Activity
     }
 
     private void pushRefreshRate() {
+        if (mNative == null) return;
         Display d = getDisplay();
         if (d != null)
             mNative.setRefreshRate(d.getRefreshRate());
@@ -359,6 +360,7 @@ public class MainActivity extends Activity
     // app's native lib dir; the bridge is a unix socket in our cache dir that
     // the helper, launched via su, uses to hand back the daemon fd.
     private void applyConnectionConfig() {
+        if (mNative == null) return;
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String sock = resolveSocketPath();
         boolean useRoot = prefs.getBoolean(KEY_USE_ROOT, true);
@@ -530,7 +532,12 @@ public class MainActivity extends Activity
             return;
         }
 
-        sInstance = this;
+        // Only register as the focused instance when the native pipeline is
+        // alive. Editor-only windows (mNative == null) should not be the
+        // "focused" window in the camera/multiplexer sense; doing so leaves a
+        // ghost entry in sInstance that survives daemon restarts and shows
+        // up as an empty card in the Recents switcher even after finish().
+        if (socketOk) sInstance = this;
 
         // Each window owns its own native pipeline. We skip the native side when
         // the daemon is offline (editor-only mode); the rest of the activity
@@ -686,11 +693,11 @@ public class MainActivity extends Activity
         virtualKeyboardView.setOnKeyEventListener(new VirtualKeyboardView.OnKeyEventListener() {
             @Override
             public void onKeyDown(int scanCode) {
-                mNative.sendKey(0, scanCode);
+                if (mNative != null) mNative.sendKey(0, scanCode);
             }
             @Override
             public void onKeyUp(int scanCode) {
-                mNative.sendKey(1, scanCode);
+                if (mNative != null) mNative.sendKey(1, scanCode);
             }
         });
         // Add to root with no gravity – we will position manually.
@@ -1588,6 +1595,10 @@ public class MainActivity extends Activity
         if (!Float.isFinite(dx) || !Float.isFinite(dy)
                 || (dx == 0f && dy == 0f))
             return;
+        // No native pipeline (editor-only mode / daemon offline) - nothing to
+        // forward motion to. Silently drop so the screen touchpad does not
+        // crash the process when the user is just editing the HUD.
+        if (mNative == null) return;
         ensurePointerPosition();
         int width = pointerViewWidth();
         int height = pointerViewHeight();
@@ -1835,6 +1846,7 @@ public class MainActivity extends Activity
      * producer's PipeWire nodes). Safe to call after every (re)connect and whenever
      * the user changes a preset. */
     private void applyAudioLatency() {
+        if (mNative == null) return;
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         int speakerMs = prefs.getInt(KEY_SPEAKER_LATENCY_MS, 0);
         int micMs = prefs.getInt(KEY_MIC_LATENCY_MS, 0);
@@ -1842,11 +1854,13 @@ public class MainActivity extends Activity
     }
 
     private void applyAudioKeepalive() {
+        if (mNative == null) return;
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         mNative.setAudioKeepalive(prefs.getBoolean(KEY_AUDIO_KEEPALIVE, false));
     }
 
     private void applyMicState() {
+        if (mNative == null) return;
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         boolean want = prefs.getBoolean(KEY_MIC_ENABLED, false);
         if (!want) {
@@ -2148,9 +2162,11 @@ public class MainActivity extends Activity
     // scales with the parsed row count. Records the layout JSON it was built from.
     private void buildExtraKeysBar() {
         extraKeysBar = new ExtraKeysBar(this, new ExtraKeysBar.Sender() {
-            @Override public void key(int action, int evdev) { mNative.sendKey(action, evdev); }
+            @Override public void key(int action, int evdev) {
+                if (mNative != null) mNative.sendKey(action, evdev);
+            }
             @Override public void text(String s) {
-                if (!s.isEmpty()) mNative.sendTextInput(s.getBytes(StandardCharsets.UTF_8));
+                if (mNative != null && !s.isEmpty()) mNative.sendTextInput(s.getBytes(StandardCharsets.UTF_8));
             }
             // Tapping the ⌨ key keeps the original behaviour: toggle the system IME.
             @Override public void toggleKeyboard() { systemIme.toggleSystemKeyboard(); }
@@ -2383,6 +2399,7 @@ public class MainActivity extends Activity
     private void scheduleDeferredFinish() {
         cancelPendingFinish();
         final boolean wasEditing = mHudOverlay != null && mHudOverlay.isEditMode();
+        final boolean noNativeEver = !mNativeReady && mNative == null;
         mPendingFinish = () -> {
             mPendingFinish = null;
             // Re-check after the grace period: maybe the daemon is back, or the
@@ -2391,7 +2408,12 @@ public class MainActivity extends Activity
             if (!isSocketFile(resolveSocketPath()) && !editingNow) {
                 android.widget.Toast.makeText(this, "Deamon Down",
                         android.widget.Toast.LENGTH_SHORT).show();
-                finish();
+                // Editor-only windows never registered with sInstance, so it
+                // is safe to remove the task from Recents. Production windows
+                // have a real pipeline; fall back to plain finish() so the
+                // user can decide whether to relaunch from Recents.
+                if (noNativeEver) finishAndRemoveTask();
+                else finish();
             } else {
                 // Daemon came back during the grace period: bring the overlay up
                 // to date (banner changes from OFFLINE -> READY).
@@ -2633,6 +2655,11 @@ public class MainActivity extends Activity
     }
 
     private boolean forwardKeyToLinux(KeyEvent event, boolean convertBackToEscape) {
+        // In editor-only mode mNative is null because the daemon socket was
+        // missing when the activity launched. Forwarding a hardware key to a
+        // null native handle used to crash the process; just drop the event so
+        // the user can still design the layout.
+        if (mNative == null) return false;
         int keyCode = event.getKeyCode();
         int action = event.getAction() == KeyEvent.ACTION_DOWN ? 0 : 1;
         int evdev = -1;
@@ -2790,6 +2817,8 @@ public class MainActivity extends Activity
     }
 
     private boolean handleMouseEvent(MotionEvent event) {
+        // Editor-only mode: no native pipeline to forward mouse events to.
+        if (mNative == null) return false;
         float dx = 0f;
         float dy = 0f;
         
@@ -2827,6 +2856,7 @@ public class MainActivity extends Activity
     }
 
     private boolean handleTouchpadScroll(MotionEvent event) {
+        if (mNative == null) return true;
         if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
             float scrollX = event.getAxisValue(MotionEvent.AXIS_GESTURE_SCROLL_X_DISTANCE);
             float scrollY = event.getAxisValue(MotionEvent.AXIS_GESTURE_SCROLL_Y_DISTANCE);
@@ -2840,10 +2870,14 @@ public class MainActivity extends Activity
 
     // 原有 handleTouchEvent 一字未改
     private boolean handleTouchEvent(MotionEvent event) {
+        // In editor-only mode mNative is null. There is no desktop to forward
+        // touches to, so the screen touchpad should be entirely silent: just
+        // swallow the event instead of crashing.
+        if (mNative == null) return false;
         int action = event.getActionMasked();
         int pointerIdx = event.getActionIndex();
         int pointerId = event.getPointerId(pointerIdx);
-    
+
         switch (action) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
