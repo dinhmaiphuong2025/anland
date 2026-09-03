@@ -19,83 +19,25 @@ public final class HudLayoutProfile {
     }
 
     private void initDefaults() {
-        // Reset to a clean state: no leftover floating buttons, no leftover
-        // dock items. The HUD editor can rebuild whatever the user wants
-        // from this minimal starting point.
+        // Reset to a clean state: no floating buttons at all. The dock strip
+        // was removed in a later refactor; the legacy ExtraKeysBar is what
+        // the user actually wants on the bottom row now. Floating widgets
+        // (TrackPoint, Super Gesture, freeform buttons) are added on demand
+        // from the HUD editor toolbar, so the default profile starts blank.
         portraitLayout = new HudLayout();
         landscapeLayout = new HudLayout();
-
-        // --- Portrait Default ---
-        // Only TrackPoint remains on screen by default. The dock strip is
-        // hidden at runtime (see HudOverlayView.rebuildActiveLayout), so the
-        // dock items below are only kept for editor-time rebinding and for
-        // backward-compatible JSON migration.
-        initDockDefaults(portraitLayout);
-
-        HudButton pTrackpoint = new HudButton();
-        pTrackpoint.widgetType = HudButton.WIDGET_TRACKPOINT;
-        pTrackpoint.label = "MOUSE";
-        pTrackpoint.posXPercent = 0.08f;
-        pTrackpoint.posYPercent = 0.55f;
-        pTrackpoint.widthDp = 60;
-        pTrackpoint.heightDp = 60;
-        pTrackpoint.cornerRadiusDp = 30;
-        pTrackpoint.bgColor = 0xE6CC2222;
-        portraitLayout.floatingButtons.add(pTrackpoint);
-
-        // --- Landscape Default ---
-        initDockDefaults(landscapeLayout);
-
-        HudButton lTrackpoint = new HudButton();
-        lTrackpoint.widgetType = HudButton.WIDGET_TRACKPOINT;
-        lTrackpoint.label = "MOUSE";
-        lTrackpoint.posXPercent = 0.08f;
-        lTrackpoint.posYPercent = 0.65f;
-        lTrackpoint.widthDp = 64;
-        lTrackpoint.heightDp = 64;
-        lTrackpoint.cornerRadiusDp = 32;
-        lTrackpoint.bgColor = 0xE6CC2222;
-        landscapeLayout.floatingButtons.add(lTrackpoint);
+        // Note: we do NOT call initDockDefaults() any more. Old profiles with
+        // dock items still load via fromJSON() for backward compatibility,
+        // but new profiles start with empty dock lists.
     }
 
-    private void initDockDefaults(HudLayout l) {
-        l.dockItems.clear();
-        l.dockItems.add(createDockBtn("ESC", HudAction.key(1)));
-        l.dockItems.add(createDockBtn("TAB", HudAction.key(15)));
-        l.dockItems.add(createDockBtn("CTRL", HudAction.modifier(29)));
-        l.dockItems.add(createDockBtn("ALT", HudAction.modifier(56)));
-        l.dockItems.add(createDockBtn("SUPER", HudAction.modifier(125)));
-        
-        HudButton slash = createDockBtn("/", HudAction.text("/"));
-        slash.popupAction = HudAction.text("\\");
-        l.dockItems.add(slash);
-
-        HudButton dash = createDockBtn("-", HudAction.text("-"));
-        dash.popupAction = HudAction.text("|");
-        l.dockItems.add(dash);
-
-        HudButton left = createDockBtn("←", HudAction.key(105));
-        left.action.repeat = true;
-        l.dockItems.add(left);
-
-        HudButton down = createDockBtn("↓", HudAction.key(108));
-        down.action.repeat = true;
-        l.dockItems.add(down);
-
-        HudButton up = createDockBtn("↑", HudAction.key(103));
-        up.action.repeat = true;
-        l.dockItems.add(up);
-
-        HudButton right = createDockBtn("→", HudAction.key(106));
-        right.action.repeat = true;
-        l.dockItems.add(right);
-
-        HudButton ime = createDockBtn("KB", HudAction.system("toggle_ime"));
-        ime.popupAction = HudAction.system("toggle_vk");
-        l.dockItems.add(ime);
-
-        l.dockItems.add(createDockBtn("SET", HudAction.system("open_settings")));
-    }
+    // initDockDefaults removed: the dock strip was deleted and the legacy
+    // ExtraKeysBar is what the user actually wants on the bottom row now.
+    // Old profiles with non-empty dock lists still load via fromJSON() and
+    // the dock items are kept in the model for backward compatibility, but
+    // they are no longer rendered in the overlay (see HudOverlayView).
+    // @SuppressWarnings("unused") keeps the helper method alive for any
+    // future migration path that needs to seed the dock list.
 
     private HudButton createDockBtn(String label, HudAction action) {
         HudButton b = new HudButton();

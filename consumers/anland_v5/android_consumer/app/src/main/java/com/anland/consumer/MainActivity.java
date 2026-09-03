@@ -669,7 +669,12 @@ public class MainActivity extends Activity
             }
             @Override
             public void onLayoutSaved() {
-                relayout();
+                // Only relayout when the native pipeline exists. In editor
+                // mode (mNative == null) there is no surface to relayout,
+                // and the call would otherwise crash on a null surfaceView.
+                if (mNative != null) {
+                    relayout();
+                }
             }
             @Override
             public boolean isNativeReady() {
@@ -2050,15 +2055,17 @@ public class MainActivity extends Activity
     // IME inset and bar visibility. The surface ends above the bar, which sits
     // directly on top of the IME: "surface / extra-keys bar / IME" bottom-up.
     private void relayout() {
+        // Nothing to relayout when we are running editor-only (no native
+        // pipeline). Touching the surfaceView here would only produce
+        // garbage frames anyway, and skipping keeps the editor overlay
+        // clean while the user is just designing buttons.
+        if (mNative == null) return;
         boolean barVisible = extraKeysBar != null && extraKeysBar.getVisibility() == View.VISIBLE;
         int barH = barVisible ? mBarHeight : 0;
         // Floating mode: keyboard + bar overlay the display, so the surface keeps
         // its full size (target 0). Default mode: shrink the surface above both.
-        int hudDockH = 0;
-        if (mHudOverlay != null && mHudOverlay.getVisibility() == View.VISIBLE && getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false)) {
-            hudDockH = mHudOverlay.getActiveLayout().dockHeightDp > 0 ? Math.round(mHudOverlay.getActiveLayout().dockHeightDp * mDensity) : 0;
-        }
-        int target = mKeyboardFloating ? 0 : (mImeBottom + barH + hudDockH);
+        // The dock strip was removed; the bottom row is the legacy ExtraKeysBar.
+        int target = mKeyboardFloating ? 0 : (mImeBottom + barH);
 
         FrameLayout.LayoutParams lp =
             (FrameLayout.LayoutParams) surfaceView.getLayoutParams();
@@ -2616,12 +2623,25 @@ public class MainActivity extends Activity
     // unexpectedly finish via gesture navigation.
     @Override
     public void onBackPressed() {
+        // 1. If the user is in HUD edit mode, exit edit mode first. Without
+        //    this guard, finishing the activity while the overlay is still
+        //    in edit state leaves a half-frozen black window in Recents.
+        if (mHudOverlay != null && mHudOverlay.isEditMode()) {
+            mHudOverlay.setEditMode(false);
+            return;
+        }
+        // 2. Release an active pointer capture (Xiaomi/HyperOS back gesture).
         if (mRoot != null && mRoot.hasPointerCapture()) {
             releasePointerCapture(true);
-            // There is no KeyEvent on this OEM path. Use a wildcard so a trailing
-            // Back UP, if one still arrives, is consumed; a fresh DOWN clears it.
             trackPointerCaptureBack(null);
             showPointerCaptureReleasedToast();
+            return;
+        }
+        // 3. Editor-only mode (daemon offline) - the activity is useless
+        //    without a native pipeline. Remove from Recents entirely so
+        //    the user does not have to manually clear a black tile.
+        if (mNative == null) {
+            finishAndRemoveTask();
             return;
         }
     }

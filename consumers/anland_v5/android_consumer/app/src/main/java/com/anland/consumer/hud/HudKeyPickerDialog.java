@@ -63,7 +63,7 @@ public final class HudKeyPickerDialog {
         // Content Container
         LinearLayout contentContainer = new LinearLayout(context);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
-        contentContainer.setMinimumHeight(dp(context, 480));
+        contentContainer.setMinimumHeight(dp(context, 540));
         root.addView(contentContainer);
 
         AlertDialog dialog = builder.setView(root).create();
@@ -140,11 +140,16 @@ public final class HudKeyPickerDialog {
 
         ScrollView scroll = new ScrollView(ctx);
         GridView grid = new GridView(ctx);
-        grid.setNumColumns(3);
-        grid.setHorizontalSpacing(dp(ctx, 8));
-        grid.setVerticalSpacing(dp(ctx, 8));
-        grid.setStretchMode(GridView.STRETCH_COLUMN_WIDTH);
-        grid.setColumnWidth(dp(ctx, 96));
+        grid.setNumColumns(GridView.AUTO_FIT);
+        grid.setColumnWidth(dp(ctx, 100));
+        grid.setHorizontalSpacing(dp(ctx, 6));
+        grid.setVerticalSpacing(dp(ctx, 6));
+        // STRETCH_SPACING_UNIFORM keeps the inter-column gap constant and
+        // shares the leftover space evenly between the outer margins. With
+        // AUTO_FIT + columnWidth=100dp, a 360dp dialog gets 3 columns of
+        // 114dp each; a 600dp dialog gets 6 columns. Every entry stays
+        // visible without horizontal scrolling.
+        grid.setStretchMode(GridView.STRETCH_SPACING_UNIFORM);
 
         grid.setAdapter(new BaseAdapter() {
             @Override public int getCount() { return entries.size(); }
@@ -170,8 +175,12 @@ public final class HudKeyPickerDialog {
         });
 
         scroll.addView(grid);
+        // MATCH_PARENT height lets the grid show all rows. With AUTO_FIT we
+        // typically have 3-6 rows per tab; a fixed 480dp was sometimes
+        // clipping the bottom row when the device was short.
         container.addView(scroll, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(ctx, 480)));
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
     private static List<KeyEntry> getWmKeys() {

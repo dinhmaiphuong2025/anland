@@ -519,7 +519,7 @@ public class SettingsActivity extends Activity {
 
         // === Master Switch for HUD Overlay ===
         android.widget.Switch hudSwitch = new android.widget.Switch(this);
-        hudSwitch.setText("Enable Custom HUD Controls (Floating & Dynamic Dock)");
+        hudSwitch.setText("Enable Custom HUD Controls (Floating Buttons)");
         hudSwitch.setTextSize(14);
         hudSwitch.setChecked(useHud);
         hudSwitch.setPadding(0, dp(8), 0, dp(16));
@@ -549,7 +549,7 @@ public class SettingsActivity extends Activity {
             root.addView(btnEditHud);
 
             TextView hudHint = new TextView(this);
-            hudHint.setText("Design on-screen buttons, Super gesture nub, ThinkPad trackpoint and Gboard docked strip with live dragging, snapping and precise numeric properties.");
+            hudHint.setText("Design on-screen floating buttons. Add a TrackPoint (mouse or scroll mode) or a Super Gesture nub; each can be moved, resized and rebound to any key/combo/action with live snapping and precise numeric properties. The bottom key row is the legacy ExtraKeysBar.");
             hudHint.setTextSize(12);
             hudHint.setTextColor(Color.GRAY);
             hudHint.setPadding(0, dp(4), 0, dp(12));

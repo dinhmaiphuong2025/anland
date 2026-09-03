@@ -73,7 +73,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     // UI Sub-containers
     private FrameLayout mFloatingContainer;
-    private HudDockStripView mDockStripView;
+    // Dock strip removed. The legacy ExtraKeysBar is the bottom row now.
+    // HudLayout.dockItems is still in the model for JSON backward-compat,
+    // but no view renders it. See HudLayoutProfile for the migration note.
     private LinearLayout mTopToolbar;
     private HudPropertyInspectorView mInspectorView;
 
@@ -152,7 +154,6 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             showFirstTimeNoticeDialog();
         }
         mTopToolbar.setVisibility(editMode ? VISIBLE : GONE);
-        if (mDockStripView != null) mDockStripView.setEditMode(editMode);
         if (!editMode) {
             selectButton(null, null);
         }
@@ -188,31 +189,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mFloatingContainer.setClipToPadding(false);
         addView(mFloatingContainer, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Dock Strip Container (Pinned at bottom)
-        mDockStripView = new HudDockStripView(getContext(), getActiveLayout(), new HudDockStripView.DockActionListener() {
-            @Override
-            public void onDockItemClick(HudButton item) {
-                if (mIsEditMode) {
-                    onDockItemSelectedForEdit(item);
-                    return;
-                }
-                dispatchHudAction(item.action);
-            }
-            @Override
-            public void onDockItemLongPress(HudButton item) {
-                if (mIsEditMode) {
-                    // Long-press in edit mode is a fast-path to the key picker
-                    // (mirrors the freeform button's main action).
-                    onDockItemActionPickedForEdit(item);
-                    return;
-                }
-                if (item.popupAction != null) {
-                    dispatchHudAction(item.popupAction);
-                }
-            }
-        });
-        LayoutParams dockLp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(getActiveLayout().dockHeightDp), Gravity.BOTTOM);
-        addView(mDockStripView, dockLp);
+        // Dock strip removed. The legacy ExtraKeysBar is the bottom row now.
+        // HudLayout.dockItems is still in the model for backward-compat JSON,
+        // but the strip view itself is no longer created or added.
 
         // Top Toolbar (Visible only in Edit Mode)
         mTopToolbar = createTopToolbar();
@@ -262,28 +241,22 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         rebuildActiveLayout();
     }
 
-    // When the user taps a dock item in edit mode, open the property inspector
-    // for it so they can rebind the key. Dock items are stored in HudLayout as
-    // a List<HudButton> alongside floatingButtons, but live in their own dock
-    // strip view; we synthesize a "selected" feeling by passing the HudButton
-    // straight to the inspector.
-    private void onDockItemSelectedForEdit(HudButton item) {
-        mSelectedButton = item;
-        mSelectedView = null;
-        mInspectorView.bindDockItem(item);
-        invalidate();
-    }
-
-    // Long-press on a dock item in edit mode opens the key picker directly,
-    // skipping the inspector entirely (common case is "I just want to change
-    // what this key sends").
-    private void onDockItemActionPickedForEdit(HudButton item) {
-        HudKeyPickerDialog.show(getContext(), (action, displayLabel) -> {
-            item.action = action;
-            item.label = displayLabel;
-            mDockStripView.rebuildItems();
-        });
-    }
+    // The dock strip is gone. The two callbacks below used to populate it
+    // from the inspector; they are now dead code. Kept (commented) for the
+    // rare migration where a user still has dock items in their JSON.
+    //
+    // private void onDockItemSelectedForEdit(HudButton item) {
+    //     mSelectedButton = item;
+    //     mSelectedView = null;
+    //     mInspectorView.bindDockItem(item);
+    //     invalidate();
+    // }
+    // private void onDockItemActionPickedForEdit(HudButton item) {
+    //     HudKeyPickerDialog.show(getContext(), (action, displayLabel) -> {
+    //         item.action = action;
+    //         item.label = displayLabel;
+    //     });
+    // }
 
     private LinearLayout createTopToolbar() {
         LinearLayout bar = new LinearLayout(getContext());
@@ -440,9 +413,10 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private void setModifierActive(ModState state, boolean active) {
         state.active = active;
         if (!active) state.locked = false;
-        if (mDockStripView != null) {
-            mDockStripView.setModifierActiveState(state.evdev, active);
-        }
+        // Dock strip was removed; floating TrackPoint / SuperGesture buttons
+        // do not surface modifier latch state visually today. A future
+        // floating modifier indicator widget could subscribe to a
+        // listener here if we ever add one.
     }
 
     private void sendWithModifiers(Runnable emit) {
@@ -467,13 +441,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     public void rebuildActiveLayout() {
         mFloatingContainer.removeAllViews();
         HudLayout layout = getActiveLayout();
-        mDockStripView.rebuildItems();
-        // Dock strip is only useful in edit mode (so the user can rebind the
-        // keys). In production we hand off the screen real estate to the
-        // legacy ExtraKeysBar, which is what the user actually asked for.
-        if (mDockStripView != null) {
-            mDockStripView.setVisibility(mIsEditMode ? VISIBLE : GONE);
-        }
+        // Dock strip removed; no per-frame visibility bookkeeping needed.
 
         for (HudButton b : layout.floatingButtons) {
             View widgetView;
@@ -488,6 +456,20 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         if (!mIsEditMode && mHost != null) {
                             mHost.sendMouseButton(button, true);
                             postDelayed(() -> mHost.sendMouseButton(button, false), 50);
+                        }
+                    }
+                    @Override
+                    public void onPointerScroll(float dx, float dy) {
+                        // The dispatchContinuousMotion() loop already multiplies
+                        // the offset by trackpointSensitivity, so the deltas
+                        // arrive scaled. We only need to translate them into
+                        // vertical / horizontal wheel ticks. dx maps to
+                        // horizontal scroll (axis 1), dy maps to vertical
+                        // (axis 0). Sign is inverted so the nub feels like
+                        // a real touchpad: drag up -> page scrolls up.
+                        if (!mIsEditMode && mHost != null) {
+                            if (Math.abs(dy) > 0.01f) mHost.sendMouseScroll(0, -dy);
+                            if (Math.abs(dx) > 0.01f) mHost.sendMouseScroll(1, dx);
                         }
                     }
                 });
@@ -603,7 +585,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     RectF candidate = new RectF(targetX, targetY, targetX + view.getWidth(), targetY + view.getHeight());
                     List<RectF> siblings = getSiblingBounds(model);
 
-                    float dockTop = (mDockStripView.getVisibility() == VISIBLE) ? mDockStripView.getY() : getHeight();
+                    // Dock strip removed - widgets can use the full screen
+                    // height for snap-to-bottom alignment.
+                    float dockTop = getHeight();
                     SnapGeometryEngine.SnapResult snap = mSnapEngine.computeSnap(candidate, siblings, getWidth(), getHeight(), dockTop);
 
                     view.setX(snap.snappedX);
@@ -721,14 +705,12 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     private void drawDaemonBanner(Canvas canvas, float w, float h, float density) {
         boolean nativeReady = mHost.isNativeReady();
-        // The banner sits a few dp above the dock strip so it does not overlap
-        // with the existing buttons. We measure the strip's height dynamically
-        // to keep the gap consistent.
-        int dockHeight = mDockStripView != null ? mDockStripView.getHeight() : 0;
+        // The banner sits near the bottom of the screen. There is no dock
+        // strip anymore, so we simply leave a small bottom margin.
         float bannerH = 38f * density;
         float bannerW = Math.min(w - 40f * density, 420f * density);
         float left = (w - bannerW) / 2f;
-        float top = h - dockHeight - bannerH - 16f * density;
+        float top = h - bannerH - 24f * density;
         if (top < 16f * density) top = 16f * density;
 
         mBannerFillPaint.setColor(nativeReady ? 0xCC2E7D32 : 0xCCE53935);
@@ -796,9 +778,8 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     }
 
     public void applyImeBottom(int imeBottom) {
-        if (mDockStripView != null) {
-            mDockStripView.setTranslationY(-imeBottom);
-        }
+        // Dock strip removed. The legacy ExtraKeysBar lives in MainActivity
+        // and is positioned separately when the IME is up.
     }
 
     private int dp(int val) {
