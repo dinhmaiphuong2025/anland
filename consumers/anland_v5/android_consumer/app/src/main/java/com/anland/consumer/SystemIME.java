@@ -131,15 +131,16 @@ public final class SystemIME {
                 int evdev = KeyCodeMapper.getScanCode(e.getKeyCode());
                 if (evdev == -1) continue;
                 int action = e.getAction() == KeyEvent.ACTION_DOWN ? 0 : 1;
-                mNative.sendKey(action, evdev);
+                if (mNative != null) mNative.sendKey(action, evdev);
             }
         } else {
             // Fallback for unmapped chars (CJK, emoji, ...): send as TEXT_INPUT.
-            mNative.sendTextInput(text.getBytes(StandardCharsets.UTF_8));
+            if (mNative != null) mNative.sendTextInput(text.getBytes(StandardCharsets.UTF_8));
         }
     }
 
     private void tapKey(int evdevCode) {
+        if (mNative == null) return;
         mNative.sendKey(0, evdevCode);
         mNative.sendKey(1, evdevCode);
     }
@@ -308,10 +309,14 @@ public final class SystemIME {
                 // Character key: commitText forwards it.  Swallow here.
                 return true;
             }
-            if (event.getAction() == KeyEvent.ACTION_DOWN) {
-                mNative.sendKey(0, evdev);
-            } else if (event.getAction() == KeyEvent.ACTION_UP) {
-                mNative.sendKey(1, evdev);
+            if (mNative != null) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    mNative.sendKey(0, evdev);
+                } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                    mNative.sendKey(1, evdev);
+                }
+            }
+            if (event.getAction() == KeyEvent.ACTION_UP) {
                 if (evdev == EVDEV_BACKSPACE && mMirror.length() > 0) {
                     mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
                 } else {

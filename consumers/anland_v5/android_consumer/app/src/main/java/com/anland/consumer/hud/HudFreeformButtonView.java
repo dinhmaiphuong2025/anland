@@ -27,6 +27,11 @@ public final class HudFreeformButtonView extends View {
     private boolean mIsPressed;
     private float mDownY;
     private boolean mPopupTriggered;
+    // In edit mode the parent HudOverlayView already owns the touch stream
+    // (it uses an OnTouchListener to drag-to-move). We must NOT respond to
+    // touch ourselves, or the parent would think we have a competing gesture
+    // and we would also accidentally trigger button press on every tap.
+    private boolean mInEditMode = false;
 
     public HudFreeformButtonView(Context context, HudButton model, ButtonActionListener listener) {
         super(context);
@@ -36,6 +41,11 @@ public final class HudFreeformButtonView extends View {
         mTextPaint.setColor(Color.WHITE);
         mTextPaint.setTextAlign(Paint.Align.CENTER);
         mTextPaint.setFakeBoldText(true);
+    }
+
+    public void setInEditMode(boolean editMode) {
+        mInEditMode = editMode;
+        if (editMode) mIsPressed = false;
     }
 
     public HudButton getModel() {
@@ -87,6 +97,11 @@ public final class HudFreeformButtonView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        // Edit mode: the parent's OnTouchListener already owns this widget for
+        // drag-to-move. Returning false here is the Android-idiomatic way of
+        // saying "I don't want to handle this; my parent will".
+        if (mInEditMode) return false;
+
         float y = event.getY();
         float density = getResources().getDisplayMetrics().density;
 

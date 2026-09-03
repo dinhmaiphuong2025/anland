@@ -32,6 +32,11 @@ public final class TrackpointNubView extends View {
     private float mCurrentOffsetY;
     private boolean mIsDragging;
     private long mTouchDownTime;
+    // In edit mode, this nub must not act as a trackpoint. Drag-to-move is
+    // handled by the parent HudOverlayView via its OnTouchListener. Without
+    // this guard, a finger on the nub in edit mode would both move the cursor
+    // AND try to drag the widget, producing jittery / contradictory motion.
+    private boolean mInEditMode = false;
 
     private final Handler mLoopHandler = new Handler(Looper.getMainLooper());
     private final Runnable mLoopRunnable = new Runnable() {
@@ -48,6 +53,18 @@ public final class TrackpointNubView extends View {
         super(context);
         this.mModel = model;
         this.mDispatcher = dispatcher;
+    }
+
+    public void setInEditMode(boolean editMode) {
+        if (mInEditMode == editMode) return;
+        mInEditMode = editMode;
+        if (editMode) {
+            mIsDragging = false;
+            mCurrentOffsetX = 0;
+            mCurrentOffsetY = 0;
+            mLoopHandler.removeCallbacks(mLoopRunnable);
+        }
+        invalidate();
     }
 
     @Override
@@ -102,6 +119,11 @@ public final class TrackpointNubView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        // Edit mode: the parent's OnTouchListener owns this widget for
+        // drag-to-move. Defer completely so we don't also start a fake
+        // trackpoint drag or send mouse motion.
+        if (mInEditMode) return false;
+
         float x = event.getX();
         float y = event.getY();
         float cx = getWidth() * 0.5f;
