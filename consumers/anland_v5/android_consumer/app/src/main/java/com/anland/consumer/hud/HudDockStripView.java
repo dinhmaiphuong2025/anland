@@ -25,6 +25,12 @@ public final class HudDockStripView extends HorizontalScrollView {
     private final HudLayout mLayout;
     private final DockActionListener mListener;
     private final LinearLayout mRow;
+    // When edit mode is on, the dock strip turns into a configuration row:
+    // the buttons are visually subdued (lower opacity), drag-to-move is still
+    // allowed, and tap/long-press are routed to "select for rebinding" /
+    // "open key picker" instead of dispatching real key events.
+    private boolean mEditMode = false;
+    private int mSelectedDockIndex = -1;
 
     public HudDockStripView(Context context, HudLayout layout, DockActionListener listener) {
         super(context);
@@ -47,6 +53,16 @@ public final class HudDockStripView extends HorizontalScrollView {
         rebuildItems();
     }
 
+    public void setEditMode(boolean editMode) {
+        mEditMode = editMode;
+        if (!editMode) mSelectedDockIndex = -1;
+        rebuildItems();
+    }
+
+    public int getSelectedDockIndex() {
+        return mSelectedDockIndex;
+    }
+
     public void rebuildItems() {
         mRow.removeAllViews();
         List<HudButton> items = mLayout.dockItems;
@@ -55,8 +71,19 @@ public final class HudDockStripView extends HorizontalScrollView {
             Button btn = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
             btn.setText(item.label != null ? item.label : "");
             btn.setTextSize(12);
-            btn.setTextColor(item.textColor);
-            btn.setBackgroundColor(item.bgColor != 0 ? item.bgColor : 0x22FFFFFF);
+            // Selected dock item gets a vivid cyan border in edit mode to mirror
+            // the floating button's selection treatment.
+            if (mEditMode && i == mSelectedDockIndex) {
+                btn.setTextColor(0xFF11111B);
+                btn.setBackgroundColor(0xFF80DEEA);
+            } else if (mEditMode) {
+                // Lower opacity so the strip reads as "configurable" not "active".
+                btn.setTextColor(0x99FFFFFF);
+                btn.setBackgroundColor(0x22FFFFFF);
+            } else {
+                btn.setTextColor(item.textColor);
+                btn.setBackgroundColor(item.bgColor != 0 ? item.bgColor : 0x22FFFFFF);
+            }
             btn.setPadding(dp(6), dp(4), dp(6), dp(4));
 
             int width = ViewGroup.LayoutParams.WRAP_CONTENT;
@@ -71,7 +98,12 @@ public final class HudDockStripView extends HorizontalScrollView {
             lp.setMargins(dp(2), 0, dp(2), 0);
             btn.setLayoutParams(lp);
 
+            final int dockIdx = i;
             btn.setOnClickListener(v -> {
+                if (mEditMode) {
+                    mSelectedDockIndex = dockIdx;
+                    rebuildItems();
+                }
                 if (mListener != null) mListener.onDockItemClick(item);
             });
             btn.setOnLongClickListener(v -> {
@@ -92,6 +124,9 @@ public final class HudDockStripView extends HorizontalScrollView {
                     View v = mRow.getChildAt(i);
                     if (v instanceof Button) {
                         Button btn = (Button) v;
+                        // Edit mode uses the subdued palette; skip the active
+                        // highlight there to avoid visual noise.
+                        if (mEditMode) return;
                         btn.setTextColor(active ? 0xFF80DEEA : item.textColor);
                         btn.setBackgroundColor(active ? 0x6680DEEA : (item.bgColor != 0 ? item.bgColor : 0x22FFFFFF));
                     }

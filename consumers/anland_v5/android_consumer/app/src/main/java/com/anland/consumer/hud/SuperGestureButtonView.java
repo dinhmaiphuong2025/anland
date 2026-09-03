@@ -37,6 +37,7 @@ public final class SuperGestureButtonView extends View {
     private long mDownTime;
     private boolean mIsPressed;
     private boolean mGestureFired;
+    private boolean mInEditMode = false;
 
     public SuperGestureButtonView(Context context, HudButton model, GestureListener listener) {
         super(context);
@@ -46,6 +47,14 @@ public final class SuperGestureButtonView extends View {
         mTextPaint.setColor(Color.WHITE);
         mTextPaint.setTextAlign(Paint.Align.CENTER);
         mTextPaint.setFakeBoldText(true);
+    }
+
+    public void setInEditMode(boolean editMode) {
+        mInEditMode = editMode;
+        if (editMode) {
+            mIsPressed = false;
+            mGestureFired = false;
+        }
     }
 
     @Override
@@ -94,6 +103,7 @@ public final class SuperGestureButtonView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (mInEditMode) return false;
         float x = event.getX();
         float y = event.getY();
         float density = getResources().getDisplayMetrics().density;

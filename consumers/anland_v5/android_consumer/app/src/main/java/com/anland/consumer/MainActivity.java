@@ -18,6 +18,8 @@ import android.media.AudioFocusRequest;
 import android.media.AudioManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.Display;
@@ -99,6 +101,16 @@ public class MainActivity extends Activity
     private static final String KEY_EXTRA_KEYS_MODE = "extra_keys_mode";
     private com.anland.consumer.hud.HudOverlayView mHudOverlay;
     private boolean mPendingOpenHudEditor = false;
+    // True when the daemon socket is live and the native pipeline is connected.
+    // False during editor-only mode when the daemon is offline; we keep mNative
+    // null and all native calls must be no-ops.
+    private boolean mNativeReady = false;
+    // Grace period handler: defer finish() when daemon drops so Droidspaces has
+    // time to bring it back. Cancellable if socket reappears or user re-engages.
+    private final Handler mGraceHandler = new Handler(Looper.getMainLooper());
+    private Runnable mPendingFinish = null;
+    private boolean mHasRenderedFrame = false;
+    private static final long GRACE_PERIOD_MS = 3000L;
     private static final String KEY_BACK_OPENS_EXTRA_KEYS = "back_opens_extra_keys";
     private static final String KEY_EXTRA_KEYS_LAYOUT = "extra_keys_layout";
     // Linux input-event-codes.h: KEY_BACK (the browser-back key).
@@ -272,15 +284,15 @@ public class MainActivity extends Activity
             // The producer connection is gone: every consumer var regresses to 0.
             // The producer resends the current value once it reconnects.
             captureMouseForced = false;
+            mNativeReady = false;
+            // Tell the HUD overlay so it can swap the "DAEMON READY" banner for
+            // "DAEMON OFFLINE" without forcing the user out of edit mode.
+            if (mHudOverlay != null) mHudOverlay.refreshEditModeBanner();
             if (mRoot != null)
                 mRoot.post(this::syncPointerCapture);
-            boolean isEditingHud = (mHudOverlay != null && mHudOverlay.isEditMode()) || mPendingOpenHudEditor;
-            if (!isSocketFile(resolveSocketPath()) && !isEditingHud) {
-                //exit
-                android.widget.Toast.makeText(this, "Deamon Down",
-                        android.widget.Toast.LENGTH_SHORT).show();
-                finish();
-            }
+            // Defer finish() so Droidspaces can bring the daemon back without
+            // bouncing the user out of their session.
+            scheduleDeferredFinish();
         });
     }
 
@@ -300,12 +312,22 @@ public class MainActivity extends Activity
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        boolean isEditingHud = (mHudOverlay != null && mHudOverlay.isEditMode()) || mPendingOpenHudEditor;
-        if (!isSocketFile(resolveSocketPath()) && !isEditingHud) {
-            //exit
-            android.widget.Toast.makeText(this, "Deamon Down",
-                    android.widget.Toast.LENGTH_SHORT).show();
-            finish();
+        // While the window is losing focus (a dialog, the system bar, etc.) we
+        // do not run any socket check at all: Droidspaces may be in the middle
+        // of restarting the daemon, and a spurious finish would be hostile to
+        // edit mode. Only verify on focus regains.
+        if (!hasFocus) {
+            if (immersive != null) immersive.stop();
+            return;
+        }
+        if (!isSocketFile(resolveSocketPath()) && !mNativeReady) {
+            // The socket is gone and we never had a working pipeline. No point
+            // scheduling a deferred finish: scheduleDeferredFinish will
+            // re-check the editor flag at fire time, so editor mode stays up.
+            scheduleDeferredFinish();
+        } else if (mNativeReady && isSocketFile(resolveSocketPath())) {
+            // The user came back and the daemon is fine: cancel any pending exit.
+            cancelPendingFinish();
         }
         if (hasFocus) {
             // Become the accessibility-key target and the focused instance, so real
@@ -324,11 +346,6 @@ public class MainActivity extends Activity
                 releasePointerCapture(false);
             }
         }
-        // Losing focus means something else is on screen (a system dialog, a
-        // call). Holding an exclusive grab on every input device through that
-        // would leave the user with nothing to answer it with.
-        if (!hasFocus && immersive != null)
-            immersive.stop();
     }
 
     private void pushRefreshRate() {
@@ -381,6 +398,16 @@ public class MainActivity extends Activity
             }
             return;
         }
+        // Lazy-create the native side if we previously entered in editor-only
+        // mode (mNative == null) but the daemon has since come online. We must
+        // also bring up the clipboard and the SystemIME that depend on it.
+        if (mNative == null) {
+            mNative = new Native();
+            mNativeReady = true;
+            if (clipboard == null) clipboard = new Clipboard(this, mNative);
+            applyConnectionConfig();
+            if (mHudOverlay != null) mHudOverlay.refreshEditModeBanner();
+        }
         // Sync the current rotation into the native pipeline before the producer
         // connects, so a window launched while the device is already rotated
         // reports its orientation instead of waiting for the next display event.
@@ -389,6 +416,7 @@ public class MainActivity extends Activity
         // onDisplayChanged may not fire until something switches modes.
         pushRefreshRate();
         mNative.start(surface, clipboard, this);
+        mNativeReady = true;
     }
 
     // True only when `path` exists and is a unix-domain socket. In root mode the
@@ -486,8 +514,11 @@ public class MainActivity extends Activity
         // The target must exist AND be a unix-domain socket before we bring up any
         // pipeline. If it is not: a parameter launch has nowhere to fall back to
         // (toast and quit); a plain launcher start bounces to Settings so the user
-        // can fix the path.
-        if (!isSocketFile(resolveSocketPath()) && !mPendingOpenHudEditor) {
+        // can fix the path. The HUD editor however must always be reachable so
+        // the user can design layout regardless of daemon state, so we still
+        // enter onCreate, but skip native pipeline initialization.
+        boolean socketOk = isSocketFile(resolveSocketPath());
+        if (!socketOk && !mPendingOpenHudEditor) {
             if (mSocketOverride != null) {
                 android.widget.Toast.makeText(this, "Socket Not Found",
                         android.widget.Toast.LENGTH_SHORT).show();
@@ -501,11 +532,20 @@ public class MainActivity extends Activity
 
         sInstance = this;
 
-        // Each window owns its own native pipeline.
-        mNative = new Native();
+        // Each window owns its own native pipeline. We skip the native side when
+        // the daemon is offline (editor-only mode); the rest of the activity
+        // builds a UI surface that lets the user still design and save the HUD
+        // layout. The native side will be lazily created the next time the
+        // socket appears and startNative() is called.
+        mNativeReady = socketOk;
+        if (socketOk) {
+            mNative = new Native();
+            clipboard = new Clipboard(this, mNative);
+        } else {
+            mNative = null;
+            clipboard = null;
+        }
         setTaskDescription(new ActivityManager.TaskDescription(mWindowName));
-
-        clipboard = new Clipboard(this, mNative);
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
@@ -623,6 +663,10 @@ public class MainActivity extends Activity
             @Override
             public void onLayoutSaved() {
                 relayout();
+            }
+            @Override
+            public boolean isNativeReady() {
+                return mNativeReady;
             }
         });
         mHudOverlay.setVisibility(useHud ? View.VISIBLE : View.GONE);
@@ -1668,7 +1712,7 @@ public class MainActivity extends Activity
         // and registers SERVICE_TYPE_CAMERA on the very first connect rather than a
         // later reconnect. Idempotent, so safe to call on every resume.
         applyCameraState();
-        if (surfaceReady) {
+        if (surfaceReady && mNative != null) {
             mNative.stop();
             applyConnectionConfig();
             int sw = surfaceView.getWidth();
@@ -1768,6 +1812,7 @@ public class MainActivity extends Activity
      * onRequestPermissionsResult finishes the init.
      */
     private void applyCameraState() {
+        if (mNative == null) return;  // no pipeline -> nothing to plug the camera into
         boolean want = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .getBoolean(KEY_CAMERA_ENABLED, false);
         if (!want || cameraInited)
@@ -1857,6 +1902,15 @@ public class MainActivity extends Activity
         // from the actual surface dimensions instead.
         if (mNative != null && width > 0 && height > 0)
             mNative.setScreenSize(width, height);
+        // In editor-only mode the native pipeline is intentionally absent. We
+        // still need the surface flags updated so the HUD overlay can draw on
+        // a properly sized window, but we MUST NOT call mNative.stop() or the
+        // pipeline (which has never been started) would crash.
+        if (mNative == null) {
+            surfaceReady = true;
+            if (mHudOverlay != null) mHudOverlay.refreshEditModeBanner();
+            return;
+        }
         updateDisplayRotation();
         ensurePointerPosition();
         surfaceReady = true;
@@ -2304,6 +2358,55 @@ public class MainActivity extends Activity
     public void sendMouseScroll(int axis, float value) {
         if (mNative != null)
             mNative.sendMouseScroll(axis, value);
+    }
+
+    // ---- Safe pipeline helpers (no-op when native is offline) ----
+
+    private void safeSendKey(int action, int evdev) {
+        if (mNativeReady && mNative != null) mNative.sendKey(action, evdev);
+    }
+    private void safeSendTextInput(byte[] data) {
+        if (mNativeReady && mNative != null) mNative.sendTextInput(data);
+    }
+    private void safeSendMouseMotion(float dx, float dy) {
+        if (mNativeReady && mNative != null) mNative.sendMouseMotion(0, 0, dx, dy);
+    }
+    private void safeSendMouseButton(int button, boolean pressed) {
+        if (mNativeReady && mNative != null) mNative.sendMouseButton(button, pressed);
+    }
+    private void safeSendMouseScroll(int axis, float value) {
+        if (mNativeReady && mNative != null) mNative.sendMouseScroll(axis, value);
+    }
+
+    // Defer finish() to give Droidspaces a chance to bring the daemon back.
+    // Cancelled automatically if socket reappears or user re-engages.
+    private void scheduleDeferredFinish() {
+        cancelPendingFinish();
+        final boolean wasEditing = mHudOverlay != null && mHudOverlay.isEditMode();
+        mPendingFinish = () -> {
+            mPendingFinish = null;
+            // Re-check after the grace period: maybe the daemon is back, or the
+            // user has since entered edit mode.
+            boolean editingNow = mHudOverlay != null && mHudOverlay.isEditMode();
+            if (!isSocketFile(resolveSocketPath()) && !editingNow) {
+                android.widget.Toast.makeText(this, "Deamon Down",
+                        android.widget.Toast.LENGTH_SHORT).show();
+                finish();
+            } else {
+                // Daemon came back during the grace period: bring the overlay up
+                // to date (banner changes from OFFLINE -> READY).
+                if (mHudOverlay != null) mHudOverlay.refreshEditModeBanner();
+            }
+            if (!wasEditing && mHudOverlay != null) mHudOverlay.refreshEditModeBanner();
+        };
+        mGraceHandler.postDelayed(mPendingFinish, GRACE_PERIOD_MS);
+    }
+
+    private void cancelPendingFinish() {
+        if (mPendingFinish != null) {
+            mGraceHandler.removeCallbacks(mPendingFinish);
+            mPendingFinish = null;
+        }
     }
 
     @Override

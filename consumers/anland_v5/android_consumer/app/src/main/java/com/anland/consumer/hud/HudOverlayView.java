@@ -39,6 +39,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         void toggleVirtualKeyboard();
         void openSettings();
         void onLayoutSaved();
+        // True when the daemon socket is live and the native pipeline is
+        // connected. False during editor-only mode when the daemon is offline.
+        boolean isNativeReady();
     }
 
     private static final String PREF_KEY_PROFILE = "hud_layout_profile_v2";
@@ -55,6 +58,8 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private final Paint mGuidePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mSelectBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mGridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mBannerFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mBannerTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final List<Float> mActiveVerticalGuides = new ArrayList<>();
     private final List<Float> mActiveHorizontalGuides = new ArrayList<>();
 
@@ -97,6 +102,10 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mGridPaint.setStrokeWidth(1f);
         mGridPaint.setStyle(Paint.Style.STROKE);
 
+        mBannerTextPaint.setColor(Color.WHITE);
+        mBannerTextPaint.setFakeBoldText(true);
+        mBannerTextPaint.setTextAlign(Paint.Align.CENTER);
+
         setWillNotDraw(false);
         loadProfile();
         initViews();
@@ -130,6 +139,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             showFirstTimeNoticeDialog();
         }
         mTopToolbar.setVisibility(editMode ? VISIBLE : GONE);
+        if (mDockStripView != null) mDockStripView.setEditMode(editMode);
         if (!editMode) {
             selectButton(null, null);
         }
@@ -169,11 +179,21 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mDockStripView = new HudDockStripView(getContext(), getActiveLayout(), new HudDockStripView.DockActionListener() {
             @Override
             public void onDockItemClick(HudButton item) {
-                if (!mIsEditMode) dispatchHudAction(item.action);
+                if (mIsEditMode) {
+                    onDockItemSelectedForEdit(item);
+                    return;
+                }
+                dispatchHudAction(item.action);
             }
             @Override
             public void onDockItemLongPress(HudButton item) {
-                if (!mIsEditMode && item.popupAction != null) {
+                if (mIsEditMode) {
+                    // Long-press in edit mode is a fast-path to the key picker
+                    // (mirrors the freeform button's main action).
+                    onDockItemActionPickedForEdit(item);
+                    return;
+                }
+                if (item.popupAction != null) {
                     dispatchHudAction(item.popupAction);
                 }
             }
@@ -227,6 +247,29 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         addView(mInspectorView, new LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         rebuildActiveLayout();
+    }
+
+    // When the user taps a dock item in edit mode, open the property inspector
+    // for it so they can rebind the key. Dock items are stored in HudLayout as
+    // a List<HudButton> alongside floatingButtons, but live in their own dock
+    // strip view; we synthesize a "selected" feeling by passing the HudButton
+    // straight to the inspector.
+    private void onDockItemSelectedForEdit(HudButton item) {
+        mSelectedButton = item;
+        mSelectedView = null;
+        mInspectorView.bindDockItem(item);
+        invalidate();
+    }
+
+    // Long-press on a dock item in edit mode opens the key picker directly,
+    // skipping the inspector entirely (common case is "I just want to change
+    // what this key sends").
+    private void onDockItemActionPickedForEdit(HudButton item) {
+        HudKeyPickerDialog.show(getContext(), (action, displayLabel) -> {
+            item.action = action;
+            item.label = displayLabel;
+            mDockStripView.rebuildItems();
+        });
     }
 
     private LinearLayout createTopToolbar() {
@@ -429,6 +472,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         }
                     }
                 });
+                ((TrackpointNubView) widgetView).setInEditMode(mIsEditMode);
             } else if (HudButton.WIDGET_SUPER_GESTURE.equals(b.widgetType)) {
                 widgetView = new SuperGestureButtonView(getContext(), b, new SuperGestureButtonView.GestureListener() {
                     @Override
@@ -448,6 +492,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         else if (direction == SuperGestureButtonView.DIR_DOWN) dispatchHudAction(btn.swipeDownAction);
                     }
                 });
+                ((SuperGestureButtonView) widgetView).setInEditMode(mIsEditMode);
             } else {
                 widgetView = new HudFreeformButtonView(getContext(), b, new HudFreeformButtonView.ButtonActionListener() {
                     @Override
@@ -469,6 +514,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         }
                     }
                 });
+                ((HudFreeformButtonView) widgetView).setInEditMode(mIsEditMode);
             }
 
             attachTouchAndLayout(widgetView, b);
@@ -602,11 +648,54 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         mSelectedView.getY() + mSelectedView.getHeight() + 3 * density);
                 canvas.drawRoundRect(r, 6 * density, 6 * density, mSelectBorderPaint);
             }
+
+            // 5. Bottom-center daemon status banner (only when we know the host)
+            if (mHost != null) {
+                drawDaemonBanner(canvas, w, h, density);
+            }
         }
+    }
+
+    private void drawDaemonBanner(Canvas canvas, float w, float h, float density) {
+        boolean nativeReady = mHost.isNativeReady();
+        // The banner sits a few dp above the dock strip so it does not overlap
+        // with the existing buttons. We measure the strip's height dynamically
+        // to keep the gap consistent.
+        int dockHeight = mDockStripView != null ? mDockStripView.getHeight() : 0;
+        float bannerH = 38f * density;
+        float bannerW = Math.min(w - 40f * density, 420f * density);
+        float left = (w - bannerW) / 2f;
+        float top = h - dockHeight - bannerH - 16f * density;
+        if (top < 16f * density) top = 16f * density;
+
+        mBannerFillPaint.setColor(nativeReady ? 0xCC2E7D32 : 0xCCE53935);
+        canvas.drawRoundRect(left, top, left + bannerW, top + bannerH,
+                              8f * density, 8f * density, mBannerFillPaint);
+
+        mBannerTextPaint.setTextSize(14f * density);
+        float textY = top + bannerH / 2f -
+            ((mBannerTextPaint.descent() + mBannerTextPaint.ascent()) * 0.5f);
+        String msg = nativeReady
+            ? "DAEMON READY  ·  TAP EXIT EDIT TO USE DESKTOP"
+            : "DAEMON OFFLINE  ·  EDITOR MODE ONLY";
+        canvas.drawText(msg, left + bannerW / 2f, textY, mBannerTextPaint);
+    }
+
+    // MainActivity calls this whenever the native pipeline state may have
+    // changed (onFallback, startNative success, surfaceChanged). It just
+    // invalidates; the banner text is recomputed inside onDraw.
+    public void refreshEditModeBanner() {
+        if (mIsEditMode) invalidate();
     }
 
     private void dispatchHudAction(HudAction action) {
         if (action == null || mHost == null) return;
+        // In edit mode, all action dispatch is suspended. The dock strip and
+        // freeform buttons only serve as drag-to-move handles; the user picks
+        // a button to rebind it via the property inspector. Without this guard
+        // tapping ESC/Tab/Super in edit mode would still send real keys to
+        // the desktop, surprising the user mid-design.
+        if (mIsEditMode) return;
         if (HudAction.TYPE_KEY.equals(action.type)) {
             sendWithModifiers(() -> {
                 if (mHost != null) {

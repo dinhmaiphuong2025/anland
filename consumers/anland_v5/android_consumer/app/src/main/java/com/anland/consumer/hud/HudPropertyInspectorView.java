@@ -51,8 +51,16 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private SeekBar mOpacitySeekBar;
     private EditText mOpacityInput;
 
+    // Container that holds the four size/opacity slider rows. Visible only for
+    // floating buttons; hidden for dock items (their size is fixed by the
+    // dock strip's grid policy).
+    private LinearLayout mSizeSection;
+
     private Button mBtnPickMainAction;
     private LinearLayout mSuperGestureOptions;
+    // Bottom action row; cached so bindDockItem can hide it (dock items cannot
+    // be deleted or duplicated from the strip).
+    private LinearLayout mOpRow;
     private Button mBtnPickSwipeLeft;
     private Button mBtnPickSwipeRight;
     private Button mBtnPickSwipeUp;
@@ -145,10 +153,16 @@ public final class HudPropertyInspectorView extends LinearLayout {
         });
         content.addView(mLabelInput);
 
-        // Sliders with exact Numeric Edit Fields
+        // Sliders with exact Numeric Edit Fields. All four live inside a single
+        // container so we can hide the whole block for dock items (where
+        // size/corner/opacity are fixed by the strip layout) without tearing
+        // down the views underneath.
+        mSizeSection = new LinearLayout(getContext());
+        mSizeSection.setOrientation(VERTICAL);
+
         mWidthSeekBar = new SeekBar(getContext());
         mWidthInput = createExactNumberInput();
-        content.addView(createSliderRow("Width (dp):", mWidthSeekBar, mWidthInput, 20, 240, val -> {
+        mSizeSection.addView(createSliderRow("Width (dp):", mWidthSeekBar, mWidthInput, 20, 240, val -> {
             if (mActiveButton != null) {
                 mActiveButton.widthDp = val;
                 if (mCallback != null) mCallback.onModelChanged(mActiveButton);
@@ -157,7 +171,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         mHeightSeekBar = new SeekBar(getContext());
         mHeightInput = createExactNumberInput();
-        content.addView(createSliderRow("Height (dp):", mHeightSeekBar, mHeightInput, 20, 240, val -> {
+        mSizeSection.addView(createSliderRow("Height (dp):", mHeightSeekBar, mHeightInput, 20, 240, val -> {
             if (mActiveButton != null) {
                 mActiveButton.heightDp = val;
                 if (mCallback != null) mCallback.onModelChanged(mActiveButton);
@@ -166,7 +180,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         mCornerSeekBar = new SeekBar(getContext());
         mCornerInput = createExactNumberInput();
-        content.addView(createSliderRow("Corner Radius (dp):", mCornerSeekBar, mCornerInput, 0, 50, val -> {
+        mSizeSection.addView(createSliderRow("Corner Radius (dp):", mCornerSeekBar, mCornerInput, 0, 50, val -> {
             if (mActiveButton != null) {
                 mActiveButton.cornerRadiusDp = val;
                 if (mCallback != null) mCallback.onModelChanged(mActiveButton);
@@ -175,12 +189,13 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         mOpacitySeekBar = new SeekBar(getContext());
         mOpacityInput = createExactNumberInput();
-        content.addView(createSliderRow("Opacity (%):", mOpacitySeekBar, mOpacityInput, 10, 100, val -> {
+        mSizeSection.addView(createSliderRow("Opacity (%):", mOpacitySeekBar, mOpacityInput, 10, 100, val -> {
             if (mActiveButton != null) {
                 mActiveButton.opacity = val / 100f;
                 if (mCallback != null) mCallback.onModelChanged(mActiveButton);
             }
         }));
+        content.addView(mSizeSection);
 
         // Action Assignment
         content.addView(createSectionLabel("Action Mapping:"));
@@ -221,8 +236,10 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mSuperGestureOptions.addView(mBtnPickSwipeDown);
         content.addView(mSuperGestureOptions);
 
-        // Bottom Operations: Delete & Duplicate
-        LinearLayout opRow = new LinearLayout(getContext());
+        // Bottom Operations: Delete & Duplicate. Hidden for dock items since
+        // they live in a fixed-size strip and don't have a per-button position
+        // to delete/duplicate.
+        final LinearLayout opRow = new LinearLayout(getContext());
         opRow.setOrientation(HORIZONTAL);
         opRow.setPadding(0, dp(12), 0, 0);
 
@@ -249,6 +266,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         content.addView(opRow);
         scroll.addView(content);
         addView(scroll, new LayoutParams(dp(260), dp(340)));
+        mOpRow = opRow;
     }
 
     public void bindButton(HudButton b) {
@@ -268,6 +286,27 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         mBtnPickMainAction.setText("Action: " + b.action.type.toUpperCase() + " (" + (b.action.code > 0 ? b.action.code : "") + ")");
         mSuperGestureOptions.setVisibility(HudButton.WIDGET_SUPER_GESTURE.equals(b.widgetType) ? VISIBLE : GONE);
+        // Floating buttons show size sliders and the delete/duplicate row.
+        if (mSizeSection != null) mSizeSection.setVisibility(VISIBLE);
+        if (mOpRow != null) mOpRow.setVisibility(VISIBLE);
+    }
+
+    // Slim inspector for a dock strip button: only the display label and the
+    // action mapping matter, because dock items share a fixed size/opacity set
+    // by the strip layout and cannot be deleted/duplicated from the strip.
+    public void bindDockItem(HudButton b) {
+        this.mActiveButton = b;
+        if (b == null) {
+            setVisibility(GONE);
+            return;
+        }
+        setVisibility(VISIBLE);
+        mTitleText.setText("DOCK BUTTON PROPERTIES");
+        mLabelInput.setText(b.label != null ? b.label : "");
+        mBtnPickMainAction.setText("Action: " + b.action.type.toUpperCase() + " (" + (b.action.code > 0 ? b.action.code : "") + ")");
+        mSuperGestureOptions.setVisibility(GONE);
+        if (mSizeSection != null) mSizeSection.setVisibility(GONE);
+        if (mOpRow != null) mOpRow.setVisibility(GONE);
     }
 
     private interface ValueConsumer {
