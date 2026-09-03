@@ -106,10 +106,15 @@ public class MainActivity extends Activity
     // null and all native calls must be no-ops.
     private boolean mNativeReady = false;
     // Grace period handler: defer finish() when daemon drops so Droidspaces has
-    // time to bring it back. Cancellable if socket reappears or user re-engages.
+    // time to bring the daemon back. Cancellable if socket reappears or user re-engages.
     private final Handler mGraceHandler = new Handler(Looper.getMainLooper());
     private Runnable mPendingFinish = null;
     private boolean mHasRenderedFrame = false;
+    // Once the user has interacted with the production view (touched the
+    // desktop, tapped a key, etc.), we should NOT auto-finish the activity
+    // on a daemon-down event, even if the grace period is still running.
+    // The editor path handles its own teardown via mPendingOpenHudEditor.
+    private boolean mUserInteracted = false;
     private static final long GRACE_PERIOD_MS = 3000L;
     private static final String KEY_BACK_OPENS_EXTRA_KEYS = "back_opens_extra_keys";
     private static final String KEY_EXTRA_KEYS_LAYOUT = "extra_keys_layout";
@@ -290,8 +295,12 @@ public class MainActivity extends Activity
             if (mHudOverlay != null) mHudOverlay.refreshEditModeBanner();
             if (mRoot != null)
                 mRoot.post(this::syncPointerCapture);
-            // Defer finish() so Droidspaces can bring the daemon back without
-            // bouncing the user out of their session.
+            // If the user is no longer in the editor (mPendingOpenHudEditor
+            // was cleared by onEditModeExited) and the activity was never
+            // a ghost editor-only window, just let the normal onWindowFocus
+            // / scheduleDeferredFinish path handle the rest. We always
+            // schedule so a daemon bounce in the background still gets a
+            // chance to recover before we toast and finish.
             scheduleDeferredFinish();
         });
     }
@@ -679,6 +688,19 @@ public class MainActivity extends Activity
             @Override
             public boolean isNativeReady() {
                 return mNativeReady;
+            }
+            @Override
+            public void onEditModeExited() {
+                // The user just pressed [EXIT EDIT] or the back key while in
+                // HUD edit mode. The flags below were set so we could open
+                // the editor without a live daemon. Now that the user is
+                // back in the production view, drop them so a subsequent
+                // daemon-down event does not bounce the activity out of
+                // Recents. This is the fix for the "ghost tab after save"
+                // symptom: a deferred finish queued for the editor path
+                // would otherwise fire here and create a new task entry.
+                mPendingOpenHudEditor = false;
+                cancelPendingFinish();
             }
         });
         mHudOverlay.setVisibility(useHud ? View.VISIBLE : View.GONE);
@@ -2407,12 +2429,19 @@ public class MainActivity extends Activity
         cancelPendingFinish();
         final boolean wasEditing = mHudOverlay != null && mHudOverlay.isEditMode();
         final boolean noNativeEver = !mNativeReady && mNative == null;
+        final boolean wasPendingEditor = mPendingOpenHudEditor;
         mPendingFinish = () -> {
             mPendingFinish = null;
             // Re-check after the grace period: maybe the daemon is back, or the
             // user has since entered edit mode.
             boolean editingNow = mHudOverlay != null && mHudOverlay.isEditMode();
-            if (!isSocketFile(resolveSocketPath()) && !editingNow) {
+            // If the user has already been using the production view (touched
+            // the desktop, tapped a key) AND we are not in editor-only mode,
+            // do not force-close the activity. A daemon bounce in the
+            // background should not break an in-progress session; the user
+            // can recover by themselves.
+            boolean userInProduction = mUserInteracted && !editingNow && !wasPendingEditor;
+            if (!isSocketFile(resolveSocketPath()) && !editingNow && !userInProduction) {
                 android.widget.Toast.makeText(this, "Deamon Down",
                         android.widget.Toast.LENGTH_SHORT).show();
                 // Editor-only windows never registered with sInstance, so it
@@ -2498,6 +2527,9 @@ public class MainActivity extends Activity
     // ================================================================
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            mUserInteracted = true;
+        }
         boolean mouseEvent = isMouseEvent(event);
         if (mouseEvent && event.getActionMasked() == MotionEvent.ACTION_DOWN
                 && pointerCaptureWanted() && mRoot != null
@@ -2578,6 +2610,7 @@ public class MainActivity extends Activity
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
+        mUserInteracted = true;
         if (mHudOverlay != null && mHudOverlay.isEditMode()) {
             if (keyCode == KeyEvent.KEYCODE_BACK) {
                 mHudOverlay.setEditMode(false);

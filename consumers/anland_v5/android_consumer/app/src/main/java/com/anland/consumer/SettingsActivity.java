@@ -517,28 +517,36 @@ public class SettingsActivity extends Activity {
         header.setPadding(0, dp(24), 0, dp(8));
         root.addView(header);
 
-        // === Master Switch for HUD Overlay ===
+        // === Master Switch for HUD Layout Editor (own section, peer to ExtraKeysBar / ImmersiveMode) ===
+        TextView hudSectionLabel = new TextView(this);
+        hudSectionLabel.setText("CUSTOM HUD CONTROLS");
+        hudSectionLabel.setTextSize(16);
+        hudSectionLabel.setTypeface(null, Typeface.BOLD);
+        hudSectionLabel.setPadding(0, dp(24), 0, dp(8));
+        root.addView(hudSectionLabel);
+
         android.widget.Switch hudSwitch = new android.widget.Switch(this);
         hudSwitch.setText("Enable Custom HUD Controls (Floating Buttons)");
         hudSwitch.setTextSize(14);
         hudSwitch.setChecked(useHud);
-        hudSwitch.setPadding(0, dp(8), 0, dp(16));
+        hudSwitch.setPadding(0, dp(8), 0, dp(8));
+        // Toggling the HUD must NOT touch KEY_EXTRA_KEYS_MODE anymore. The two
+        // features are now independent peers: the user can run the floating
+        // button overlay, the legacy ExtraKeys bar, or both at the same time.
         hudSwitch.setOnCheckedChangeListener((v, checked) -> {
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString(KEY_EXTRA_KEYS_MODE, checked ? MODE_NEVER : MODE_ALWAYS)
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean("use_hud_overlay", checked).apply();
-            // Rebuild section to show/hide relevant controls
             showKeyboardPage();
         });
         root.addView(hudSwitch);
 
         if (useHud) {
             // === Open Visual HUD Layout Editor ===
+            // Styled like the existing "Bind Soft Keyboard Toggle Key" button:
+            // a plain Material Button with just text + the default ripple, so
+            // all the bind-style controls read as a single coherent row group.
             Button btnEditHud = new Button(this);
-            btnEditHud.setText("OPEN VISUAL HUD LAYOUT EDITOR");
-            btnEditHud.setTextColor(Color.WHITE);
-            btnEditHud.setTextSize(14);
-            btnEditHud.setBackgroundColor(0xFF1565C0);
-            btnEditHud.setPadding(0, dp(12), 0, dp(12));
+            btnEditHud.setText("Open Visual HUD Layout Editor");
             btnEditHud.setOnClickListener(v -> {
                 Intent intent = new Intent(this, MainActivity.class);
                 intent.setAction("OPEN_HUD_EDITOR");
@@ -549,7 +557,7 @@ public class SettingsActivity extends Activity {
             root.addView(btnEditHud);
 
             TextView hudHint = new TextView(this);
-            hudHint.setText("Design on-screen floating buttons. Add a TrackPoint (mouse or scroll mode) or a Super Gesture nub; each can be moved, resized and rebound to any key/combo/action with live snapping and precise numeric properties. The bottom key row is the legacy ExtraKeysBar.");
+            hudHint.setText("Design on-screen floating buttons. Add a TrackPoint (mouse or scroll mode) or a Super Gesture nub; each can be moved, resized and rebound to any key/combo/action with live snapping and precise numeric properties. The bottom key row is the legacy ExtraKeysBar and is unaffected by this toggle.");
             hudHint.setTextSize(12);
             hudHint.setTextColor(Color.GRAY);
             hudHint.setPadding(0, dp(4), 0, dp(12));
