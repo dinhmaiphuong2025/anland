@@ -46,6 +46,12 @@ public final class HudButton {
     // TrackPoint specific mappings
     public float trackpointSensitivity = 1.5f;
     public int trackpointDeadzoneDp = 4;
+    // TrackPoint mode: "mouse" sends relative pointer motion (default),
+    // "scroll" sends scroll-wheel events instead so the same nub can be
+    // repurposed as a thumb-scroll pad.
+    public static final String MODE_MOUSE = "mouse";
+    public static final String MODE_SCROLL = "scroll";
+    public String trackpointMode = MODE_MOUSE;
 
     public HudButton() {}
 
@@ -77,6 +83,7 @@ public final class HudButton {
         } else if (WIDGET_TRACKPOINT.equals(widgetType)) {
             obj.put("trackpoint_sensitivity", trackpointSensitivity);
             obj.put("trackpoint_deadzone_dp", trackpointDeadzoneDp);
+            obj.put("trackpoint_mode", trackpointMode != null ? trackpointMode : MODE_MOUSE);
         }
         return obj;
     }
@@ -109,6 +116,8 @@ public final class HudButton {
 
         b.trackpointSensitivity = (float) obj.optDouble("trackpoint_sensitivity", 1.5);
         b.trackpointDeadzoneDp = obj.optInt("trackpoint_deadzone_dp", 4);
+        // Default to mouse mode when an old profile does not record a mode.
+        b.trackpointMode = obj.optString("trackpoint_mode", MODE_MOUSE);
         return b;
     }
 
@@ -135,6 +144,7 @@ public final class HudButton {
         d.swipeThresholdDp = this.swipeThresholdDp;
         d.trackpointSensitivity = this.trackpointSensitivity;
         d.trackpointDeadzoneDp = this.trackpointDeadzoneDp;
+        d.trackpointMode = this.trackpointMode;
         return d;
     }
 }

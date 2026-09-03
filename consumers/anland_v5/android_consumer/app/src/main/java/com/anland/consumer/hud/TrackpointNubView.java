@@ -19,6 +19,11 @@ public final class TrackpointNubView extends View {
     public interface MotionDispatcher {
         void onPointerMove(float dx, float dy);
         void onPointerClick(int button); // 1 = left, 2 = right
+        // Called when the nub is in "scroll" mode and the user drags on it.
+        // dx/dy are pixel deltas (already in native scale, see the host
+        // implementation in MainActivity). This is optional - hosts that
+        // do not care about scroll mode can leave it empty.
+        default void onPointerScroll(float dx, float dy) { /* no-op */ }
     }
 
     private final HudButton mModel;
@@ -192,7 +197,15 @@ public final class TrackpointNubView extends View {
             float normX = mCurrentOffsetX / dist;
             float normY = mCurrentOffsetY / dist;
 
-            mDispatcher.onPointerMove(normX * speedFactor, normY * speedFactor);
+            // The TrackPoint runs in one of two modes. In mouse mode the
+            // offsets become relative pointer motion (the original
+            // behaviour). In scroll mode they become scroll-wheel deltas,
+            // letting the same on-screen nub act as a thumb-scroll pad.
+            if (HudButton.MODE_SCROLL.equals(mModel.trackpointMode)) {
+                mDispatcher.onPointerScroll(normX * speedFactor, normY * speedFactor);
+            } else {
+                mDispatcher.onPointerMove(normX * speedFactor, normY * speedFactor);
+            }
         }
     }
 }

@@ -65,6 +65,10 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
     private Button mBtnPickMainAction;
     private LinearLayout mSuperGestureOptions;
+    // TrackPoint mode toggle row: visible only for the trackpoint widget.
+    // Two buttons (MOUSE / SCROLL) plus a small status text underneath.
+    private LinearLayout mTrackPointOptions;
+    private Button mBtnTrackPointMode;
     // Bottom action row; cached so bindDockItem can hide it (dock items cannot
     // be deleted or duplicated from the strip).
     private LinearLayout mOpRow;
@@ -244,6 +248,28 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mSuperGestureOptions.addView(mBtnPickSwipeDown);
         content.addView(mSuperGestureOptions);
 
+        // TrackPoint specific options: a single button that cycles between
+        // "MOUSE" (relative pointer motion) and "SCROLL" (wheel deltas).
+        mTrackPointOptions = new LinearLayout(getContext());
+        mTrackPointOptions.setOrientation(VERTICAL);
+        mTrackPointOptions.setPadding(0, dp(6), 0, 0);
+        mTrackPointOptions.addView(createSectionLabel("TrackPoint Mode:"));
+        mBtnTrackPointMode = createActionButton("Mode: MOUSE");
+        mBtnTrackPointMode.setOnClickListener(v -> {
+            if (mActiveButton == null) return;
+            // Toggle between mouse and scroll. We commit directly through
+            // mCallback so the caller can rebuild the widget tree (and pick
+            // up the new mode in TrackpointNubView.dispatchContinuousMotion).
+            String next = HudButton.MODE_MOUSE.equals(mActiveButton.trackpointMode)
+                    ? HudButton.MODE_SCROLL
+                    : HudButton.MODE_MOUSE;
+            mActiveButton.trackpointMode = next;
+            mBtnTrackPointMode.setText("Mode: " + next.toUpperCase());
+            if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+        });
+        mTrackPointOptions.addView(mBtnTrackPointMode);
+        content.addView(mTrackPointOptions);
+
         // Bottom Operations: Delete & Duplicate. Hidden for dock items since
         // they live in a fixed-size strip and don't have a per-button position
         // to delete/duplicate.
@@ -303,6 +329,17 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         mBtnPickMainAction.setText("Action: " + b.action.type.toUpperCase() + " (" + (b.action.code > 0 ? b.action.code : "") + ")");
         mSuperGestureOptions.setVisibility(HudButton.WIDGET_SUPER_GESTURE.equals(b.widgetType) ? VISIBLE : GONE);
+        // TrackPoint options only make sense for the trackpoint widget. We
+        // keep the current mode label in sync so the user sees what the
+        // button will toggle to before tapping it.
+        boolean isTrackpoint = HudButton.WIDGET_TRACKPOINT.equals(b.widgetType);
+        if (mTrackPointOptions != null) {
+            mTrackPointOptions.setVisibility(isTrackpoint ? VISIBLE : GONE);
+            if (isTrackpoint) {
+                String mode = b.trackpointMode != null ? b.trackpointMode : HudButton.MODE_MOUSE;
+                mBtnTrackPointMode.setText("Mode: " + mode.toUpperCase());
+            }
+        }
         // Floating buttons show size sliders and the delete/duplicate row.
         if (mSizeSection != null) mSizeSection.setVisibility(VISIBLE);
         if (mOpRow != null) mOpRow.setVisibility(VISIBLE);
@@ -327,6 +364,10 @@ public final class HudPropertyInspectorView extends LinearLayout {
         }
         mBtnPickMainAction.setText("Action: " + b.action.type.toUpperCase() + " (" + (b.action.code > 0 ? b.action.code : "") + ")");
         mSuperGestureOptions.setVisibility(GONE);
+        // Dock items never expose trackpoint-mode; the strip is in the
+        // legacy ExtraKeysBar path now anyway, but keep the guard in case
+        // an old profile still tags a dock item as a trackpoint.
+        if (mTrackPointOptions != null) mTrackPointOptions.setVisibility(GONE);
         if (mSizeSection != null) mSizeSection.setVisibility(GONE);
         if (mOpRow != null) mOpRow.setVisibility(GONE);
     }
