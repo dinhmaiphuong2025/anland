@@ -42,6 +42,11 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         // True when the daemon socket is live and the native pipeline is
         // connected. False during editor-only mode when the daemon is offline.
         boolean isNativeReady();
+        // Notified when the user finishes HUD edit mode (via [EXIT EDIT] or
+        // back-press). The host can use this to clear transient flags that
+        // were set when the editor was opened, so a stray daemon-down event
+        // fired right after exit does not bounce the user out of the app.
+        void onEditModeExited();
     }
 
     private static final String PREF_KEY_PROFILE = "hud_layout_profile_v2";
@@ -156,6 +161,12 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mTopToolbar.setVisibility(editMode ? VISIBLE : GONE);
         if (!editMode) {
             selectButton(null, null);
+            // Tell the host we are leaving the editor so it can clear the
+            // editor-only flags. If we do not, a deferred-finish timer
+            // armed for the editor path can fire after the user is already
+            // back in the production view, killing the activity and
+            // creating the "ghost tab" the user reported.
+            if (mHost != null) mHost.onEditModeExited();
         }
         rebuildActiveLayout();
         invalidate();

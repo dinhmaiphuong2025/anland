@@ -7,9 +7,7 @@ import android.graphics.Typeface;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.BaseAdapter;
 import android.widget.Button;
-import android.widget.GridView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -138,49 +136,91 @@ public final class HudKeyPickerDialog {
     ) {
         container.removeAllViews();
 
+        // GridView was unreliable here: with a wide dialog (~90% of a
+        // phone screen) it would happily compute a multi-column layout,
+        // yet still render only the first row when the entries were short
+        // and the parent ScrollView was MATCH_PARENT. We replace it with
+        // an explicit vertical LinearLayout of horizontal LinearLayout
+        // rows - the layout is dumb but always correct.
         ScrollView scroll = new ScrollView(ctx);
-        GridView grid = new GridView(ctx);
-        grid.setNumColumns(GridView.AUTO_FIT);
-        grid.setColumnWidth(dp(ctx, 100));
-        grid.setHorizontalSpacing(dp(ctx, 6));
-        grid.setVerticalSpacing(dp(ctx, 6));
-        // STRETCH_SPACING_UNIFORM keeps the inter-column gap constant and
-        // shares the leftover space evenly between the outer margins. With
-        // AUTO_FIT + columnWidth=100dp, a 360dp dialog gets 3 columns of
-        // 114dp each; a 600dp dialog gets 6 columns. Every entry stays
-        // visible without horizontal scrolling.
-        grid.setStretchMode(GridView.STRETCH_SPACING_UNIFORM);
+        LinearLayout grid = new LinearLayout(ctx);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        int hSpacing = dp(ctx, 6);
+        int vSpacing = dp(ctx, 6);
+        int sidePad = dp(ctx, 4);
+        grid.setPadding(sidePad, 0, sidePad, 0);
 
-        grid.setAdapter(new BaseAdapter() {
-            @Override public int getCount() { return entries.size(); }
-            @Override public Object getItem(int i) { return entries.get(i); }
-            @Override public long getItemId(int i) { return i; }
-            @Override public View getView(int i, View view, ViewGroup parent) {
+        int columns = computeColumnCount(ctx);
+        for (int row = 0; row < entries.size(); row += columns) {
+            LinearLayout rowView = new LinearLayout(ctx);
+            rowView.setOrientation(LinearLayout.HORIZONTAL);
+            rowView.setBaselineAligned(false);
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (row > 0) rowLp.topMargin = vSpacing;
+            grid.addView(rowView, rowLp);
+
+            for (int col = 0; col < columns; col++) {
+                int idx = row + col;
+                if (idx >= entries.size()) {
+                    // Pad the last row with a transparent spacer so the
+                    // remaining cells do not stretch awkwardly.
+                    View spacer = new View(ctx);
+                    LinearLayout.LayoutParams spacerLp = new LinearLayout.LayoutParams(
+                            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                    spacerLp.setMargins(0, 0, 0, 0);
+                    rowView.addView(spacer, spacerLp);
+                    continue;
+                }
+                final KeyEntry entry = entries.get(idx);
                 Button btn = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
-                KeyEntry entry = entries.get(i);
                 btn.setText(entry.label);
                 btn.setTextSize(14);
                 btn.setTextColor(Color.WHITE);
                 btn.setBackgroundColor(0xFF2A2B3D);
                 btn.setPadding(dp(ctx, 4), dp(ctx, 12), dp(ctx, 4), dp(ctx, 12));
                 btn.setMinHeight(dp(ctx, 48));
+                btn.setSingleLine(true);
+                btn.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                if (col > 0) btnLp.leftMargin = hSpacing;
+                btn.setLayoutParams(btnLp);
                 btn.setOnClickListener(v -> {
                     dialog.dismiss();
                     if (listener != null) {
                         listener.onActionSelected(entry.action.copy(), entry.label);
                     }
                 });
-                return btn;
+                rowView.addView(btn);
             }
-        });
+        }
 
-        scroll.addView(grid);
-        // MATCH_PARENT height lets the grid show all rows. With AUTO_FIT we
-        // typically have 3-6 rows per tab; a fixed 480dp was sometimes
-        // clipping the bottom row when the device was short.
+        scroll.addView(grid, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        // MATCH_PARENT height lets the ScrollView fill the dialog; the
+        // child grid is WRAP_CONTENT so all rows are reachable by
+        // vertical scrolling.
         container.addView(scroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
+    }
+
+    // Decide how many columns to show based on the dialog width. We avoid
+    // GridView entirely so the layout is predictable across dialog sizes
+    // and across older releases of the framework.
+    private static int computeColumnCount(Context ctx) {
+        int widthDp = ctx.getResources().getConfiguration().screenWidthDp;
+        if (widthDp <= 0) widthDp = 360;  // safe default
+        // 100dp per cell is a comfortable touch target on phones; on
+        // tablets we get more columns. Clamp to 3-6 so the buttons stay
+        // readable regardless of device size.
+        int cols = widthDp / 100;
+        if (cols < 3) cols = 3;
+        if (cols > 6) cols = 6;
+        return cols;
     }
 
     private static List<KeyEntry> getWmKeys() {
