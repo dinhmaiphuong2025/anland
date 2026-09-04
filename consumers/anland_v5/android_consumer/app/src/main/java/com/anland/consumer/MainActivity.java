@@ -337,6 +337,20 @@ public class MainActivity extends Activity
         } else if (mNativeReady && isSocketFile(resolveSocketPath())) {
             // The user came back and the daemon is fine: cancel any pending exit.
             cancelPendingFinish();
+        } else if (!mNativeReady && mNative == null && isSocketFile(resolveSocketPath())
+                && mHudOverlay != null && !mHudOverlay.isEditMode()
+                && !mPendingOpenHudEditor && mUserInteracted) {
+            // Editor-only window is back in focus, the daemon socket is back
+            // online, and the user has actually been using the app. The
+            // window was launched in editor-only mode (mNative == null)
+            // so its surface never bound to a real producer; we have to
+            // recreate() to bring up the native pipeline properly. This is
+            // the fix for the "black tile in Recents after the user exits
+            // HUD editor" symptom: the activity used to stay around as a
+            // ghost because nothing ever restarted its native side.
+            android.util.Log.i(TAG, "Editor-only window detected daemon back; recreating");
+            recreate();
+            return;
         }
         if (hasFocus) {
             // Become the accessibility-key target and the focused instance, so real
