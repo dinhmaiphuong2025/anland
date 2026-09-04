@@ -301,9 +301,17 @@ public class SettingsActivity extends Activity {
             Button btnEditHud = new Button(this);
             btnEditHud.setText("Open Visual HUD Layout Editor");
             btnEditHud.setOnClickListener(v -> {
+                // The HUD editor must run inside the same task as the
+                // currently-running MainActivity, otherwise it spawns a
+                // second task that connects to the default socket (which
+                // is not the Droidspaces-owned daemon the user is looking
+                // at) and shows a black screen. We rely on singleTask
+                // + SINGLE_TOP + CLEAR_TOP to bring the existing instance
+                // forward and deliver the intent via onNewIntent, which
+                // already preserves mSocketOverride.
                 Intent intent = new Intent(this, MainActivity.class);
                 intent.setAction("OPEN_HUD_EDITOR");
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 startActivity(intent);
                 finish();
             });
