@@ -25,6 +25,26 @@ public final class HudKeyPickerDialog {
 
     public interface OnActionSelectedListener {
         void onActionSelected(HudAction action, String displayLabel);
+        // Optional: lets the combo builder deliver a custom-built combo
+        // without changing the regular picker. Implementations can just
+        // forward to onActionSelected if they do not care.
+        default void onComboBuilt(HudAction action) {
+            onActionSelected(action, formatComboLabel(action));
+        }
+    }
+
+    // Render a combo's keycodes as "CTRL + C" / "SUPER + L" / "F12" style
+    // text. The "None" branch is taken when the slot is empty.
+    public static String formatComboLabel(HudAction action) {
+        if (action == null || action.comboKeys == null || action.comboKeys.isEmpty()) {
+            return "None";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < action.comboKeys.size(); i++) {
+            if (i > 0) sb.append(" + ");
+            sb.append(HudPropertyInspectorView.labelForEvdev(action.comboKeys.get(i)));
+        }
+        return sb.toString();
     }
 
     private static final class KeyEntry {
@@ -103,10 +123,11 @@ public final class HudKeyPickerDialog {
             highlightTab(tabRow, 1);
             showGrid(context, contentContainer, getWmKeys(), listener, dialog, colsLong);
         };
+        // COMBO & SYS tab: Combo builder (free-form 1-3 key combo) on top +
+        // a 3-column grid of system actions / mouse inputs on the bottom.
         selectTab[2] = () -> {
             highlightTab(tabRow, 2);
-            // Combos + system actions: same long-label grid.
-            showGrid(context, contentContainer, getNiriAndSystem(listener), listener, dialog, colsLong);
+            showComboSysTab(context, contentContainer, listener, dialog);
         };
 
         btnTabKeys.setOnClickListener(v -> selectTab[0].run());
@@ -115,6 +136,90 @@ public final class HudKeyPickerDialog {
 
         selectTab[0].run();
         dialog.show();
+    }
+
+    // COMBO & SYS tab body: a vertical stack with the combo builder at the
+    // top and a 3-column grid of system / mouse actions below.
+    private static void showComboSysTab(final Context ctx, final LinearLayout container,
+                                       final OnActionSelectedListener listener,
+                                       final AlertDialog dialog) {
+        container.removeAllViews();
+
+        final ComboBuilderView builder = new ComboBuilderView();
+
+        // 1. Combo builder: a free-form combo of 1-3 keys.
+        builder.showDialog(ctx, action -> {
+            dialog.dismiss();
+            if (listener != null) listener.onComboBuilt(action);
+        });
+
+        // 2. System / mouse actions grid below it, inside the container so the
+        //    user can still scroll to the buttons if the screen is short.
+        container.addView(buildSystemActionsGrid(ctx, listener, dialog));
+    }
+
+    // 3-column grid of system actions (toggle IME / settings / mouse buttons).
+    // We use a ScrollView so the buttons stay reachable on very small phones.
+    private static View buildSystemActionsGrid(final Context ctx,
+                                              final OnActionSelectedListener listener,
+                                              final AlertDialog dialog) {
+        ScrollView scroll = new ScrollView(ctx);
+        LinearLayout grid = new LinearLayout(ctx);
+        grid.setOrientation(LinearLayout.VERTICAL);
+        int hSpacing = dp(ctx, 6);
+        int vSpacing = dp(ctx, 6);
+        int sidePad = dp(ctx, 4);
+        grid.setPadding(sidePad, dp(ctx, 12), sidePad, sidePad);
+
+        java.util.List<KeyEntry> entries = getSystemActions();
+        for (int row = 0; row < entries.size(); row += 3) {
+            LinearLayout rowView = new LinearLayout(ctx);
+            rowView.setOrientation(LinearLayout.HORIZONTAL);
+            rowView.setBaselineAligned(false);
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (row > 0) rowLp.topMargin = vSpacing;
+            grid.addView(rowView, rowLp);
+
+            for (int col = 0; col < 3; col++) {
+                int idx = row + col;
+                if (idx >= entries.size()) {
+                    View spacer = new View(ctx);
+                    LinearLayout.LayoutParams spacerLp = new LinearLayout.LayoutParams(
+                            0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                    rowView.addView(spacer, spacerLp);
+                    continue;
+                }
+                final KeyEntry entry = entries.get(idx);
+                Button btn = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
+                btn.setText(entry.label);
+                btn.setTextSize(12);
+                btn.setAllCaps(false);
+                btn.setTextColor(Color.WHITE);
+                btn.setBackgroundColor(0xFF2A2B3D);
+                btn.setPadding(dp(ctx, 2), dp(ctx, 8), dp(ctx, 2), dp(ctx, 8));
+                btn.setMinHeight(dp(ctx, 44));
+                btn.setSingleLine(true);
+                btn.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                btn.setIncludeFontPadding(false);
+                LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                if (col > 0) btnLp.leftMargin = hSpacing;
+                btn.setLayoutParams(btnLp);
+                btn.setOnClickListener(v -> {
+                    dialog.dismiss();
+                    if (listener != null) {
+                        listener.onActionSelected(entry.action.copy(), entry.label);
+                    }
+                });
+                rowView.addView(btn);
+            }
+        }
+        scroll.addView(grid, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        return scroll;
     }
 
     private static Button createTabButton(Context ctx, String text) {
@@ -326,16 +431,6 @@ public final class HudKeyPickerDialog {
     // COMBO & SYS tab content: Niri compositor macros first (the
     // most common ones), then system actions like the virtual/soft
     // keyboard toggle, mouse buttons, and scroll wheel events.
-    private static List<KeyEntry> getNiriAndSystem(OnActionSelectedListener listener) {
-        // We cannot capture `listener` here without making it a static
-        // field; the dialog is constructed in the show() call which
-        // already passes `listener` through to each entry's onClick
-        // callback. So this method just builds the read-only list.
-        List<KeyEntry> list = new ArrayList<>(getNiriCombos());
-        list.addAll(getSystemActions());
-        return list;
-    }
-
     private static int dp(Context ctx, int dpVal) {
         return Math.round(dpVal * ctx.getResources().getDisplayMetrics().density);
     }
