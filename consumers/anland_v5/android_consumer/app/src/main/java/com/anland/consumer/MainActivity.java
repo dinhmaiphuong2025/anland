@@ -2041,7 +2041,11 @@ public class MainActivity extends Activity
         dbg("surfaceDestroyed");
         if (immersive != null) immersive.stop();
         releasePointerCapture(false);
-        mNative.stop();
+        // In editor-only mode (mNative == null) there is no pipeline to
+        // stop. Calling mNative.stop() here would NPE because the surface
+        // does get torn down on lifecycle events even when the activity
+        // never bound a real native producer.
+        if (mNative != null) mNative.stop();
     }
 
 
