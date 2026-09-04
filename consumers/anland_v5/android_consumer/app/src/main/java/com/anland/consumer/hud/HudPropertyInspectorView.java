@@ -279,14 +279,28 @@ public final class HudPropertyInspectorView extends LinearLayout {
         // Bottom Operations: Delete & Duplicate. Hidden for dock items since
         // they live in a fixed-size strip and don't have a per-button position
         // to delete/duplicate.
+        // Bottom Operations: Delete & Duplicate. Styled with Material 12dp
+        // corner radius and 16dp insets on all four sides so the pair sits
+        // inside the panel instead of clinging to its borders.
         final LinearLayout opRow = new LinearLayout(getContext());
         opRow.setOrientation(HORIZONTAL);
-        opRow.setPadding(0, dp(12), 0, 0);
+        opRow.setPadding(dp(16), dp(16), dp(16), dp(16));
+        LinearLayout.LayoutParams opLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        opLp.topMargin = dp(8);
+        opRow.setLayoutParams(opLp);
 
         Button btnDelete = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
         btnDelete.setText("DELETE");
+        btnDelete.setAllCaps(true);
         btnDelete.setTextColor(0xFFF38BA8);
-        btnDelete.setBackgroundColor(0x33FF0000);
+        btnDelete.setTextSize(12);
+        android.graphics.drawable.GradientDrawable bgDel = new android.graphics.drawable.GradientDrawable();
+        bgDel.setCornerRadius(dp(12));
+        bgDel.setColor(0x33FF0000);
+        btnDelete.setBackground(bgDel);
+        btnDelete.setPadding(dp(16), dp(12), dp(16), dp(12));
         btnDelete.setLayoutParams(new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         btnDelete.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onDeleteRequested(mActiveButton);
@@ -295,9 +309,17 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         Button btnDuplicate = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
         btnDuplicate.setText("DUPLICATE");
+        btnDuplicate.setAllCaps(true);
         btnDuplicate.setTextColor(Color.WHITE);
-        btnDuplicate.setBackgroundColor(0x33FFFFFF);
-        btnDuplicate.setLayoutParams(new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        btnDuplicate.setTextSize(12);
+        android.graphics.drawable.GradientDrawable bgDup = new android.graphics.drawable.GradientDrawable();
+        bgDup.setCornerRadius(dp(12));
+        bgDup.setColor(0x33FFFFFF);
+        btnDuplicate.setBackground(bgDup);
+        btnDuplicate.setPadding(dp(16), dp(12), dp(16), dp(12));
+        LinearLayout.LayoutParams dupLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        dupLp.leftMargin = dp(12);
+        btnDuplicate.setLayoutParams(dupLp);
         btnDuplicate.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onDuplicateRequested(mActiveButton);
         });
@@ -471,15 +493,21 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
     // Rounded badge-style button used for the action assignment rows.
     // Reads as "Key: SUPER" / "Type: COMBO" with a rounded background
-    // that stands out against the dark panel.
+    // that stands out against the dark panel. Text is left-aligned with
+    // a 12dp padding-left so the label lines up with the title text
+    // above it (Material Design body-text rhythm).
     private Button createBadgeButton(String label) {
         Button b = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
         b.setText(label);
         b.setTextColor(Color.WHITE);
-        b.setTextSize(11);
+        b.setTextSize(12);
         b.setAllCaps(false);
         b.setBackgroundColor(0xFF2A2B3D);
-        b.setPadding(dp(10), dp(6), dp(10), dp(6));
+        // 12dp left padding + 6dp top/bottom + 12dp right padding keeps the
+        // text left-aligned and the badge readable; gravity START so the
+        // text always starts at the padding-left edge.
+        b.setPadding(dp(12), dp(6), dp(12), dp(6));
+        b.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         b.setSingleLine(true);
         b.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LayoutParams lp = new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -577,16 +605,16 @@ public final class HudPropertyInspectorView extends LinearLayout {
         String prefix = directionToken != null ? (directionToken + ": ") : "";
         switch (a.type) {
             case HudAction.TYPE_KEY:
-                return a.code > 0 ? (prefix + "Key " + a.code) : (prefix + UNASSIGNED_LABEL);
+                return a.code > 0 ? (prefix + labelForEvdev(a.code)) : (prefix + UNASSIGNED_LABEL);
             case HudAction.TYPE_MODIFIER:
-                return prefix + "Mod " + a.code;
+                return prefix + labelForEvdev(a.code);
             case HudAction.TYPE_COMBO:
                 if (a.comboKeys == null || a.comboKeys.isEmpty())
                     return prefix + UNASSIGNED_LABEL;
                 StringBuilder sb = new StringBuilder(prefix);
                 for (int i = 0; i < a.comboKeys.size(); i++) {
-                    if (i > 0) sb.append("+");
-                    sb.append(a.comboKeys.get(i));
+                    if (i > 0) sb.append(" + ");
+                    sb.append(labelForEvdev(a.comboKeys.get(i)));
                 }
                 return sb.toString();
             case HudAction.TYPE_TEXT:
@@ -595,6 +623,85 @@ public final class HudPropertyInspectorView extends LinearLayout {
                 return prefix + "Sys " + (a.systemCommand != null ? a.systemCommand : UNASSIGNED_LABEL);
             default:
                 return prefix + UNASSIGNED_LABEL;
+        }
+    }
+
+    /**
+     * Map a Linux evdev scancode to a short human label. The
+     * ComboBuilderView produces keycodes from this same map so the
+     * badge text and the live preview stay consistent. Unknown codes
+     * fall back to "Key 125" so the user is never left wondering what
+     * the numeric value is.
+     */
+    public static String labelForEvdev(int code) {
+        switch (code) {
+            case 29: return "CTRL";
+            case 56: return "ALT";
+            case 125: return "SUPER";
+            case 42: return "SHIFT";
+            case 1: return "ESC";
+            case 15: return "TAB";
+            case 28: return "ENTER";
+            case 14: return "BKSP";
+            case 111: return "DEL";
+            case 57: return "SPACE";
+            case 102: return "HOME";
+            case 107: return "END";
+            case 103: return "UP";
+            case 108: return "DOWN";
+            case 105: return "LEFT";
+            case 106: return "RIGHT";
+            case 104: return "PGUP";
+            case 109: return "PGDN";
+            case 30: return "A";
+            case 48: return "B";
+            case 46: return "C";
+            case 32: return "D";
+            case 18: return "E";
+            case 33: return "F";
+            case 34: return "G";
+            case 35: return "H";
+            case 23: return "I";
+            case 36: return "J";
+            case 37: return "K";
+            case 38: return "L";
+            case 50: return "M";
+            case 49: return "N";
+            case 24: return "O";
+            case 25: return "P";
+            case 16: return "Q";
+            case 19: return "R";
+            case 31: return "S";
+            case 20: return "T";
+            case 22: return "U";
+            case 47: return "V";
+            case 17: return "W";
+            case 45: return "X";
+            case 21: return "Y";
+            case 44: return "Z";
+            case 11: return "0";
+            case 2: return "1";
+            case 3: return "2";
+            case 4: return "3";
+            case 5: return "4";
+            case 6: return "5";
+            case 7: return "6";
+            case 8: return "7";
+            case 9: return "8";
+            case 10: return "9";
+            case 59: return "F1";
+            case 60: return "F2";
+            case 61: return "F3";
+            case 62: return "F4";
+            case 63: return "F5";
+            case 64: return "F6";
+            case 65: return "F7";
+            case 66: return "F8";
+            case 67: return "F9";
+            case 68: return "F10";
+            case 87: return "F11";
+            case 88: return "F12";
+            default: return "Key " + code;
         }
     }
 

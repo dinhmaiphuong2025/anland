@@ -229,17 +229,33 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             }
             @Override
             public void onPickActionRequested(HudButton button, int targetSlot) {
-                HudKeyPickerDialog.show(getContext(), (action, displayLabel) -> {
-                    if (targetSlot == 0) {
-                        button.action = action;
-                        button.label = displayLabel;
-                    } else if (targetSlot == 2) button.swipeLeftAction = action;
-                    else if (targetSlot == 3) button.swipeRightAction = action;
-                    else if (targetSlot == 4) button.swipeUpAction = action;
-                    else if (targetSlot == 5) button.swipeDownAction = action;
-                    mInspectorView.bindButton(button);
-                    rebuildActiveLayout();
-                });
+                // Swipe action slots (target 2..5) get the free-form combo
+                // builder so the user can pick up to three keys. The main
+                // action slot (target 0) and the popup (target 1) stay on
+                // the predefined key grid.
+                if (targetSlot >= 2) {
+                    new ComboBuilderView().showDialog(getContext(), combo -> {
+                        switch (targetSlot) {
+                            case 2: button.swipeLeftAction = combo; break;
+                            case 3: button.swipeRightAction = combo; break;
+                            case 4: button.swipeUpAction = combo; break;
+                            case 5: button.swipeDownAction = combo; break;
+                        }
+                        mInspectorView.bindButton(button);
+                        rebuildActiveLayout();
+                    });
+                } else {
+                    HudKeyPickerDialog.show(getContext(), (action, displayLabel) -> {
+                        if (targetSlot == 0) {
+                            button.action = action;
+                            button.label = displayLabel;
+                        } else if (targetSlot == 1) {
+                            button.popupAction = action;
+                        }
+                        mInspectorView.bindButton(button);
+                        rebuildActiveLayout();
+                    });
+                }
             }
             @Override
             public void onCloseRequested() {
