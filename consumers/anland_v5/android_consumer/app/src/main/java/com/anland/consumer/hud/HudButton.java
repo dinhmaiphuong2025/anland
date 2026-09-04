@@ -13,6 +13,14 @@ public final class HudButton {
     public static final String WIDGET_SUPER_GESTURE = "super_gesture";
     public static final String WIDGET_TRACKPOINT = "trackpoint";
 
+    // Strongly-typed mirror of WIDGET_* above, used by code that switches
+    // over the widget kind (e.g. the toolbar's add-widget chooser).
+    public enum WidgetKind {
+        KEY,           // WIDGET_STANDARD
+        SUPER_GESTURE, // WIDGET_SUPER_GESTURE
+        TRACKPOINT     // WIDGET_TRACKPOINT
+    }
+
     public String id = UUID.randomUUID().toString();
     public String widgetType = WIDGET_STANDARD;
     public String label = "BTN";

@@ -276,60 +276,30 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         bar.setBackgroundColor(0xF0181825);
         bar.setPadding(dp(8), dp(6), dp(8), dp(6));
 
-        Button btnSave = createToolButton("[SAVE]");
+        // Save / Done stays on the right of the bar so the user can confirm
+        // their changes at a glance. The action color is a calm teal/green
+        // that signals "all good".
+        Button btnSave = createToolButton("SAVE");
         btnSave.setTextColor(0xFF80DEEA);
         btnSave.setOnClickListener(v -> saveProfile());
         bar.addView(btnSave);
 
-        Button btnAdd = createToolButton("[+ BUTTON]");
-        btnAdd.setOnClickListener(v -> {
-            HudButton b = new HudButton();
-            b.label = "KEY";
-            b.posXPercent = 0.5f;
-            b.posYPercent = 0.4f;
-            b.action = HudAction.key(1);
-            getActiveLayout().floatingButtons.add(b);
-            rebuildActiveLayout();
-            selectButton(b, null);
-        });
+        // Single "+ ADD" button instead of three separate add buttons.
+        // Tapping it opens a chooser so the user picks Standard Key,
+        // Super Gesture nub, or TrackPoint (mouse / scroll). The popup
+        // menu gives us more room for richer labels without eating the
+        // top bar's tiny real estate on a portrait phone.
+        Button btnAdd = createToolButton("+ ADD");
+        btnAdd.setOnClickListener(v -> showAddWidgetChooser());
         bar.addView(btnAdd);
 
-        Button btnAddGesture = createToolButton("[+ GESTURE]");
-        btnAddGesture.setOnClickListener(v -> {
-            HudButton b = new HudButton();
-            b.widgetType = HudButton.WIDGET_SUPER_GESTURE;
-            b.label = "SUPER";
-            b.widthDp = 58;
-            b.heightDp = 58;
-            b.cornerRadiusDp = 29;
-            b.posXPercent = 0.5f;
-            b.posYPercent = 0.5f;
-            getActiveLayout().floatingButtons.add(b);
-            rebuildActiveLayout();
-            selectButton(b, null);
-        });
-        bar.addView(btnAddGesture);
-
-        Button btnAddTrackpoint = createToolButton("[+ MOUSE]");
-        btnAddTrackpoint.setOnClickListener(v -> {
-            HudButton b = new HudButton();
-            b.widgetType = HudButton.WIDGET_TRACKPOINT;
-            b.label = "MOUSE";
-            b.widthDp = 60;
-            b.heightDp = 60;
-            b.cornerRadiusDp = 30;
-            b.posXPercent = 0.2f;
-            b.posYPercent = 0.5f;
-            getActiveLayout().floatingButtons.add(b);
-            rebuildActiveLayout();
-            selectButton(b, null);
-        });
-        bar.addView(btnAddTrackpoint);
-
+        // Spacer pushes the cancel button to the right edge.
         View spacer = new View(getContext());
         bar.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
 
-        Button btnExit = createToolButton("[EXIT EDIT]");
+        // Cancel / Exit Edit. Calm red so it reads as a warning rather
+        // than a destructive action.
+        Button btnExit = createToolButton("CANCEL");
         btnExit.setTextColor(0xFFF38BA8);
         btnExit.setOnClickListener(v -> setEditMode(false));
         bar.addView(btnExit);
@@ -337,12 +307,85 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         return bar;
     }
 
+    // Modal chooser for the "what kind of widget do you want to add?"
+    // prompt. Replaces the old trio of separate [+] buttons which were
+    // squeezed off the right edge of the bar on portrait phones.
+    private void showAddWidgetChooser() {
+        final String[] labels = new String[] {
+                "Standard Key Button",
+                "Super Gesture Nub",
+                "TrackPoint (Mouse / Scroll)"
+        };
+        final HudButton.WidgetKind[] kinds = new HudButton.WidgetKind[] {
+                HudButton.WidgetKind.KEY,
+                HudButton.WidgetKind.SUPER_GESTURE,
+                HudButton.WidgetKind.TRACKPOINT
+        };
+        new android.app.AlertDialog.Builder(getContext(),
+                android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("Add Widget")
+                .setItems(labels, (dialog, which) -> {
+                    if (mIsEditMode) addWidgetOfKind(kinds[which]);
+                    dialog.dismiss();
+                })
+                .setNegativeButton("CANCEL", null)
+                .show();
+    }
+
+    private void addWidgetOfKind(HudButton.WidgetKind kind) {
+        HudButton b = new HudButton();
+        switch (kind) {
+            case KEY:
+                b.label = "KEY";
+                b.action = HudAction.key(1);
+                b.posXPercent = 0.5f;
+                b.posYPercent = 0.4f;
+                break;
+            case SUPER_GESTURE:
+                b.widgetType = HudButton.WIDGET_SUPER_GESTURE;
+                b.label = "SUPER";
+                b.widthDp = 58;
+                b.heightDp = 58;
+                b.cornerRadiusDp = 29;
+                b.posXPercent = 0.5f;
+                b.posYPercent = 0.5f;
+                break;
+            case TRACKPOINT:
+                b.widgetType = HudButton.WIDGET_TRACKPOINT;
+                b.label = "MOUSE";
+                b.widthDp = 60;
+                b.heightDp = 60;
+                b.cornerRadiusDp = 30;
+                b.posXPercent = 0.2f;
+                b.posYPercent = 0.5f;
+                break;
+        }
+        getActiveLayout().floatingButtons.add(b);
+        rebuildActiveLayout();
+        selectButton(b, null);
+    }
+
+    // Material-style flat button. All top-bar buttons share the rounded
+    // 8dp Material surface, the same corner radius the rest of the
+    // editor UI uses. Background is a subtle translucent white so the
+    // chrome blends with the dark scrim above Niri.
     private Button createToolButton(String label) {
         Button b = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
         b.setText(label);
+        b.setAllCaps(true);
         b.setTextSize(11);
         b.setTextColor(Color.WHITE);
-        b.setPadding(dp(6), dp(4), dp(6), dp(4));
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setCornerRadius(dp(8));
+        bg.setColor(0x33FFFFFF);
+        b.setBackground(bg);
+        b.setPadding(dp(12), dp(6), dp(12), dp(6));
+        b.setMinWidth(0);
+        b.setMinHeight(0);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        b.setLayoutParams(lp);
         return b;
     }
 

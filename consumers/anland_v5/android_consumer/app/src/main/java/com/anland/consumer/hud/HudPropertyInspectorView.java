@@ -100,18 +100,25 @@ public final class HudPropertyInspectorView extends LinearLayout {
         header.setPadding(dp(8), dp(6), dp(8), dp(6));
 
         TextView dragHandle = new TextView(getContext());
-        dragHandle.setText(":: DRAG PANEL ::");
+        dragHandle.setText("DRAG PANEL");
         dragHandle.setTextColor(0xFF80DEEA);
         dragHandle.setTextSize(12);
         dragHandle.setTypeface(Typeface.DEFAULT_BOLD);
         dragHandle.setLayoutParams(new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         header.addView(dragHandle);
 
+        // Round close button. We render "X" inside a programmatic circular
+        // background so we stay consistent with the no-emoji rule.
         Button btnClose = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
-        btnClose.setText("[X]");
+        btnClose.setText("X");
         btnClose.setTextColor(Color.WHITE);
-        btnClose.setTextSize(12);
-        btnClose.setPadding(dp(6), 0, dp(6), 0);
+        btnClose.setTextSize(13);
+        btnClose.setBackground(getRoundCloseBackground());
+        btnClose.setMinWidth(0);
+        btnClose.setMinHeight(0);
+        btnClose.setPadding(0, 0, 0, 0);
+        LinearLayout.LayoutParams closeLp = new LinearLayout.LayoutParams(dp(28), dp(28));
+        btnClose.setLayoutParams(closeLp);
         btnClose.setOnClickListener(v -> {
             if (mCallback != null) mCallback.onCloseRequested();
         });
@@ -146,8 +153,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
         content.addView(mTitleText);
 
         // Label input
-        content.addView(createSectionLabel("Display Label:"));
-        mLabelInput = new EditText(getContext());
+        content.addView(createLabelValueRow("Display Label",
+                createLeftAlignedEditText(), mLabelInput = createLabelEditText()));
         mLabelInput.setTextColor(Color.WHITE);
         mLabelInput.setTextSize(13);
         mLabelInput.setBackgroundColor(0x22FFFFFF);
@@ -163,7 +170,6 @@ public final class HudPropertyInspectorView extends LinearLayout {
                 }
             }
         });
-        content.addView(mLabelInput);
 
         // Sliders with exact Numeric Edit Fields. All four live inside a single
         // container so we can hide the whole block for dock items (where
@@ -192,7 +198,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         mCornerSeekBar = new SeekBar(getContext());
         mCornerInput = createExactNumberInput();
-        mSizeSection.addView(createSliderRow("Corner Radius (dp):", mCornerSeekBar, mCornerInput, 0, 50, val -> {
+        mSizeSection.addView(createSliderRow("Corner (dp):", mCornerSeekBar, mCornerInput, 0, 50, val -> {
             if (mActiveButton != null) {
                 mActiveButton.cornerRadiusDp = val;
                 if (mCallback != null) mCallback.onModelChanged(mActiveButton);
@@ -209,13 +215,16 @@ public final class HudPropertyInspectorView extends LinearLayout {
         }));
         content.addView(mSizeSection);
 
-        // Action Assignment
+        // Action Assignment rendered as a left-right row: the "Action" label
+        // on the left, a badge button on the right showing the currently
+        // bound key / combo. The text is rebuilt in bindButton / bindDockItem
+        // so the badge always reflects the live model.
         content.addView(createSectionLabel("Action Mapping:"));
-        mBtnPickMainAction = createActionButton("[ CHANGE ACTION / KEY ]");
+        mBtnPickMainAction = createBadgeButton(formatMainActionLabel(null));
         mBtnPickMainAction.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 0);
         });
-        content.addView(mBtnPickMainAction);
+        content.addView(createLabelValueRow("Main Action", null, mBtnPickMainAction));
 
         // Super Gesture Specific Options
         mSuperGestureOptions = new LinearLayout(getContext());
@@ -223,29 +232,29 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mSuperGestureOptions.setPadding(0, dp(6), 0, 0);
 
         mSuperGestureOptions.addView(createSectionLabel("Swipe Actions:"));
-        mBtnPickSwipeLeft = createActionButton("Swipe Left: (Change)");
+        mBtnPickSwipeLeft = createBadgeButton("Left: " + UNASSIGNED_LABEL);
         mBtnPickSwipeLeft.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 2);
         });
-        mSuperGestureOptions.addView(mBtnPickSwipeLeft);
+        mSuperGestureOptions.addView(createLabelValueRow("Left", null, mBtnPickSwipeLeft));
 
-        mBtnPickSwipeRight = createActionButton("Swipe Right: (Change)");
+        mBtnPickSwipeRight = createBadgeButton("Right: " + UNASSIGNED_LABEL);
         mBtnPickSwipeRight.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 3);
         });
-        mSuperGestureOptions.addView(mBtnPickSwipeRight);
+        mSuperGestureOptions.addView(createLabelValueRow("Right", null, mBtnPickSwipeRight));
 
-        mBtnPickSwipeUp = createActionButton("Swipe Up: (Change)");
+        mBtnPickSwipeUp = createBadgeButton("Up: " + UNASSIGNED_LABEL);
         mBtnPickSwipeUp.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 4);
         });
-        mSuperGestureOptions.addView(mBtnPickSwipeUp);
+        mSuperGestureOptions.addView(createLabelValueRow("Up", null, mBtnPickSwipeUp));
 
-        mBtnPickSwipeDown = createActionButton("Swipe Down: (Change)");
+        mBtnPickSwipeDown = createBadgeButton("Down: " + UNASSIGNED_LABEL);
         mBtnPickSwipeDown.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 5);
         });
-        mSuperGestureOptions.addView(mBtnPickSwipeDown);
+        mSuperGestureOptions.addView(createLabelValueRow("Down", null, mBtnPickSwipeDown));
         content.addView(mSuperGestureOptions);
 
         // TrackPoint specific options: a single button that cycles between
@@ -254,12 +263,9 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mTrackPointOptions.setOrientation(VERTICAL);
         mTrackPointOptions.setPadding(0, dp(6), 0, 0);
         mTrackPointOptions.addView(createSectionLabel("TrackPoint Mode:"));
-        mBtnTrackPointMode = createActionButton("Mode: MOUSE");
+        mBtnTrackPointMode = createBadgeButton("Mode: MOUSE");
         mBtnTrackPointMode.setOnClickListener(v -> {
             if (mActiveButton == null) return;
-            // Toggle between mouse and scroll. We commit directly through
-            // mCallback so the caller can rebuild the widget tree (and pick
-            // up the new mode in TrackpointNubView.dispatchContinuousMotion).
             String next = HudButton.MODE_MOUSE.equals(mActiveButton.trackpointMode)
                     ? HudButton.MODE_SCROLL
                     : HudButton.MODE_MOUSE;
@@ -267,7 +273,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
             mBtnTrackPointMode.setText("Mode: " + next.toUpperCase());
             if (mCallback != null) mCallback.onModelChanged(mActiveButton);
         });
-        mTrackPointOptions.addView(mBtnTrackPointMode);
+        mTrackPointOptions.addView(createLabelValueRow("Mode", null, mBtnTrackPointMode));
         content.addView(mTrackPointOptions);
 
         // Bottom Operations: Delete & Duplicate. Hidden for dock items since
@@ -327,11 +333,17 @@ public final class HudPropertyInspectorView extends LinearLayout {
         syncSliderAndInput(mCornerSeekBar, mCornerInput, b.cornerRadiusDp, 0, 50);
         syncSliderAndInput(mOpacitySeekBar, mOpacityInput, Math.round(b.opacity * 100), 10, 100);
 
-        mBtnPickMainAction.setText("Action: " + b.action.type.toUpperCase() + " (" + (b.action.code > 0 ? b.action.code : "") + ")");
-        mSuperGestureOptions.setVisibility(HudButton.WIDGET_SUPER_GESTURE.equals(b.widgetType) ? VISIBLE : GONE);
-        // TrackPoint options only make sense for the trackpoint widget. We
-        // keep the current mode label in sync so the user sees what the
-        // button will toggle to before tapping it.
+        // Update the badges with the live values from the model.
+        mBtnPickMainAction.setText(formatMainActionLabel(b));
+        if (HudButton.WIDGET_SUPER_GESTURE.equals(b.widgetType)) {
+            mSuperGestureOptions.setVisibility(VISIBLE);
+            mBtnPickSwipeLeft.setText(swipeBadgeLabel(b.swipeLeftAction, "Left"));
+            mBtnPickSwipeRight.setText(swipeBadgeLabel(b.swipeRightAction, "Right"));
+            mBtnPickSwipeUp.setText(swipeBadgeLabel(b.swipeUpAction, "Up"));
+            mBtnPickSwipeDown.setText(swipeBadgeLabel(b.swipeDownAction, "Down"));
+        } else {
+            mSuperGestureOptions.setVisibility(GONE);
+        }
         boolean isTrackpoint = HudButton.WIDGET_TRACKPOINT.equals(b.widgetType);
         if (mTrackPointOptions != null) {
             mTrackPointOptions.setVisibility(isTrackpoint ? VISIBLE : GONE);
@@ -362,11 +374,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
         } finally {
             mIsProgrammaticChange = false;
         }
-        mBtnPickMainAction.setText("Action: " + b.action.type.toUpperCase() + " (" + (b.action.code > 0 ? b.action.code : "") + ")");
+        mBtnPickMainAction.setText(formatMainActionLabel(b));
         mSuperGestureOptions.setVisibility(GONE);
-        // Dock items never expose trackpoint-mode; the strip is in the
-        // legacy ExtraKeysBar path now anyway, but keep the guard in case
-        // an old profile still tags a dock item as a trackpoint.
         if (mTrackPointOptions != null) mTrackPointOptions.setVisibility(GONE);
         if (mSizeSection != null) mSizeSection.setVisibility(GONE);
         if (mOpRow != null) mOpRow.setVisibility(GONE);
@@ -454,16 +463,139 @@ public final class HudPropertyInspectorView extends LinearLayout {
     }
 
     private Button createActionButton(String label) {
+        // Keep the old name as alias to createBadgeButton for code that
+        // still uses the wider button. New code should call
+        // createBadgeButton directly.
+        return createBadgeButton(label);
+    }
+
+    // Rounded badge-style button used for the action assignment rows.
+    // Reads as "Key: SUPER" / "Type: COMBO" with a rounded background
+    // that stands out against the dark panel.
+    private Button createBadgeButton(String label) {
         Button b = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
         b.setText(label);
         b.setTextColor(Color.WHITE);
         b.setTextSize(11);
+        b.setAllCaps(false);
         b.setBackgroundColor(0xFF2A2B3D);
-        b.setPadding(dp(6), dp(4), dp(6), dp(4));
-        LayoutParams lp = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, dp(3), 0, dp(3));
+        b.setPadding(dp(10), dp(6), dp(10), dp(6));
+        b.setSingleLine(true);
+        b.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LayoutParams lp = new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.weight = 1f;
+        lp.setMargins(dp(8), dp(3), 0, dp(3));
         b.setLayoutParams(lp);
         return b;
+    }
+
+    // Placeholder shown on a freshly added action slot, before the user
+    // has picked a real key / combo. Spelled as a friendly sentence
+    // fragment because we concatenate "Left: <placeholder>" etc.
+    private static final String UNASSIGNED_LABEL = "Unassigned";
+
+    // Build a left-aligned "Label - Value (Badge/EditText)" row. The label
+    // sits at the start of the row; the second child (when provided)
+    // stretches to fill the rest of the width.
+    private LinearLayout createLabelValueRow(String label, View leftItem, View rightItem) {
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(4), 0, dp(4));
+
+        TextView l = new TextView(getContext());
+        l.setText(label);
+        l.setTextColor(0xFFCCCCCC);
+        l.setTextSize(12);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        row.addView(l, lp);
+
+        if (leftItem != null) {
+            LinearLayout.LayoutParams li = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            li.leftMargin = dp(8);
+            row.addView(leftItem, li);
+        }
+        if (rightItem != null) {
+            LinearLayout.LayoutParams ri = new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            ri.leftMargin = dp(8);
+            row.addView(rightItem, ri);
+        }
+        return row;
+    }
+
+    // Empty left-side spacer used when the row only has a right-side
+    // badge (so the badge takes the full row width).
+    private View createLeftAlignedEditText() {
+        View v = new View(getContext());
+        v.setLayoutParams(new LinearLayout.LayoutParams(0, 0));
+        return v;
+    }
+
+    private EditText createLabelEditText() {
+        EditText et = new EditText(getContext());
+        et.setTextColor(Color.WHITE);
+        et.setTextSize(13);
+        et.setBackgroundColor(0x22FFFFFF);
+        et.setPadding(dp(8), dp(6), dp(8), dp(6));
+        et.setSingleLine(true);
+        et.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        return et;
+    }
+
+    // Programmatic round dark background used by the panel's close button.
+    // Keeps the look consistent with the no-emoji rule (no Unicode glyphs
+    // or material icon dependency).
+    private android.graphics.drawable.Drawable getRoundCloseBackground() {
+        android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+        d.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        d.setColor(0x33FFFFFF);
+        return d;
+    }
+
+    // Format a HudAction as a short human-readable string for the action
+    // badge. Falls back to "Unassigned" when nothing is bound yet.
+    private String formatMainActionLabel(HudButton b) {
+        if (b == null || b.action == null) return UNASSIGNED_LABEL;
+        return formatActionBadge(b.action, null);
+    }
+
+    // Same as formatMainActionLabel but prefixes a direction token so
+    // the four swipe rows read "Left: KEY" / "Right: Combo" etc.
+    private String swipeBadgeLabel(HudAction a, String directionToken) {
+        if (a == null) return directionToken + ": " + UNASSIGNED_LABEL;
+        return formatActionBadge(a, directionToken);
+    }
+
+    private String formatActionBadge(HudAction a, String directionToken) {
+        if (a == null) return directionToken != null
+                ? (directionToken + ": " + UNASSIGNED_LABEL)
+                : UNASSIGNED_LABEL;
+        String prefix = directionToken != null ? (directionToken + ": ") : "";
+        switch (a.type) {
+            case HudAction.TYPE_KEY:
+                return a.code > 0 ? (prefix + "Key " + a.code) : (prefix + UNASSIGNED_LABEL);
+            case HudAction.TYPE_MODIFIER:
+                return prefix + "Mod " + a.code;
+            case HudAction.TYPE_COMBO:
+                if (a.comboKeys == null || a.comboKeys.isEmpty())
+                    return prefix + UNASSIGNED_LABEL;
+                StringBuilder sb = new StringBuilder(prefix);
+                for (int i = 0; i < a.comboKeys.size(); i++) {
+                    if (i > 0) sb.append("+");
+                    sb.append(a.comboKeys.get(i));
+                }
+                return sb.toString();
+            case HudAction.TYPE_TEXT:
+                return a.text != null && !a.text.isEmpty() ? (prefix + "Text " + a.text) : (prefix + UNASSIGNED_LABEL);
+            case HudAction.TYPE_SYSTEM:
+                return prefix + "Sys " + (a.systemCommand != null ? a.systemCommand : UNASSIGNED_LABEL);
+            default:
+                return prefix + UNASSIGNED_LABEL;
+        }
     }
 
     private TextView createSectionLabel(String text) {

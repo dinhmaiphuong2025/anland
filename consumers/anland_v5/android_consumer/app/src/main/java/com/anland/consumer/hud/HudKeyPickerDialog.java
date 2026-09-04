@@ -8,6 +8,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -16,8 +17,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Categorized Tabbed Dialog for picking keys, WM macros, standard alphanumeric keys, and system actions.
- * Strictly adheres to Anland design language without emojis.
+ * Categorized Tabbed Dialog for picking keys, WM macros, standard
+ * alphanumeric keys, and system actions. Strictly adheres to Anland
+ * design language without emojis.
  */
 public final class HudKeyPickerDialog {
 
@@ -36,7 +38,7 @@ public final class HudKeyPickerDialog {
 
     public static void show(Context context, OnActionSelectedListener listener) {
         AlertDialog.Builder builder = new AlertDialog.Builder(context, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
-        
+
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(context, 16), dp(context, 16), dp(context, 16), dp(context, 16));
@@ -51,54 +53,65 @@ public final class HudKeyPickerDialog {
         title.setPadding(0, 0, 0, dp(context, 12));
         root.addView(title);
 
-        // Tab Navigation Bar
+        // Tab Navigation Bar (wrapped in HorizontalScrollView so the labels
+        // never get squeezed on narrow portrait phones).
+        HorizontalScrollView tabScroller = new HorizontalScrollView(context);
+        tabScroller.setHorizontalScrollBarEnabled(false);
+        tabScroller.setFillViewport(true);
         LinearLayout tabRow = new LinearLayout(context);
         tabRow.setOrientation(LinearLayout.HORIZONTAL);
-        tabRow.setGravity(Gravity.CENTER_HORIZONTAL);
-        tabRow.setPadding(0, 0, 0, dp(context, 12));
-        root.addView(tabRow);
+        tabRow.setGravity(Gravity.CENTER_VERTICAL);
+        tabRow.setPadding(dp(context, 4), 0, dp(context, 4), dp(context, 12));
+        tabScroller.addView(tabRow, new HorizontalScrollView.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        root.addView(tabScroller, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
 
         // Content Container
         LinearLayout contentContainer = new LinearLayout(context);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
-        contentContainer.setMinimumHeight(dp(context, 540));
-        root.addView(contentContainer);
+        contentContainer.setMinimumHeight(dp(context, 480));
+        root.addView(contentContainer, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
 
         AlertDialog dialog = builder.setView(root).create();
 
-        Button btnTabWM = createTabButton(context, "WM & MODS");
-        Button btnTabCombos = createTabButton(context, "COMBOS");
-        Button btnTabKeys = createTabButton(context, "A-Z / NUM");
-        Button btnTabSys = createTabButton(context, "SYSTEM / MOUSE");
+        // 3 tabs only: KEYS (alphanumeric + F-keys), MODS (modifiers + nav +
+        // editing), COMBO & SYS (Niri macros + system actions).
+        Button btnTabKeys = createTabButton(context, "KEYS");
+        Button btnTabMods = createTabButton(context, "MODS");
+        Button btnTabComboSys = createTabButton(context, "COMBO & SYS");
 
-        tabRow.addView(btnTabWM);
-        tabRow.addView(btnTabCombos);
         tabRow.addView(btnTabKeys);
-        tabRow.addView(btnTabSys);
+        tabRow.addView(btnTabMods);
+        tabRow.addView(btnTabComboSys);
 
-        Runnable[] selectTab = new Runnable[4];
+        // Compute grid columns per tab so letters/numbers get the wide
+        // 4-column layout while longer labels stay on a 3-column grid.
+        final int colsKeys = computeColumnCount(context, 4);
+        final int colsLong = computeColumnCount(context, 3);
 
+        Runnable[] selectTab = new Runnable[3];
         selectTab[0] = () -> {
             highlightTab(tabRow, 0);
-            showGrid(context, contentContainer, getWmKeys(), listener, dialog);
+            showGrid(context, contentContainer, getStandardKeys(), listener, dialog, colsKeys);
         };
         selectTab[1] = () -> {
             highlightTab(tabRow, 1);
-            showGrid(context, contentContainer, getNiriCombos(), listener, dialog);
+            showGrid(context, contentContainer, getWmKeys(), listener, dialog, colsLong);
         };
         selectTab[2] = () -> {
             highlightTab(tabRow, 2);
-            showGrid(context, contentContainer, getStandardKeys(), listener, dialog);
-        };
-        selectTab[3] = () -> {
-            highlightTab(tabRow, 3);
-            showGrid(context, contentContainer, getSystemActions(), listener, dialog);
+            // Combos + system actions: same long-label grid.
+            showGrid(context, contentContainer, getNiriAndSystem(listener), listener, dialog, colsLong);
         };
 
-        btnTabWM.setOnClickListener(v -> selectTab[0].run());
-        btnTabCombos.setOnClickListener(v -> selectTab[1].run());
-        btnTabKeys.setOnClickListener(v -> selectTab[2].run());
-        btnTabSys.setOnClickListener(v -> selectTab[3].run());
+        btnTabKeys.setOnClickListener(v -> selectTab[0].run());
+        btnTabMods.setOnClickListener(v -> selectTab[1].run());
+        btnTabComboSys.setOnClickListener(v -> selectTab[2].run());
 
         selectTab[0].run();
         dialog.show();
@@ -109,8 +122,9 @@ public final class HudKeyPickerDialog {
         b.setText(text);
         b.setTextSize(12);
         b.setTextColor(0xFF888888);
-        b.setPadding(dp(ctx, 10), dp(ctx, 6), dp(ctx, 10), dp(ctx, 6));
+        b.setPadding(dp(ctx, 14), dp(ctx, 6), dp(ctx, 14), dp(ctx, 6));
         b.setBackgroundColor(Color.TRANSPARENT);
+        b.setAllCaps(true);
         return b;
     }
 
@@ -132,16 +146,16 @@ public final class HudKeyPickerDialog {
             LinearLayout container,
             List<KeyEntry> entries,
             OnActionSelectedListener listener,
-            AlertDialog dialog
+            AlertDialog dialog,
+            int columns
     ) {
         container.removeAllViews();
 
-        // GridView was unreliable here: with a wide dialog (~90% of a
-        // phone screen) it would happily compute a multi-column layout,
-        // yet still render only the first row when the entries were short
-        // and the parent ScrollView was MATCH_PARENT. We replace it with
-        // an explicit vertical LinearLayout of horizontal LinearLayout
-        // rows - the layout is dumb but always correct.
+        // Explicit vertical LinearLayout of horizontal rows. The GridView
+        // attempt earlier only rendered the first row on this dialog size;
+        // this layout is dumb but always correct and reacts well to long
+        // labels because each cell is given equal share of the width via
+        // LayoutParams weight=1.
         ScrollView scroll = new ScrollView(ctx);
         LinearLayout grid = new LinearLayout(ctx);
         grid.setOrientation(LinearLayout.VERTICAL);
@@ -150,7 +164,6 @@ public final class HudKeyPickerDialog {
         int sidePad = dp(ctx, 4);
         grid.setPadding(sidePad, 0, sidePad, 0);
 
-        int columns = computeColumnCount(ctx);
         for (int row = 0; row < entries.size(); row += columns) {
             LinearLayout rowView = new LinearLayout(ctx);
             rowView.setOrientation(LinearLayout.HORIZONTAL);
@@ -176,16 +189,14 @@ public final class HudKeyPickerDialog {
                 final KeyEntry entry = entries.get(idx);
                 Button btn = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
                 btn.setText(entry.label);
-                // Portrait phones are only ~411dp wide. With 3 columns at
-                // 14sp the labels overlap or get ellipsized; shrink the
-                // font to 12sp and let each button use weight=1 to keep the
-                // cell width fixed. Min height of 52dp gives the smaller
-                // text enough vertical room to render properly.
-                btn.setTextSize(12);
+                btn.setTextSize(13);
                 btn.setTextColor(Color.WHITE);
                 btn.setBackgroundColor(0xFF2A2B3D);
                 btn.setPadding(dp(ctx, 2), dp(ctx, 8), dp(ctx, 2), dp(ctx, 8));
-                btn.setMinHeight(dp(ctx, 52));
+                // 44dp is the Material Design minimum touch target; we keep
+                // even the short letters at that height so the row rhythm
+                // is consistent across all tabs.
+                btn.setMinHeight(dp(ctx, 44));
                 btn.setSingleLine(true);
                 btn.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 btn.setIncludeFontPadding(false);
@@ -214,19 +225,17 @@ public final class HudKeyPickerDialog {
                 ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
-    // Decide how many columns to show based on the dialog width. We avoid
-    // GridView entirely so the layout is predictable across dialog sizes
-    // and across older releases of the framework.
-    private static int computeColumnCount(Context ctx) {
+    // Decide how many columns to show based on the dialog width. We pass
+    // the caller's preferred minimum (e.g. 4 for short labels) so letters
+    // and numbers get a denser grid while longer labels stay on a wider
+    // 3-column grid. The result is also clamped to an upper bound so a
+    // 600dp+ tablet does not end up with 7 columns of cramped buttons.
+    private static int computeColumnCount(Context ctx, int minColumns) {
         int widthDp = ctx.getResources().getConfiguration().screenWidthDp;
         if (widthDp <= 0) widthDp = 360;  // safe default
-        // Portrait phones are around 411dp wide and a full-width dialog
-        // claims 90% of that, so each cell is only ~123dp wide. 3 columns
-        // at 14sp overflows; 4 columns at 12sp fits cleanly. On tablets
-        // (>=600dp) we get the wider layout and more columns.
         int cols = widthDp / 80;
-        if (cols < 4) cols = 4;
-        if (cols > 7) cols = 7;
+        if (cols < minColumns) cols = minColumns;
+        if (cols > minColumns + 2) cols = minColumns + 2;
         return cols;
     }
 
@@ -311,6 +320,19 @@ public final class HudKeyPickerDialog {
         list.add(new KeyEntry("Mouse Middle Click", HudAction.system("mouse_middle")));
         list.add(new KeyEntry("Mouse Scroll Up", HudAction.system("mouse_scroll_up")));
         list.add(new KeyEntry("Mouse Scroll Down", HudAction.system("mouse_scroll_down")));
+        return list;
+    }
+
+    // COMBO & SYS tab content: Niri compositor macros first (the
+    // most common ones), then system actions like the virtual/soft
+    // keyboard toggle, mouse buttons, and scroll wheel events.
+    private static List<KeyEntry> getNiriAndSystem(OnActionSelectedListener listener) {
+        // We cannot capture `listener` here without making it a static
+        // field; the dialog is constructed in the show() call which
+        // already passes `listener` through to each entry's onClick
+        // callback. So this method just builds the read-only list.
+        List<KeyEntry> list = new ArrayList<>(getNiriCombos());
+        list.addAll(getSystemActions());
         return list;
     }
 
