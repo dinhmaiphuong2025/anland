@@ -3,9 +3,7 @@ package com.anland.consumer.hud;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Color;
-import android.graphics.Typeface;
 import android.view.Gravity;
-import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -30,7 +28,6 @@ public final class ComboBuilderView {
     }
 
     private static final int MAX_SLOTS = 3;
-    private static final int COLS = 3;
 
     // The keycode -> human label map. We keep it tiny on purpose: the
     // builder is a fallback for the predefined macros in
@@ -168,17 +165,37 @@ public final class ComboBuilderView {
     private TextView mPreview;
 
     /**
-     * Show a dialog with three slots, a key picker, and Clear / Apply
-     * buttons. Calls {@code listener} when the user accepts a combo and
-     * dismisses the dialog.
+     * Show a standalone AlertDialog with three slots, a key picker, and
+     * Clear / Apply buttons. Calls {@code listener} when the user accepts
+     * a combo and dismisses the dialog.
      */
     public void showDialog(Context ctx, OnComboBuiltListener listener) {
         mListener = listener;
-        mDialog = buildDialog(ctx);
+        mDialog = new AlertDialog.Builder(ctx, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setView(buildContent(ctx))
+                .setCancelable(true)
+                .create();
         mDialog.show();
     }
 
-    private AlertDialog buildDialog(final Context ctx) {
+    /**
+     * Inline variant: the dialog body is appended to {@code host} instead
+     * of creating an AlertDialog. The caller dismisses its own outer
+     * dialog (e.g. the HudKeyPickerDialog) by calling the onComboBuilt
+     * callback. We clear {@code mDialog} so the inline flow does not try
+     * to dismiss a non-existent dialog.
+     */
+    public void showInline(Context ctx, ViewGroup host, OnComboBuiltListener listener) {
+        mListener = listener;
+        mDialog = null;
+        host.removeAllViews();
+        host.addView(buildContent(ctx));
+    }
+
+    // Build the dialog body. Used by both the standalone AlertDialog flow
+    // (showDialog) and the inline flow (showInline) so the layout is
+    // consistent across both.
+    private LinearLayout buildContent(final Context ctx) {
         LinearLayout root = new LinearLayout(ctx);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFF1E1E2E);
@@ -188,7 +205,7 @@ public final class ComboBuilderView {
         title.setText("COMBO BUILDER");
         title.setTextColor(Color.WHITE);
         title.setTextSize(18);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         title.setPadding(0, 0, 0, dp(ctx, 12));
         root.addView(title);
 
@@ -232,9 +249,9 @@ public final class ComboBuilderView {
         mPreview.setTextSize(14);
         mPreview.setGravity(Gravity.CENTER);
         mPreview.setPadding(0, dp(ctx, 8), 0, dp(ctx, 8));
-        // Preview is added to the root below the key picker; it is shown
-        // next to the action buttons so the user sees the result of their
-        // picks before pressing APPLY.
+        // Preview is added below the key picker; it is shown next to
+        // the action buttons so the user sees the result of their picks
+        // before pressing APPLY.
 
         // Key picker grid
         ScrollView keyScroll = new ScrollView(ctx);
@@ -257,9 +274,8 @@ public final class ComboBuilderView {
             for (int col = 0; col < keyCols; col++) {
                 final int idx = i + col;
                 if (idx >= mKeycodes.size()) {
-                    View spacer = new View(ctx);
-                    LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-                    row.addView(spacer, sp);
+                    ViewGroup.LayoutParams sp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                    row.addView(new android.view.View(ctx), sp);
                     continue;
                 }
                 final int code = mKeycodes.get(idx);
@@ -273,7 +289,7 @@ public final class ComboBuilderView {
                 k.setMinHeight(dp(ctx, 40));
                 k.setPadding(dp(ctx, 2), dp(ctx, 6), dp(ctx, 2), dp(ctx, 6));
                 k.setSingleLine(true);
-                LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                ViewGroup.LayoutParams blp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
                 if (col > 0) blp.leftMargin = hSpacing;
                 k.setLayoutParams(blp);
                 k.setOnClickListener(v -> {
@@ -290,8 +306,7 @@ public final class ComboBuilderView {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 dp(ctx, 320)));
 
-        // Append the preview right after the key grid so it sits above
-        // the action row.
+        // Preview is shown just below the key grid, above the action row.
         root.addView(mPreview);
 
         // Action row: Clear All + Apply Combo
@@ -326,7 +341,7 @@ public final class ComboBuilderView {
             commit();
             if (mDialog != null) mDialog.dismiss();
         });
-        LinearLayout.LayoutParams applyLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        ViewGroup.LayoutParams applyLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         applyLp.leftMargin = dp(ctx, 8);
         actions.addView(btnApply, applyLp);
 
@@ -335,10 +350,7 @@ public final class ComboBuilderView {
         refreshActiveSlot();
         updatePreview();
 
-        return new AlertDialog.Builder(ctx, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                .setView(root)
-                .setCancelable(true)
-                .create();
+        return root;
     }
 
     private void updatePreview() {

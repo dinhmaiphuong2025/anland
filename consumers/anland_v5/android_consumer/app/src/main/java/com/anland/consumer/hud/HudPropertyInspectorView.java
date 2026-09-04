@@ -232,25 +232,25 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mSuperGestureOptions.setPadding(0, dp(6), 0, 0);
 
         mSuperGestureOptions.addView(createSectionLabel("Swipe Actions:"));
-        mBtnPickSwipeLeft = createBadgeButton("Left: " + UNASSIGNED_LABEL);
+        mBtnPickSwipeLeft = createBadgeButton(UNASSIGNED_LABEL);
         mBtnPickSwipeLeft.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 2);
         });
         mSuperGestureOptions.addView(createLabelValueRow("Left", null, mBtnPickSwipeLeft));
 
-        mBtnPickSwipeRight = createBadgeButton("Right: " + UNASSIGNED_LABEL);
+        mBtnPickSwipeRight = createBadgeButton(UNASSIGNED_LABEL);
         mBtnPickSwipeRight.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 3);
         });
         mSuperGestureOptions.addView(createLabelValueRow("Right", null, mBtnPickSwipeRight));
 
-        mBtnPickSwipeUp = createBadgeButton("Up: " + UNASSIGNED_LABEL);
+        mBtnPickSwipeUp = createBadgeButton(UNASSIGNED_LABEL);
         mBtnPickSwipeUp.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 4);
         });
         mSuperGestureOptions.addView(createLabelValueRow("Up", null, mBtnPickSwipeUp));
 
-        mBtnPickSwipeDown = createBadgeButton("Down: " + UNASSIGNED_LABEL);
+        mBtnPickSwipeDown = createBadgeButton(UNASSIGNED_LABEL);
         mBtnPickSwipeDown.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 5);
         });
@@ -263,14 +263,14 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mTrackPointOptions.setOrientation(VERTICAL);
         mTrackPointOptions.setPadding(0, dp(6), 0, 0);
         mTrackPointOptions.addView(createSectionLabel("TrackPoint Mode:"));
-        mBtnTrackPointMode = createBadgeButton("Mode: MOUSE");
+        mBtnTrackPointMode = createBadgeButton("MOUSE");
         mBtnTrackPointMode.setOnClickListener(v -> {
             if (mActiveButton == null) return;
             String next = HudButton.MODE_MOUSE.equals(mActiveButton.trackpointMode)
                     ? HudButton.MODE_SCROLL
                     : HudButton.MODE_MOUSE;
             mActiveButton.trackpointMode = next;
-            mBtnTrackPointMode.setText("Mode: " + next.toUpperCase());
+            mBtnTrackPointMode.setText(next.toUpperCase());
             if (mCallback != null) mCallback.onModelChanged(mActiveButton);
         });
         mTrackPointOptions.addView(createLabelValueRow("Mode", null, mBtnTrackPointMode));
@@ -371,7 +371,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
             mTrackPointOptions.setVisibility(isTrackpoint ? VISIBLE : GONE);
             if (isTrackpoint) {
                 String mode = b.trackpointMode != null ? b.trackpointMode : HudButton.MODE_MOUSE;
-                mBtnTrackPointMode.setText("Mode: " + mode.toUpperCase());
+                mBtnTrackPointMode.setText(mode.toUpperCase());
             }
         }
         // Floating buttons show size sliders and the delete/duplicate row.
@@ -523,21 +523,27 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private static final String UNASSIGNED_LABEL = "Unassigned";
 
     // Build a left-aligned "Label - Value (Badge/EditText)" row. The label
-    // sits at the start of the row; the second child (when provided)
-    // stretches to fill the rest of the width.
+    // sits in a fixed 110dp column on the left, so the right-hand value
+    // column always starts at the same X position regardless of the label
+    // text width. The right child (or the single EditText) stretches to
+    // fill the rest of the row width.
     private LinearLayout createLabelValueRow(String label, View leftItem, View rightItem) {
         LinearLayout row = new LinearLayout(getContext());
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(0, dp(4), 0, dp(4));
 
+        // Fixed 110dp label column: every "Main Action", "Left", "Right",
+        // "Up", "Down", "Mode" and "Display Label" row lines up exactly
+        // with its neighbours, so the value column can have the same
+        // starting X position and width across rows.
         TextView l = new TextView(getContext());
         l.setText(label);
         l.setTextColor(0xFFCCCCCC);
         l.setTextSize(12);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
+                dp(110), LinearLayout.LayoutParams.WRAP_CONTENT);
+        l.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         row.addView(l, lp);
 
         if (leftItem != null) {
@@ -591,36 +597,34 @@ public final class HudPropertyInspectorView extends LinearLayout {
         return formatActionBadge(b.action, null);
     }
 
-    // Same as formatMainActionLabel but prefixes a direction token so
-    // the four swipe rows read "Left: KEY" / "Right: Combo" etc.
+    // Render the swipe-action badge as a pure value string: "SUPER + LEFT",
+    // "Overview", "Unassigned". The direction token is implied by the
+    // row's own left-hand label ("Left", "Right", "Up", "Down") so we no
+    // longer need to duplicate it inside the badge.
     private String swipeBadgeLabel(HudAction a, String directionToken) {
-        if (a == null) return directionToken + ": " + UNASSIGNED_LABEL;
-        return formatActionBadge(a, directionToken);
+        return formatActionBadge(a, null);
     }
 
     private String formatActionBadge(HudAction a, String directionToken) {
-        if (a == null) return directionToken != null
-                ? (directionToken + ": " + UNASSIGNED_LABEL)
-                : UNASSIGNED_LABEL;
-        String prefix = directionToken != null ? (directionToken + ": ") : "";
+        if (a == null) return UNASSIGNED_LABEL;
         switch (a.type) {
             case HudAction.TYPE_KEY:
-                return a.code > 0 ? (prefix + labelForEvdev(a.code)) : (prefix + UNASSIGNED_LABEL);
+                return a.code > 0 ? labelForEvdev(a.code) : UNASSIGNED_LABEL;
             case HudAction.TYPE_MODIFIER:
-                return prefix + labelForEvdev(a.code);
+                return labelForEvdev(a.code);
             case HudAction.TYPE_COMBO:
                 if (a.comboKeys == null || a.comboKeys.isEmpty())
-                    return prefix + UNASSIGNED_LABEL;
-                StringBuilder sb = new StringBuilder(prefix);
+                    return UNASSIGNED_LABEL;
+                StringBuilder sb = new StringBuilder();
                 for (int i = 0; i < a.comboKeys.size(); i++) {
                     if (i > 0) sb.append(" + ");
                     sb.append(labelForEvdev(a.comboKeys.get(i)));
                 }
                 return sb.toString();
             case HudAction.TYPE_TEXT:
-                return a.text != null && !a.text.isEmpty() ? (prefix + "Text " + a.text) : (prefix + UNASSIGNED_LABEL);
+                return a.text != null && !a.text.isEmpty() ? ("Text " + a.text) : UNASSIGNED_LABEL;
             case HudAction.TYPE_SYSTEM:
-                return prefix + "Sys " + (a.systemCommand != null ? a.systemCommand : UNASSIGNED_LABEL);
+                return "Sys " + (a.systemCommand != null ? a.systemCommand : UNASSIGNED_LABEL);
             default:
                 return prefix + UNASSIGNED_LABEL;
         }
