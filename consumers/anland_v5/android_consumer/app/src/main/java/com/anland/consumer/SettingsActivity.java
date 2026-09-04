@@ -95,9 +95,29 @@ public class SettingsActivity extends Activity {
     private EditText layoutInput;
     private static final int REQ_PICK_LAYOUT = 2001;
 
+    // The socket path and window name of the Droidspaces-owned MainActivity
+    // window that launched us. We have to forward them to every child Intent
+    // that re-enters MainActivity (e.g. OPEN_HUD_EDITOR) so the editor
+    // connects to the same daemon instead of the default socket path.
+    private String mCurrentSocketPath = null;
+    private String mCurrentWindowName = null;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Capture the daemon the user is looking at so the HUD-editor
+        // entry can hand it back to MainActivity unchanged.
+        Intent launched = getIntent();
+        if (launched != null) {
+            String sock = launched.getStringExtra(MainActivity.EXTRA_SOCKET_PATH);
+            if (sock != null && !sock.trim().isEmpty()) {
+                mCurrentSocketPath = sock.trim();
+            }
+            String name = launched.getStringExtra(MainActivity.EXTRA_WINDOW_NAME);
+            if (name != null && !name.trim().isEmpty()) {
+                mCurrentWindowName = name.trim();
+            }
+        }
         showHome();
     }
 
@@ -301,16 +321,23 @@ public class SettingsActivity extends Activity {
             Button btnEditHud = new Button(this);
             btnEditHud.setText("Open Visual HUD Layout Editor");
             btnEditHud.setOnClickListener(v -> {
-                // The HUD editor must run inside the same task as the
-                // currently-running MainActivity, otherwise it spawns a
-                // second task that connects to the default socket (which
-                // is not the Droidspaces-owned daemon the user is looking
-                // at) and shows a black screen. We rely on singleTask
-                // + SINGLE_TOP + CLEAR_TOP to bring the existing instance
-                // forward and deliver the intent via onNewIntent, which
-                // already preserves mSocketOverride.
+                // Re-enter the MainActivity that spawned us, passing the
+                // daemon it is connected to. Without these extras the
+                // editor falls back to the default socket, which is not
+                // the Droidspaces-owned daemon, so Android spawns a second
+                // task with a black screen. singleTask + SINGLE_TOP +
+                // CLEAR_TOP brings the existing instance forward so
+                // onNewIntent fires and the original task is reused.
                 Intent intent = new Intent(this, MainActivity.class);
                 intent.setAction("OPEN_HUD_EDITOR");
+                if (mCurrentSocketPath != null) {
+                    intent.putExtra(MainActivity.EXTRA_SOCKET_PATH,
+                            mCurrentSocketPath);
+                }
+                if (mCurrentWindowName != null) {
+                    intent.putExtra(MainActivity.EXTRA_WINDOW_NAME,
+                            mCurrentWindowName);
+                }
                 intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
                 startActivity(intent);
                 finish();

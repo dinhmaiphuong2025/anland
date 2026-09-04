@@ -337,21 +337,18 @@ public class MainActivity extends Activity
         } else if (mNativeReady && isSocketFile(resolveSocketPath())) {
             // The user came back and the daemon is fine: cancel any pending exit.
             cancelPendingFinish();
-        } else if (!mNativeReady && mNative == null && isSocketFile(resolveSocketPath())
-                && mHudOverlay != null && !mHudOverlay.isEditMode()
-                && !mPendingOpenHudEditor && mUserInteracted) {
-            // Editor-only window is back in focus, the daemon socket is back
-            // online, and the user has actually been using the app. The
-            // window was launched in editor-only mode (mNative == null)
-            // so its surface never bound to a real producer; we have to
-            // recreate() to bring up the native pipeline properly. This is
-            // the fix for the "black tile in Recents after the user exits
-            // HUD editor" symptom: the activity used to stay around as a
-            // ghost because nothing ever restarted its native side.
-            android.util.Log.i(TAG, "Editor-only window detected daemon back; recreating");
-            recreate();
-            return;
         }
+        // Note: the editor-only recreate() block that used to live here was
+        // removed. It fired whenever an editor-only window regained focus
+        // and the daemon was back online; the intent was to rebuild the
+        // native pipeline so the user could see Niri again. In practice
+        // it duplicated the task: the previous MainActivity instance (the
+        // one the user was already looking at) was destroyed and replaced
+        // with a brand-new instance in a new Recents card, which is the
+        // "second tab" the user reported. The socket now stays bound the
+        // whole time (SettingsActivity -> MainActivity via singleTask +
+        // SINGLE_TOP + CLEAR_TOP), so the editor returns to the running
+        // window instead of starting a new one.
         if (hasFocus) {
             // Become the accessibility-key target and the focused instance, so real
             // camera frames route to this window (others get blank frames).
@@ -408,6 +405,23 @@ public class MainActivity extends Activity
         if (sock == null || sock.trim().isEmpty())
             sock = DEFAULT_SOCKET_PATH;
         return sock.trim();
+    }
+
+    // Build an Intent that opens SettingsActivity while preserving the current
+    // socket path and window name. Without these extras SettingsActivity
+    // would launch the HUD editor against the default socket, which is not
+    // the Droidspaces-owned daemon the user is looking at; Android then
+    // spawns a second task with a black screen.
+    private Intent buildSettingsIntent() {
+        Intent intent = new Intent(this, SettingsActivity.class);
+        String sock = resolveSocketPath();
+        if (sock != null && !sock.trim().isEmpty()) {
+            intent.putExtra(EXTRA_SOCKET_PATH, sock);
+        }
+        if (mWindowName != null && !mWindowName.trim().isEmpty()) {
+            intent.putExtra(EXTRA_WINDOW_NAME, mWindowName);
+        }
+        return intent;
     }
 
     // Start (or restart) this window's native pipeline, but only if the daemon
@@ -688,7 +702,13 @@ public class MainActivity extends Activity
             }
             @Override
             public void openSettings() {
-                startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+                // Pass the current socket path and window name through so
+                // SettingsActivity can hand them back unchanged when it
+                // later launches the HUD editor. Without this the editor
+                // intent falls back to the default socket, which does not
+                // match the Droidspaces-owned daemon the user is looking at
+                // and Android then spawns a second task with a black screen.
+                startActivity(buildSettingsIntent());
             }
             @Override
             public void onLayoutSaved() {
@@ -827,7 +847,7 @@ public class MainActivity extends Activity
         channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         nm.createNotificationChannel(channel);
 
-        Intent intent = new Intent(this, SettingsActivity.class);
+        Intent intent = buildSettingsIntent();
         intent.setAction(Intent.ACTION_MAIN);
         PendingIntent pi = PendingIntent.getActivity(this, 0, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -2217,7 +2237,7 @@ public class MainActivity extends Activity
                 MainActivity.this.toggleVirtualKeyboard();
             }
             @Override public void openSettings() {
-                startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+                startActivity(MainActivity.this.buildSettingsIntent());
             }
         });
         mBarHeight = Math.round(37.5f * mDensity * extraKeysBar.getRowCount());
