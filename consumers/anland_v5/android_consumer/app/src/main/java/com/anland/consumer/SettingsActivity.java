@@ -638,6 +638,7 @@ public class SettingsActivity extends Activity {
         // ExtraKeys editor just because HUD is on prevented the user from
         // re-binding the bottom key row, which is the bug that surfaced
         // as "bảng JSON chỉnh sửa ExtraKeys biến mất khi bật HUD".
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         TextView layoutHeader = new TextView(this);
         layoutHeader.setText(R.string.section_custom_layout);
         layoutHeader.setTextSize(16);
