@@ -176,13 +176,19 @@ public final class HudKeyPickerDialog {
                 final KeyEntry entry = entries.get(idx);
                 Button btn = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
                 btn.setText(entry.label);
-                btn.setTextSize(14);
+                // Portrait phones are only ~411dp wide. With 3 columns at
+                // 14sp the labels overlap or get ellipsized; shrink the
+                // font to 12sp and let each button use weight=1 to keep the
+                // cell width fixed. Min height of 52dp gives the smaller
+                // text enough vertical room to render properly.
+                btn.setTextSize(12);
                 btn.setTextColor(Color.WHITE);
                 btn.setBackgroundColor(0xFF2A2B3D);
-                btn.setPadding(dp(ctx, 4), dp(ctx, 12), dp(ctx, 4), dp(ctx, 12));
-                btn.setMinHeight(dp(ctx, 48));
+                btn.setPadding(dp(ctx, 2), dp(ctx, 8), dp(ctx, 2), dp(ctx, 8));
+                btn.setMinHeight(dp(ctx, 52));
                 btn.setSingleLine(true);
                 btn.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                btn.setIncludeFontPadding(false);
                 LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
                         0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
                 if (col > 0) btnLp.leftMargin = hSpacing;
@@ -214,12 +220,13 @@ public final class HudKeyPickerDialog {
     private static int computeColumnCount(Context ctx) {
         int widthDp = ctx.getResources().getConfiguration().screenWidthDp;
         if (widthDp <= 0) widthDp = 360;  // safe default
-        // 100dp per cell is a comfortable touch target on phones; on
-        // tablets we get more columns. Clamp to 3-6 so the buttons stay
-        // readable regardless of device size.
-        int cols = widthDp / 100;
-        if (cols < 3) cols = 3;
-        if (cols > 6) cols = 6;
+        // Portrait phones are around 411dp wide and a full-width dialog
+        // claims 90% of that, so each cell is only ~123dp wide. 3 columns
+        // at 14sp overflows; 4 columns at 12sp fits cleanly. On tablets
+        // (>=600dp) we get the wider layout and more columns.
+        int cols = widthDp / 80;
+        if (cols < 4) cols = 4;
+        if (cols > 7) cols = 7;
         return cols;
     }
 

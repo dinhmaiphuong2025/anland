@@ -251,10 +251,71 @@ public class SettingsActivity extends Activity {
         LinearLayout root = newPage(R.string.cat_keyboard_title);
         buildVirtualKeyboardSection(root);
         buildImmersiveSection(root);
-        buildAccessibilitySection(root);
+        buildHudSection(root);
         buildExtraKeysSection(root);
         buildCustomLayoutSection(root);
+        buildAccessibilitySection(root);
         setContent(root);
+    }
+
+    // Custom HUD Control is a peer of the ExtraKeys bar and Immersive Mode:
+    // a feature of the same level on the keyboard page, not a sub-feature of
+    // the ExtraKeys row. The order is:
+    //   1. Virtual Keyboard
+    //   2. Immersive Mode
+    //   3. Custom HUD Control   <-- this section
+    //   4. ExtraKeys Bar
+    //   5. Custom Layout (ExtraKeys JSON editor)
+    //   6. Accessibility
+    private void buildHudSection(LinearLayout root) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean useHud = prefs.getBoolean("use_hud_overlay", false);
+
+        TextView header = new TextView(this);
+        header.setText("Custom HUD Control");
+        header.setTextSize(16);
+        header.setTypeface(null, Typeface.BOLD);
+        header.setPadding(0, dp(24), 0, dp(8));
+        root.addView(header);
+
+        android.widget.Switch hudSwitch = new android.widget.Switch(this);
+        hudSwitch.setText("Enable Custom HUD Control (Floating Buttons)");
+        hudSwitch.setTextSize(14);
+        hudSwitch.setChecked(useHud);
+        hudSwitch.setPadding(0, dp(8), 0, dp(8));
+        // Toggling the HUD must NOT touch KEY_EXTRA_KEYS_MODE anymore. The two
+        // features are now independent peers: the user can run the floating
+        // button overlay, the legacy ExtraKeys bar, or both at the same time.
+        hudSwitch.setOnCheckedChangeListener((v, checked) -> {
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putBoolean("use_hud_overlay", checked).apply();
+            showKeyboardPage();
+        });
+        root.addView(hudSwitch);
+
+        if (useHud) {
+            // === Open Visual HUD Layout Editor ===
+            // Styled like the existing "Bind Soft Keyboard Toggle Key" button:
+            // a plain Material Button with just text + the default ripple, so
+            // all the bind-style controls read as a single coherent row group.
+            Button btnEditHud = new Button(this);
+            btnEditHud.setText("Open Visual HUD Layout Editor");
+            btnEditHud.setOnClickListener(v -> {
+                Intent intent = new Intent(this, MainActivity.class);
+                intent.setAction("OPEN_HUD_EDITOR");
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                startActivity(intent);
+                finish();
+            });
+            root.addView(btnEditHud);
+
+            TextView hudHint = new TextView(this);
+            hudHint.setText("Design on-screen floating buttons. Add a TrackPoint (mouse or scroll mode) or a Super Gesture nub; each can be moved, resized and rebound to any key/combo/action with live snapping and precise numeric properties. The bottom key row is the legacy ExtraKeys bar and is unaffected by this toggle.");
+            hudHint.setTextSize(12);
+            hudHint.setTextColor(Color.GRAY);
+            hudHint.setPadding(0, dp(4), 0, dp(12));
+            root.addView(hudHint);
+        }
     }
 
     private void showTouchpadPage() {
@@ -508,7 +569,6 @@ public class SettingsActivity extends Activity {
 
     private void buildExtraKeysSection(LinearLayout root) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        boolean useHud = prefs.getBoolean("use_hud_overlay", false);
 
         TextView header = new TextView(this);
         header.setText(R.string.section_extra_keys);
@@ -517,70 +577,23 @@ public class SettingsActivity extends Activity {
         header.setPadding(0, dp(24), 0, dp(8));
         root.addView(header);
 
-        // === Master Switch for HUD Layout Editor (own section, peer to ExtraKeysBar / ImmersiveMode) ===
-        TextView hudSectionLabel = new TextView(this);
-        hudSectionLabel.setText("CUSTOM HUD CONTROLS");
-        hudSectionLabel.setTextSize(16);
-        hudSectionLabel.setTypeface(null, Typeface.BOLD);
-        hudSectionLabel.setPadding(0, dp(24), 0, dp(8));
-        root.addView(hudSectionLabel);
-
-        android.widget.Switch hudSwitch = new android.widget.Switch(this);
-        hudSwitch.setText("Enable Custom HUD Controls (Floating Buttons)");
-        hudSwitch.setTextSize(14);
-        hudSwitch.setChecked(useHud);
-        hudSwitch.setPadding(0, dp(8), 0, dp(8));
-        // Toggling the HUD must NOT touch KEY_EXTRA_KEYS_MODE anymore. The two
-        // features are now independent peers: the user can run the floating
-        // button overlay, the legacy ExtraKeys bar, or both at the same time.
-        hudSwitch.setOnCheckedChangeListener((v, checked) -> {
+        // === Back key opens extra keys bar (Legacy only) ===
+        android.widget.Switch backOpensExtraKeysSwitch = new android.widget.Switch(this);
+        backOpensExtraKeysSwitch.setText(R.string.back_opens_switch);
+        backOpensExtraKeysSwitch.setTextSize(14);
+        backOpensExtraKeysSwitch.setPadding(0, dp(16), 0, 0);
+        backOpensExtraKeysSwitch.setChecked(prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true));
+        backOpensExtraKeysSwitch.setOnCheckedChangeListener((v, checked) ->
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putBoolean("use_hud_overlay", checked).apply();
-            showKeyboardPage();
-        });
-        root.addView(hudSwitch);
+                .putBoolean(KEY_BACK_OPENS_EXTRA_KEYS, checked).apply());
+        root.addView(backOpensExtraKeysSwitch);
 
-        if (useHud) {
-            // === Open Visual HUD Layout Editor ===
-            // Styled like the existing "Bind Soft Keyboard Toggle Key" button:
-            // a plain Material Button with just text + the default ripple, so
-            // all the bind-style controls read as a single coherent row group.
-            Button btnEditHud = new Button(this);
-            btnEditHud.setText("Open Visual HUD Layout Editor");
-            btnEditHud.setOnClickListener(v -> {
-                Intent intent = new Intent(this, MainActivity.class);
-                intent.setAction("OPEN_HUD_EDITOR");
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                startActivity(intent);
-                finish();
-            });
-            root.addView(btnEditHud);
-
-            TextView hudHint = new TextView(this);
-            hudHint.setText("Design on-screen floating buttons. Add a TrackPoint (mouse or scroll mode) or a Super Gesture nub; each can be moved, resized and rebound to any key/combo/action with live snapping and precise numeric properties. The bottom key row is the legacy ExtraKeysBar and is unaffected by this toggle.");
-            hudHint.setTextSize(12);
-            hudHint.setTextColor(Color.GRAY);
-            hudHint.setPadding(0, dp(4), 0, dp(12));
-            root.addView(hudHint);
-        } else {
-            // === Back key opens extra keys bar (Legacy only) ===
-            android.widget.Switch backOpensExtraKeysSwitch = new android.widget.Switch(this);
-            backOpensExtraKeysSwitch.setText(R.string.back_opens_switch);
-            backOpensExtraKeysSwitch.setTextSize(14);
-            backOpensExtraKeysSwitch.setPadding(0, dp(16), 0, 0);
-            backOpensExtraKeysSwitch.setChecked(prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true));
-            backOpensExtraKeysSwitch.setOnCheckedChangeListener((v, checked) ->
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                    .putBoolean(KEY_BACK_OPENS_EXTRA_KEYS, checked).apply());
-            root.addView(backOpensExtraKeysSwitch);
-
-            TextView backOpensExtraKeysHint = new TextView(this);
-            backOpensExtraKeysHint.setText(R.string.back_opens_hint);
-            backOpensExtraKeysHint.setTextSize(12);
-            backOpensExtraKeysHint.setTextColor(Color.GRAY);
-            backOpensExtraKeysHint.setPadding(0, dp(4), 0, dp(8));
-            root.addView(backOpensExtraKeysHint);
-        }
+        TextView backOpensExtraKeysHint = new TextView(this);
+        backOpensExtraKeysHint.setText(R.string.back_opens_hint);
+        backOpensExtraKeysHint.setTextSize(12);
+        backOpensExtraKeysHint.setTextColor(Color.GRAY);
+        backOpensExtraKeysHint.setPadding(0, dp(4), 0, dp(8));
+        root.addView(backOpensExtraKeysHint);
 
         // === Extra keys bar mode selector (Shared) ===
         TextView modeLabel = new TextView(this);
@@ -620,11 +633,11 @@ public class SettingsActivity extends Activity {
     }
 
     private void buildCustomLayoutSection(LinearLayout root) {
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        boolean useHud = prefs.getBoolean("use_hud_overlay", false);
-        if (useHud) return; // Hide legacy JSON editor when HUD is enabled
-
-
+        // Always show the ExtraKeys JSON editor, regardless of whether the
+        // HUD editor is enabled. The two features are peers; hiding the
+        // ExtraKeys editor just because HUD is on prevented the user from
+        // re-binding the bottom key row, which is the bug that surfaced
+        // as "bảng JSON chỉnh sửa ExtraKeys biến mất khi bật HUD".
         TextView layoutHeader = new TextView(this);
         layoutHeader.setText(R.string.section_custom_layout);
         layoutHeader.setTextSize(16);
