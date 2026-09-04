@@ -626,7 +626,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
             case HudAction.TYPE_SYSTEM:
                 return "Sys " + (a.systemCommand != null ? a.systemCommand : UNASSIGNED_LABEL);
             default:
-                return prefix + UNASSIGNED_LABEL;
+                return UNASSIGNED_LABEL;
         }
     }
 

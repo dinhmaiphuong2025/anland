@@ -289,7 +289,7 @@ public final class ComboBuilderView {
                 k.setMinHeight(dp(ctx, 40));
                 k.setPadding(dp(ctx, 2), dp(ctx, 6), dp(ctx, 2), dp(ctx, 6));
                 k.setSingleLine(true);
-                ViewGroup.LayoutParams blp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
                 if (col > 0) blp.leftMargin = hSpacing;
                 k.setLayoutParams(blp);
                 k.setOnClickListener(v -> {
@@ -341,7 +341,7 @@ public final class ComboBuilderView {
             commit();
             if (mDialog != null) mDialog.dismiss();
         });
-        ViewGroup.LayoutParams applyLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        LinearLayout.LayoutParams applyLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         applyLp.leftMargin = dp(ctx, 8);
         actions.addView(btnApply, applyLp);
 
