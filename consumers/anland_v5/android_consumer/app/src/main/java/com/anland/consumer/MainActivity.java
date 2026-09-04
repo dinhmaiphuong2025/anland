@@ -2058,16 +2058,16 @@ public class MainActivity extends Activity
         int newImeBottom = insets.getInsets(WindowInsets.Type.ime()).bottom;
         boolean imeVisible = newImeBottom > 0;
         boolean wasImeVisible = mImeBottom > 0;
-    
+
         mImeBottom = newImeBottom;
-    
+
         // Only "with_keyboard" mode tracks the IME; "always"/"never"
         // let the user's manual toggle (back key) stay untouched.
+        // The HUD editor is a separate, peer feature and must NOT
+        // suppress the extra-keys bar here.
         String mode = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .getString(KEY_EXTRA_KEYS_MODE, "always");
-        boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                .getBoolean("use_hud_overlay", false);
-        if (imeVisible != wasImeVisible && "with_keyboard".equals(mode) && !useHud)
+        if (imeVisible != wasImeVisible && "with_keyboard".equals(mode))
             setExtraKeysBarVisible(imeVisible);
 
         relayout();
@@ -2078,12 +2078,10 @@ public class MainActivity extends Activity
     //   "always"       – bar always visible
     //   "never"        – bar always hidden
     //   "with_keyboard" – bar tracks the soft keyboard (default)
+    // The HUD editor is a peer feature and does NOT force the bar off.
     private boolean shouldShowBar(boolean imeVisible) {
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        if (prefs.getBoolean("use_hud_overlay", false)) {
-            return false;
-        }
-        String mode = prefs.getString(KEY_EXTRA_KEYS_MODE, "always");
+        String mode = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getString(KEY_EXTRA_KEYS_MODE, "always");
         switch (mode) {
             case "always":   return true;
             case "never":    return false;
@@ -2174,13 +2172,10 @@ public class MainActivity extends Activity
     }
 
     // Show/hide the extra-keys bar and re-apply the layout so the display area
-    // is compressed (shown) or restored (hidden).
+    // is compressed (shown) or restored (hidden). The HUD editor is a peer
+    // feature and does NOT force the bar off here.
     private void setExtraKeysBarVisible(boolean visible) {
         if (extraKeysBar == null) return;
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        if (prefs.getBoolean("use_hud_overlay", false)) {
-            visible = false;
-        }
         boolean cur = extraKeysBar.getVisibility() == View.VISIBLE;
         if (cur == visible) return;
         extraKeysBar.setVisibility(visible ? View.VISIBLE : View.GONE);
@@ -2306,13 +2301,12 @@ public class MainActivity extends Activity
 
     // The IME was shown/hidden via SystemIME's toggle. In freeform mode the inset
     // callback may not fire, so sync the extra-keys bar explicitly here in all modes.
+    // The HUD editor is a peer feature; it does NOT block the extra-keys bar here.
     @Override
     public void onImeVisibilityChanged(boolean visible) {
         String mode = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .getString(KEY_EXTRA_KEYS_MODE, "always");
-        boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                .getBoolean("use_hud_overlay", false);
-        if ("with_keyboard".equals(mode) && !useHud)
+        if ("with_keyboard".equals(mode))
             setExtraKeysBarVisible(visible);
         if (!visible && surfaceView != null) {
             surfaceView.requestFocus();
@@ -2654,13 +2648,10 @@ public class MainActivity extends Activity
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         // Back key toggles the extra-keys bar (without opening the soft keyboard)
         // when enabled in settings. Leaves the default swallow behaviour otherwise.
+        // The HUD editor is a peer feature; it does NOT swallow Back here.
         if (keyCode == KeyEvent.KEYCODE_BACK
                 && prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true)) {
-            if (prefs.getBoolean("use_hud_overlay", false)) {
-                // Do nothing or maybe hide HUD? But HUD has no toggle currently. Let's just consume the back event so it doesn't leave the app.
-            } else {
-                toggleExtraKeysBar();
-            }
+            toggleExtraKeysBar();
             return true;
         }
 

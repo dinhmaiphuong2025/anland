@@ -232,45 +232,51 @@ public final class HudKeyPickerDialog {
 
     private static List<KeyEntry> getWmKeys() {
         List<KeyEntry> list = new ArrayList<>();
-        list.add(new KeyEntry("SUPER (Mod)", HudAction.modifier(125)));
+        // Modifiers
+        list.add(new KeyEntry("SUPER", HudAction.modifier(125)));
         list.add(new KeyEntry("CTRL", HudAction.modifier(29)));
         list.add(new KeyEntry("ALT", HudAction.modifier(56)));
         list.add(new KeyEntry("SHIFT", HudAction.modifier(42)));
+        // Common editing keys
         list.add(new KeyEntry("ESC", HudAction.key(1)));
         list.add(new KeyEntry("TAB", HudAction.key(15)));
         list.add(new KeyEntry("ENTER", HudAction.key(28)));
-        list.add(new KeyEntry("BACKSPACE", HudAction.key(14)));
+        list.add(new KeyEntry("BKSP", HudAction.key(14)));     // Backspace
         list.add(new KeyEntry("SPACE", HudAction.key(57)));
-        list.add(new KeyEntry("DELETE", HudAction.key(111)));
+        list.add(new KeyEntry("DEL", HudAction.key(111)));      // Delete
         list.add(new KeyEntry("HOME", HudAction.key(102)));
         list.add(new KeyEntry("END", HudAction.key(107)));
-        list.add(new KeyEntry("PAGE UP", HudAction.key(104)));
-        list.add(new KeyEntry("PAGE DOWN", HudAction.key(109)));
-        list.add(new KeyEntry("UP (↑)", HudAction.key(103)));
-        list.add(new KeyEntry("DOWN (↓)", HudAction.key(108)));
-        list.add(new KeyEntry("LEFT (←)", HudAction.key(105)));
-        list.add(new KeyEntry("RIGHT (→)", HudAction.key(106)));
+        list.add(new KeyEntry("PGUP", HudAction.key(104)));     // Page Up
+        list.add(new KeyEntry("PGDN", HudAction.key(109)));     // Page Down
+        // Arrow keys
+        list.add(new KeyEntry("UP", HudAction.key(103)));
+        list.add(new KeyEntry("DOWN", HudAction.key(108)));
+        list.add(new KeyEntry("LEFT", HudAction.key(105)));
+        list.add(new KeyEntry("RIGHT", HudAction.key(106)));
         return list;
     }
 
     private static List<KeyEntry> getNiriCombos() {
         List<KeyEntry> list = new ArrayList<>();
-        list.add(new KeyEntry("Overview (Mod+O)", HudAction.combo(125, 24)));
-        list.add(new KeyEntry("Terminal (Mod+Enter)", HudAction.combo(125, 28)));
-        list.add(new KeyEntry("Close Window (Mod+Shift+Q)", HudAction.combo(125, 42, 16)));
-        list.add(new KeyEntry("Launcher (Mod+Space)", HudAction.combo(125, 57)));
-        list.add(new KeyEntry("Launcher (Mod+D)", HudAction.combo(125, 32)));
-        list.add(new KeyEntry("Fullscreen (Mod+F)", HudAction.combo(125, 33)));
-        list.add(new KeyEntry("Next Column (Mod+Right)", HudAction.combo(125, 106)));
-        list.add(new KeyEntry("Prev Column (Mod+Left)", HudAction.combo(125, 105)));
-        list.add(new KeyEntry("Next WS (Mod+PgDn)", HudAction.combo(125, 109)));
-        list.add(new KeyEntry("Prev WS (Mod+PgUp)", HudAction.combo(125, 104)));
+        // Labels are kept short so a portrait phone (4 columns at ~80dp
+        // each) can show the full word without ellipsizing. The original
+        // wording is preserved in the comment above each entry.
+        list.add(new KeyEntry("Overview", HudAction.combo(125, 24)));         // Mod+O
+        list.add(new KeyEntry("Terminal", HudAction.combo(125, 28)));          // Mod+Enter
+        list.add(new KeyEntry("Close Win", HudAction.combo(125, 42, 16)));     // Mod+Shift+Q
+        list.add(new KeyEntry("Launcher", HudAction.combo(125, 57)));          // Mod+Space
+        list.add(new KeyEntry("Launcher", HudAction.combo(125, 32)));          // Mod+D
+        list.add(new KeyEntry("Fullscreen", HudAction.combo(125, 33)));       // Mod+F
+        list.add(new KeyEntry("Next Col", HudAction.combo(125, 106)));          // Mod+Right
+        list.add(new KeyEntry("Prev Col", HudAction.combo(125, 105)));          // Mod+Left
+        list.add(new KeyEntry("Next WS", HudAction.combo(125, 109)));            // Mod+PgDn
+        list.add(new KeyEntry("Prev WS", HudAction.combo(125, 104)));            // Mod+PgUp
         list.add(new KeyEntry("Alt+Tab", HudAction.combo(56, 15)));
-        list.add(new KeyEntry("Ctrl+C (SIGINT)", HudAction.combo(29, 46)));
-        list.add(new KeyEntry("Ctrl+V (Paste)", HudAction.combo(29, 47)));
-        list.add(new KeyEntry("Ctrl+Z (Undo)", HudAction.combo(29, 44)));
-        list.add(new KeyEntry("Ctrl+A (Select All)", HudAction.combo(29, 30)));
-        list.add(new KeyEntry("Ctrl+L (Clear)", HudAction.combo(29, 38)));
+        list.add(new KeyEntry("Ctrl+C", HudAction.combo(29, 46)));              // SIGINT
+        list.add(new KeyEntry("Ctrl+V", HudAction.combo(29, 47)));              // Paste
+        list.add(new KeyEntry("Ctrl+Z", HudAction.combo(29, 44)));              // Undo
+        list.add(new KeyEntry("Ctrl+A", HudAction.combo(29, 30)));              // Select All
+        list.add(new KeyEntry("Ctrl+L", HudAction.combo(29, 38)));              // Clear
         return list;
     }
 
