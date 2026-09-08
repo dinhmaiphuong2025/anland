@@ -75,6 +75,10 @@ struct buf_info {
  * must stop drawing the cursor into the framebuffer and instead stream
  * CURSOR_POS/CURSOR_BITMAP output events. */
 #define INPUT_TYPE_CAPS 14
+/* Consumer -> producer: frame presentation notification. Sent when SurfaceFlinger
+ * releases a previously queued buffer (acquire fence signaled). Allows the
+ * compositor to synchronize its Wayland frame callbacks to actual display VSync. */
+#define INPUT_TYPE_PRESENTED 15
 
 #define SERVICE_TYPE_CAMERA 1
 
@@ -165,6 +169,12 @@ struct InputEvent {
         struct {
             uint32_t caps; /* CONSUMER_CAP_* bitmask (INPUT_TYPE_CAPS) */
         } input_caps;
+        struct {
+            uint32_t buffer_index;
+            uint32_t frame_seq;
+            uint32_t tv_sec;
+            uint32_t tv_nsec;
+        } presented;
         struct {
             uint32_t padding[4];
         };

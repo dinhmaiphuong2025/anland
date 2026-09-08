@@ -86,6 +86,7 @@ struct consumer_state {
 
     int screen_w;
     int screen_h;
+    uint32_t presented_frame_count;
 
     // Latest display refresh rate (milli-Hz) reported from Java. Read on
     // (re)connect to seed the producer; updated live by nativeSetRefreshRate.
@@ -819,6 +820,24 @@ static void *render_thread_func(void *arg)
             api.queueBuffer(s->window, anb, -1);
             usleep(1000);
             continue;
+        }
+
+        /* Send presentation feedback to producer: SurfaceFlinger has completed scanout
+         * of the previous frame on this buffer slot (acquire fence signaled). Allows the
+         * compositor to synchronize its Wayland frame callbacks to actual display VSync. */
+        if (s->ctx) {
+            struct timespec ts;
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            struct InputEvent pev = {
+                .type = INPUT_TYPE_PRESENTED,
+                .presented = {
+                    .buffer_index = (uint32_t)idx,
+                    .frame_seq = s->presented_frame_count++,
+                    .tv_sec = (uint32_t)ts.tv_sec,
+                    .tv_nsec = (uint32_t)ts.tv_nsec,
+                },
+            };
+            push_input_event(s->ctx, &pev);
         }
 
         if (select_dmabuf(s->ctx, idx) < 0) {
