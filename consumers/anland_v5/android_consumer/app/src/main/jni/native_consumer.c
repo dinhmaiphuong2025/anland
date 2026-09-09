@@ -162,6 +162,7 @@ static int collect_dmabufs(struct consumer_state *s)
     int stale_queued = 0;
 
     LOGI("collect #%d: collecting %d dma-bufs via dequeue/queue", my_seq, target);
+    dbg_file("collect #%d: collecting %d dma-bufs", my_seq, target);
 
     for (int attempt = 0; attempt < target * 4 && found < target; attempt++) {
         ANativeWindowBuffer *anb = NULL;
@@ -230,6 +231,7 @@ static int collect_dmabufs(struct consumer_state *s)
 
     s->buf_count = found;
     LOGI("collect #%d done: found=%d, stale-frames-queued=%d", my_seq, found, stale_queued);
+    dbg_file("collect #%d done: found=%d stale_queued=%d", my_seq, found, stale_queued);
     return 0;
 }
 

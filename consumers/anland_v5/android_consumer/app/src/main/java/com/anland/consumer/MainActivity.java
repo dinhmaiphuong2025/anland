@@ -57,6 +57,13 @@ public class MainActivity extends Activity
     private int customScreenHeight = 0;
     private int viewWidth = 0;
     private int viewHeight = 0;
+    // Reconnect debounce: when returning from another app (or rotation/IME),
+    // surfaceChanged often fires 2+ times with different sizes within a few
+    // hundred ms (e.g. 1440x1642 then 1440x2937). Each full teardown+reconnect
+    // re-queues stale buffers (flicker) and restarts niri's damage sweep.
+    // Coalesce rapid changes into a single reconnect at the latest size.
+    private static final long RECONNECT_DEBOUNCE_MS = 350;
+    private Runnable pendingReconnect = null;
     private static final String KEY_BOUND_KEYCODE = "bound_keycode";
     private static final String KEY_SOCKET_PATH = "socket_path";
     private static final String KEY_USE_ROOT = "use_root";
@@ -1984,14 +1991,8 @@ public class MainActivity extends Activity
             if (mHudOverlay != null) mHudOverlay.refreshEditModeBanner();
             return;
         }
-        updateDisplayRotation();
-        ensurePointerPosition();
-        surfaceReady = true;
-        // Same ordering guarantee as onResume: camera service settled before connect.
-        applyCameraState();
-        mNative.stop();
-        applyConnectionConfig();
-        startNative(holder.getSurface());
+
+        scheduleReconnect(holder);
         pushRefreshRate();
         applyMicState();
         applyAudioLatency();
@@ -2007,6 +2008,38 @@ public class MainActivity extends Activity
             // settles and restart with the real size if it moved on.
             mRoot.postDelayed(this::syncScreenSizeToSurface, 500);
         }
+    }
+
+    /** Coalesce rapid surfaceChanged bursts into one reconnect at latest size. */
+    private void scheduleReconnect(SurfaceHolder holder) {
+        final android.view.Surface surface = holder.getSurface();
+        if (mRoot == null) {
+            doReconnectNow(surface);
+            return;
+        }
+        if (pendingReconnect != null)
+            mRoot.removeCallbacks(pendingReconnect);
+        Log.i(TAG, "surfaceChanged coalescing reconnect");
+        dbg("reconnect coalesced, waiting " + RECONNECT_DEBOUNCE_MS + "ms");
+        pendingReconnect = () -> {
+            pendingReconnect = null;
+            if (mNative == null) return;
+            doReconnectNow(surface);
+        };
+        mRoot.postDelayed(pendingReconnect, RECONNECT_DEBOUNCE_MS);
+    }
+
+    private void doReconnectNow(android.view.Surface surface) {
+        updateDisplayRotation();
+        ensurePointerPosition();
+        surfaceReady = true;
+        // Same ordering guarantee as onResume: camera service settled before connect.
+        applyCameraState();
+        mNative.stop();
+        applyConnectionConfig();
+        startNative(surface);
+        Log.i(TAG, "reconnect fired");
+        dbg("reconnect fired");
     }
 
     /** Restart the pipeline if the live surface no longer matches the last
@@ -2057,6 +2090,10 @@ public class MainActivity extends Activity
     public void surfaceDestroyed(SurfaceHolder holder) {
         surfaceReady = false;
         dbg("surfaceDestroyed");
+        if (pendingReconnect != null && mRoot != null) {
+            mRoot.removeCallbacks(pendingReconnect);
+            pendingReconnect = null;
+        }
         if (immersive != null) immersive.stop();
         releasePointerCapture(false);
         // In editor-only mode (mNative == null) there is no pipeline to
