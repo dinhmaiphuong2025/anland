@@ -157,8 +157,11 @@ static int collect_dmabufs(struct consumer_state *s)
     ANativeWindow *win = s->window;
     int target = s->buf_count;
     int found = 0;
+    static int collect_seq = 0;
+    int my_seq = collect_seq++;
+    int stale_queued = 0;
 
-    LOGI("collecting %d dma-bufs via dequeue/queue", target);
+    LOGI("collect #%d: collecting %d dma-bufs via dequeue/queue", my_seq, target);
 
     for (int attempt = 0; attempt < target * 4 && found < target; attempt++) {
         ANativeWindowBuffer *anb = NULL;
@@ -191,6 +194,9 @@ static int collect_dmabufs(struct consumer_state *s)
         }
 
         /* post it back so the next dequeue rotates to another slot */
+        stale_queued++;
+        LOGI("  collect #%d attempt %d: queueBuffer anb=%p (stale-frame candidate %d)",
+             my_seq, attempt, (void *)anb, stale_queued);
         api.queueBuffer(win, anb, -1);
 
         if (dup_found)
@@ -223,7 +229,7 @@ static int collect_dmabufs(struct consumer_state *s)
     }
 
     s->buf_count = found;
-    LOGI("collected %d dma-bufs", found);
+    LOGI("collect #%d done: found=%d, stale-frames-queued=%d", my_seq, found, stale_queued);
     return 0;
 }
 
