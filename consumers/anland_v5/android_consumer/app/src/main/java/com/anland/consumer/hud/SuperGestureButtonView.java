@@ -100,13 +100,37 @@ public final class SuperGestureButtonView extends View {
         float textY = h * 0.5f - ((mTextPaint.descent() + mTextPaint.ascent()) * 0.5f);
         canvas.drawText(label, w * 0.5f, textY, mTextPaint);
 
-        // Direction indicator ticks (top, bottom, left, right)
+        // 4-way outward vector chevrons (Top, Bottom, Left, Right)
         mPaint.setColor(0xCC80DEEA);
-        mPaint.setStrokeWidth(2.5f * density);
-        canvas.drawLine(w * 0.5f, 4 * density, w * 0.5f, 9 * density, mPaint); // Up tick
-        canvas.drawLine(w * 0.5f, h - 9 * density, w * 0.5f, h - 4 * density, mPaint); // Down tick
-        canvas.drawLine(4 * density, h * 0.5f, 9 * density, h * 0.5f, mPaint); // Left tick
-        canvas.drawLine(w - 9 * density, h * 0.5f, w - 4 * density, h * 0.5f, mPaint); // Right tick
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(2.0f * density);
+        mPaint.setStrokeCap(Paint.Cap.ROUND);
+        mPaint.setStrokeJoin(Paint.Join.ROUND);
+
+        float cx = w * 0.5f;
+        float cy = h * 0.5f;
+        float wing = 3.5f * density;
+        float depth = 3.5f * density;
+
+        // Up chevron (pointing up)
+        float topTip = 5f * density;
+        canvas.drawLine(cx - wing, topTip + depth, cx, topTip, mPaint);
+        canvas.drawLine(cx, topTip, cx + wing, topTip + depth, mPaint);
+
+        // Down chevron (pointing down)
+        float botTip = h - 5f * density;
+        canvas.drawLine(cx - wing, botTip - depth, cx, botTip, mPaint);
+        canvas.drawLine(cx, botTip, cx + wing, botTip - depth, mPaint);
+
+        // Left chevron (pointing left)
+        float leftTip = 5f * density;
+        canvas.drawLine(leftTip + depth, cy - wing, leftTip, cy, mPaint);
+        canvas.drawLine(leftTip, cy, leftTip + depth, cy + wing, mPaint);
+
+        // Right chevron (pointing right)
+        float rightTip = w - 5f * density;
+        canvas.drawLine(rightTip - depth, cy - wing, rightTip, cy, mPaint);
+        canvas.drawLine(rightTip, cy, rightTip - depth, cy + wing, mPaint);
     }
 
     private boolean isHapticEnabled() {

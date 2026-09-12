@@ -111,7 +111,11 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
     private void initView() {
         setOrientation(VERTICAL);
-        setBackgroundColor(0xF0181825); // 94% Dark backdrop
+        android.graphics.drawable.GradientDrawable panelBg = new android.graphics.drawable.GradientDrawable();
+        panelBg.setCornerRadius(dp(14));
+        panelBg.setColor(0xF0181825);
+        panelBg.setStroke(dp(1), 0x33FFFFFF);
+        setBackground(panelBg);
         setPadding(dp(12), dp(8), dp(12), dp(12));
         setElevation(dp(8));
 
@@ -119,8 +123,12 @@ public final class HudPropertyInspectorView extends LinearLayout {
         LinearLayout header = new LinearLayout(getContext());
         header.setOrientation(HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setBackgroundColor(0x33FFFFFF);
-        header.setPadding(dp(8), dp(6), dp(8), dp(6));
+        android.graphics.drawable.GradientDrawable headerBg = new android.graphics.drawable.GradientDrawable();
+        float hr = dp(14);
+        headerBg.setCornerRadii(new float[]{hr, hr, hr, hr, 0, 0, 0, 0});
+        headerBg.setColor(0x2AFFFFFF);
+        header.setBackground(headerBg);
+        header.setPadding(dp(12), dp(8), dp(10), dp(8));
 
         TextView dragHandle = new TextView(getContext());
         dragHandle.setText("DRAG PANEL");
@@ -545,7 +553,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
     private View createColorPresetsRow() {
         LinearLayout container = new LinearLayout(getContext());
-        container.setOrientation(HORIZONTAL);
+        container.setOrientation(VERTICAL);
         container.setPadding(0, dp(4), 0, dp(4));
 
         int[][] themes = {
@@ -558,34 +566,45 @@ public final class HudPropertyInspectorView extends LinearLayout {
         };
         String[] themeNames = {"Slate", "Cyan", "Crimson", "Amber", "Emerald", "Stealth"};
 
-        for (int i = 0; i < themes.length; i++) {
-            final int bg = themes[i][0];
-            final int active = themes[i][1];
-            final int accent = themes[i][2];
-            Button chip = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
-            chip.setText(themeNames[i]);
-            chip.setTextSize(10);
-            chip.setAllCaps(true);
-            chip.setTextColor(accent);
-            android.graphics.drawable.GradientDrawable chipBg = new android.graphics.drawable.GradientDrawable();
-            chipBg.setCornerRadius(dp(8));
-            chipBg.setColor(bg);
-            chipBg.setStroke(dp(1), accent);
-            chip.setBackground(chipBg);
-            chip.setPadding(dp(2), dp(4), dp(2), dp(4));
-            chip.setMinHeight(dp(32));
-            chip.setMinWidth(0);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            if (i > 0) lp.leftMargin = dp(4);
-            chip.setLayoutParams(lp);
-            chip.setOnClickListener(v -> {
-                if (mActiveButton != null) {
-                    mActiveButton.bgColor = bg;
-                    mActiveButton.activeColor = active;
-                    if (mCallback != null) mCallback.onModelChanged(mActiveButton);
-                }
-            });
-            container.addView(chip);
+        for (int rowIdx = 0; rowIdx < 2; rowIdx++) {
+            LinearLayout row = new LinearLayout(getContext());
+            row.setOrientation(HORIZONTAL);
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (rowIdx > 0) rowLp.topMargin = dp(6);
+            row.setLayoutParams(rowLp);
+
+            for (int col = 0; col < 3; col++) {
+                int i = rowIdx * 3 + col;
+                final int bg = themes[i][0];
+                final int active = themes[i][1];
+                final int accent = themes[i][2];
+                Button chip = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
+                chip.setText(themeNames[i]);
+                chip.setTextSize(11);
+                chip.setAllCaps(true);
+                chip.setTextColor(accent);
+                android.graphics.drawable.GradientDrawable chipBg = new android.graphics.drawable.GradientDrawable();
+                chipBg.setCornerRadius(dp(8));
+                chipBg.setColor(bg);
+                chipBg.setStroke(dp(1), accent);
+                chip.setBackground(chipBg);
+                chip.setPadding(dp(4), dp(6), dp(4), dp(6));
+                chip.setMinHeight(dp(34));
+                chip.setMinWidth(0);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                if (col > 0) lp.leftMargin = dp(6);
+                chip.setLayoutParams(lp);
+                chip.setOnClickListener(v -> {
+                    if (mActiveButton != null) {
+                        mActiveButton.bgColor = bg;
+                        mActiveButton.activeColor = active;
+                        if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                    }
+                });
+                row.addView(chip);
+            }
+            container.addView(row);
         }
         return container;
     }
@@ -598,14 +617,14 @@ public final class HudPropertyInspectorView extends LinearLayout {
         float density = bar.getContext().getResources().getDisplayMetrics().density;
 
         android.graphics.drawable.GradientDrawable bgTrack = new android.graphics.drawable.GradientDrawable();
-        bgTrack.setCornerRadius(2.5f * density);
+        bgTrack.setCornerRadius(1.75f * density);
         bgTrack.setColor(0x33FFFFFF);
-        bgTrack.setSize(-1, Math.round(5 * density));
+        bgTrack.setSize(-1, Math.round(3.5f * density));
 
         android.graphics.drawable.GradientDrawable progressTrack = new android.graphics.drawable.GradientDrawable();
-        progressTrack.setCornerRadius(2.5f * density);
+        progressTrack.setCornerRadius(1.75f * density);
         progressTrack.setColor(activeColor);
-        progressTrack.setSize(-1, Math.round(5 * density));
+        progressTrack.setSize(-1, Math.round(3.5f * density));
         android.graphics.drawable.ClipDrawable clipProgress = new android.graphics.drawable.ClipDrawable(
                 progressTrack, Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL);
 
@@ -619,7 +638,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         android.graphics.drawable.GradientDrawable thumb = new android.graphics.drawable.GradientDrawable();
         thumb.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        thumb.setSize(Math.round(16 * density), Math.round(16 * density));
+        thumb.setSize(Math.round(12 * density), Math.round(12 * density));
         thumb.setColor(activeColor);
         bar.setThumb(thumb);
         bar.setSplitTrack(false);
@@ -696,9 +715,13 @@ public final class HudPropertyInspectorView extends LinearLayout {
         et.setTextColor(0xFF80DEEA);
         et.setTextSize(12);
         et.setTypeface(Typeface.DEFAULT_BOLD);
-        et.setBackgroundColor(0x22FFFFFF);
+        android.graphics.drawable.GradientDrawable numBg = new android.graphics.drawable.GradientDrawable();
+        numBg.setCornerRadius(dp(6));
+        numBg.setColor(0x22FFFFFF);
+        numBg.setStroke(dp(1), 0x3380DEEA);
+        et.setBackground(numBg);
         et.setGravity(Gravity.CENTER);
-        et.setPadding(dp(4), dp(2), dp(4), dp(2));
+        et.setPadding(dp(4), dp(4), dp(4), dp(4));
         et.setLayoutParams(new LayoutParams(dp(44), ViewGroup.LayoutParams.WRAP_CONTENT));
         return et;
     }
@@ -721,7 +744,11 @@ public final class HudPropertyInspectorView extends LinearLayout {
         b.setTextColor(Color.WHITE);
         b.setTextSize(12);
         b.setAllCaps(false);
-        b.setBackgroundColor(0xFF2A2B3D);
+        android.graphics.drawable.GradientDrawable badgeBg = new android.graphics.drawable.GradientDrawable();
+        badgeBg.setCornerRadius(dp(8));
+        badgeBg.setColor(0xFF2A2B3D);
+        badgeBg.setStroke(dp(1), 0x22FFFFFF);
+        b.setBackground(badgeBg);
         // 12dp left padding + 6dp top/bottom + 12dp right padding keeps the
         // text left-aligned and the badge readable; gravity START so the
         // text always starts at the padding-left edge.
@@ -792,8 +819,12 @@ public final class HudPropertyInspectorView extends LinearLayout {
         EditText et = new EditText(getContext());
         et.setTextColor(Color.WHITE);
         et.setTextSize(13);
-        et.setBackgroundColor(0x22FFFFFF);
-        et.setPadding(dp(8), dp(6), dp(8), dp(6));
+        android.graphics.drawable.GradientDrawable lblBg = new android.graphics.drawable.GradientDrawable();
+        lblBg.setCornerRadius(dp(8));
+        lblBg.setColor(0x22FFFFFF);
+        lblBg.setStroke(dp(1), 0x33FFFFFF);
+        et.setBackground(lblBg);
+        et.setPadding(dp(10), dp(6), dp(10), dp(6));
         et.setSingleLine(true);
         et.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
         return et;

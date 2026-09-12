@@ -336,6 +336,7 @@ public class SettingsActivity extends Activity {
             // a plain Material Button with just text + the default ripple, so
             // all the bind-style controls read as a single coherent row group.
             Button btnEditHud = new Button(this);
+            styleSettingsButton(btnEditHud);
             btnEditHud.setText("Open Visual HUD Layout Editor");
             btnEditHud.setOnClickListener(v -> {
                 // Re-enter the MainActivity that spawned us, passing the
@@ -517,6 +518,7 @@ public class SettingsActivity extends Activity {
             root.addView(status);
 
             button = new Button(SettingsActivity.this);
+            styleSettingsButton(button);
             button.setText(buttonLabelRes);
             button.setOnClickListener(v -> startListening());
             root.addView(button);
@@ -733,16 +735,24 @@ public class SettingsActivity extends Activity {
 
         LinearLayout layoutButtons = new LinearLayout(this);
         layoutButtons.setOrientation(LinearLayout.HORIZONTAL);
+        layoutButtons.setPadding(0, dp(4), 0, dp(4));
 
         Button loadDefaultBtn = new Button(this);
+        styleSettingsButton(loadDefaultBtn);
         loadDefaultBtn.setText(R.string.btn_load_default);
         loadDefaultBtn.setOnClickListener(v ->
             layoutInput.setText(ExtraKeysBar.defaultLayoutJson()));
+        LinearLayout.LayoutParams defLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        loadDefaultBtn.setLayoutParams(defLp);
         layoutButtons.addView(loadDefaultBtn);
 
         Button loadFileBtn = new Button(this);
+        styleSettingsButton(loadFileBtn);
         loadFileBtn.setText(R.string.btn_load_file);
         loadFileBtn.setOnClickListener(v -> pickLayoutFile());
+        LinearLayout.LayoutParams fileLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        fileLp.leftMargin = dp(10);
+        loadFileBtn.setLayoutParams(fileLp);
         layoutButtons.addView(loadFileBtn);
 
         root.addView(layoutButtons);
@@ -785,10 +795,8 @@ public class SettingsActivity extends Activity {
         spinnerCard.setBackground(spBg);
         spinnerCard.setPadding(dp(12), dp(4), dp(12), dp(4));
 
-        Spinner spinner = new Spinner(this);
-        spinner.setAdapter(new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_dropdown_item,
-            getResources().getStringArray(R.array.orientation_options)));
+        Spinner spinner = new Spinner(this, Spinner.MODE_DROPDOWN);
+        setupDarkSpinner(spinner, getResources().getStringArray(R.array.orientation_options));
 
         String cur = prefs.getString(KEY_ORIENTATION, "default");
         int idx = 0;
@@ -1104,6 +1112,7 @@ public class SettingsActivity extends Activity {
         root.addView(secSocket);
 
         Button secOpen = new Button(this);
+        styleSettingsButton(secOpen);
         secOpen.setText(R.string.second_window_open);
         secOpen.setOnClickListener(v -> {
             Intent i = new Intent(this, SecondaryActivity.class);
@@ -1269,10 +1278,8 @@ public class SettingsActivity extends Activity {
     spinnerCard.setBackground(spBg);
     spinnerCard.setPadding(dp(12), dp(4), dp(12), dp(4));
 
-    Spinner presetSpinner = new Spinner(this);
-    presetSpinner.setAdapter(new ArrayAdapter<>(this,
-        android.R.layout.simple_spinner_dropdown_item,
-        getResources().getStringArray(R.array.res_preset_labels)));
+    Spinner presetSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
+    setupDarkSpinner(presetSpinner, getResources().getStringArray(R.array.res_preset_labels));
     presetSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
         @Override
         public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
@@ -1380,12 +1387,21 @@ public class SettingsActivity extends Activity {
         TextView tv = new TextView(this);
         tv.setText(label);
         tv.setTextSize(14);
+        tv.setTextColor(0xFFA6ADC8);
+        tv.setPadding(0, 0, 0, dp(6));
         box.addView(tv);
 
-        Spinner sp = new Spinner(this);
-        sp.setAdapter(new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_dropdown_item,
-            getResources().getStringArray(R.array.latency_labels)));
+        LinearLayout spCard = new LinearLayout(this);
+        spCard.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable spBg = new android.graphics.drawable.GradientDrawable();
+        spBg.setCornerRadius(dp(8));
+        spBg.setColor(0xFF181825);
+        spBg.setStroke(dp(1), 0x22FFFFFF);
+        spCard.setBackground(spBg);
+        spCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+
+        Spinner sp = new Spinner(this, Spinner.MODE_DROPDOWN);
+        setupDarkSpinner(sp, getResources().getStringArray(R.array.latency_labels));
 
         int cur = prefs.getInt(key, 0);
         int idx = 0;
@@ -1403,7 +1419,8 @@ public class SettingsActivity extends Activity {
             @Override
             public void onNothingSelected(AdapterView<?> parent) {}
         });
-        box.addView(sp);
+        spCard.addView(sp);
+        box.addView(spCard);
         return box;
     }
 
@@ -1509,6 +1526,41 @@ public class SettingsActivity extends Activity {
         return mode;
     }
 
+    private void setupDarkSpinner(Spinner spinner, String[] items) {
+        android.graphics.drawable.GradientDrawable popupBg = new android.graphics.drawable.GradientDrawable();
+        popupBg.setCornerRadius(dp(8));
+        popupBg.setColor(0xFF1E1E2E);
+        popupBg.setStroke(dp(1), 0x33FFFFFF);
+        spinner.setPopupBackgroundDrawable(popupBg);
+
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
+                android.R.layout.simple_spinner_item, items) {
+            @Override
+            public View getDropDownView(int position, View convertView, ViewGroup parent) {
+                View v = super.getDropDownView(position, convertView, parent);
+                if (v instanceof TextView) {
+                    TextView tv = (TextView) v;
+                    tv.setTextColor(Color.WHITE);
+                    tv.setTextSize(13);
+                    tv.setPadding(dp(16), dp(12), dp(16), dp(12));
+                    tv.setBackgroundColor(0xFF1E1E2E);
+                }
+                return v;
+            }
+
+            @Override
+            public View getView(int position, View convertView, ViewGroup parent) {
+                View v = super.getView(position, convertView, parent);
+                if (v instanceof TextView) {
+                    ((TextView) v).setTextColor(Color.WHITE);
+                    ((TextView) v).setTextSize(14);
+                }
+                return v;
+            }
+        };
+        spinner.setAdapter(adapter);
+    }
+
     public static void styleSeekBar(SeekBar bar, int activeColor) {
         float density = bar.getContext().getResources().getDisplayMetrics().density;
         
@@ -1538,6 +1590,17 @@ public class SettingsActivity extends Activity {
         thumb.setColor(activeColor);
         bar.setThumb(thumb);
         bar.setSplitTrack(false);
+    }
+
+    public void styleSettingsButton(Button btn) {
+        btn.setTextColor(Color.WHITE);
+        btn.setTextSize(13);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setCornerRadius(dp(11));
+        bg.setColor(0xFF2A2B3D);
+        bg.setStroke(dp(1), 0x33FFFFFF);
+        btn.setBackground(bg);
+        btn.setPadding(dp(16), dp(10), dp(16), dp(10));
     }
 
     public static final class ChevronView extends View {
