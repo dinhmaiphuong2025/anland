@@ -200,7 +200,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     }
 
     private void showFirstTimeNoticeDialog() {
-        new AlertDialog.Builder(getContext(), AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+        AlertDialog dialog = new AlertDialog.Builder(getContext(), AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                 .setTitle("ORIENTATION NOTICE")
                 .setMessage("Portrait and Landscape layouts are stored independently.\n\nRotate your device to customize buttons and dock positions for each orientation separately.")
                 .setPositiveButton("GOT IT", (d, w) -> {
@@ -209,6 +209,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 })
                 .setCancelable(false)
                 .show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(M3.shape(getContext(), M3.RADIUS_CARD, M3.COLOR_SURFACE, M3.COLOR_BORDER_STRONG, 1.0f));
+        }
     }
 
     public HudLayout getActiveLayout() {
@@ -435,9 +438,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 "Clear Active Layout"
         };
         mInspectorView.setVisibility(GONE);
-        new AlertDialog.Builder(getContext(), AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+        AlertDialog dialog = new AlertDialog.Builder(getContext(), AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                 .setTitle("Layout Options")
-                .setItems(options, (dialog, which) -> {
+                .setItems(options, (d, which) -> {
                     if (!mIsEditMode) return;
                     if (which == 0) {
                         // Copy from opposite layout
@@ -503,13 +506,16 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         rebuildActiveLayout();
                         Toast.makeText(getContext(), "Layout Cleared", Toast.LENGTH_SHORT).show();
                     }
-                    dialog.dismiss();
+                    d.dismiss();
                 })
                 .setOnDismissListener(d -> {
                     if (mSelectedButton != null) mInspectorView.setVisibility(VISIBLE);
                 })
                 .setNegativeButton("CANCEL", null)
                 .show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(M3.shape(getContext(), M3.RADIUS_CARD, M3.COLOR_SURFACE, M3.COLOR_BORDER_STRONG, 1.0f));
+        }
     }
 
     // Modal chooser for the "what kind of widget do you want to add?"
@@ -527,18 +533,21 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 HudButton.WidgetKind.TRACKPOINT
         };
         mInspectorView.setVisibility(GONE);
-        new android.app.AlertDialog.Builder(getContext(),
+        AlertDialog dialog = new android.app.AlertDialog.Builder(getContext(),
                 android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                 .setTitle("Add Widget")
-                .setItems(labels, (dialog, which) -> {
+                .setItems(labels, (d, which) -> {
                     if (mIsEditMode) addWidgetOfKind(kinds[which]);
-                    dialog.dismiss();
+                    d.dismiss();
                 })
                 .setOnDismissListener(d -> {
                     if (mSelectedButton != null) mInspectorView.setVisibility(VISIBLE);
                 })
                 .setNegativeButton("CANCEL", null)
                 .show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(M3.shape(getContext(), M3.RADIUS_CARD, M3.COLOR_SURFACE, M3.COLOR_BORDER_STRONG, 1.0f));
+        }
     }
 
     private void addWidgetOfKind(HudButton.WidgetKind kind) {
@@ -783,6 +792,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 ((HudFreeformButtonView) widgetView).setInEditMode(mIsEditMode);
             }
 
+            if (b == mSelectedButton) {
+                mSelectedView = widgetView;
+            }
             attachTouchAndLayout(widgetView, b);
             mFloatingContainer.addView(widgetView);
         }
@@ -795,14 +807,21 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         int h = Math.round(model.heightDp * density);
 
         view.setLayoutParams(new LayoutParams(w, h));
-        post(() -> {
-            int parentW = getWidth();
-            int parentH = getHeight();
-            if (parentW > 0 && parentH > 0) {
-                view.setX(model.posXPercent * parentW - w * 0.5f);
-                view.setY(model.posYPercent * parentH - h * 0.5f);
-            }
-        });
+        int parentW = getWidth();
+        int parentH = getHeight();
+        if (parentW > 0 && parentH > 0) {
+            view.setX(model.posXPercent * parentW - w * 0.5f);
+            view.setY(model.posYPercent * parentH - h * 0.5f);
+        } else {
+            post(() -> {
+                int pw = getWidth();
+                int ph = getHeight();
+                if (pw > 0 && ph > 0) {
+                    view.setX(model.posXPercent * pw - w * 0.5f);
+                    view.setY(model.posYPercent * ph - h * 0.5f);
+                }
+            });
+        }
 
         view.setOnTouchListener((v, event) -> {
             if (!mIsEditMode) return false;
@@ -975,11 +994,17 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             }
 
             // 4. Draw bounding border around selected view
-            if (mSelectedView != null) {
+            if (mSelectedView != null && mSelectedButton != null) {
+                float bw = mSelectedView.getWidth();
+                float bh = mSelectedView.getHeight();
+                if (bw <= 0 || bh <= 0) {
+                    bw = mSelectedButton.widthDp * density;
+                    bh = mSelectedButton.heightDp * density;
+                }
                 RectF r = new RectF(mSelectedView.getX() - 3 * density,
                         mSelectedView.getY() - 3 * density,
-                        mSelectedView.getX() + mSelectedView.getWidth() + 3 * density,
-                        mSelectedView.getY() + mSelectedView.getHeight() + 3 * density);
+                        mSelectedView.getX() + bw + 3 * density,
+                        mSelectedView.getY() + bh + 3 * density);
                 canvas.drawRoundRect(r, 6 * density, 6 * density, mSelectBorderPaint);
             }
 

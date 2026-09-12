@@ -318,9 +318,9 @@ public class SettingsActivity extends Activity {
         header.setPadding(0, dp(24), 0, dp(8));
         root.addView(header);
 
-        android.widget.Switch hudSwitch = new android.widget.Switch(this);
+        Switch hudSwitch = new Switch(this);
+        M3.styleSwitch(hudSwitch);
         hudSwitch.setText("Enable Custom HUD Control (Floating Buttons)");
-        hudSwitch.setTextSize(14);
         hudSwitch.setChecked(useHud);
         hudSwitch.setPadding(0, dp(8), 0, dp(8));
         // Toggling the HUD must NOT touch KEY_EXTRA_KEYS_MODE anymore. The two
@@ -368,7 +368,7 @@ public class SettingsActivity extends Activity {
             TextView hudHint = new TextView(this);
             hudHint.setText("Design on-screen floating buttons. Add a TrackPoint (mouse or scroll mode) or a Super Gesture nub; each can be moved, resized and rebound to any key/combo/action with live snapping and precise numeric properties. The bottom key row is the legacy ExtraKeys bar and is unaffected by this toggle.");
             hudHint.setTextSize(12);
-            hudHint.setTextColor(Color.GRAY);
+            hudHint.setTextColor(M3.COLOR_TEXT_MUTED);
             hudHint.setPadding(0, dp(4), 0, dp(12));
             root.addView(hudHint);
         }
@@ -428,8 +428,8 @@ public class SettingsActivity extends Activity {
 
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         Switch raiseDesktopSwitch = new Switch(this);
+        M3.styleSwitch(raiseDesktopSwitch);
         raiseDesktopSwitch.setText(R.string.raise_desktop_for_soft_keyboard);
-        raiseDesktopSwitch.setTextSize(14);
         raiseDesktopSwitch.setPadding(0, dp(8), 0, 0);
         raiseDesktopSwitch.setChecked(!prefs.getBoolean(KEY_KEYBOARD_FLOATING, false));
         raiseDesktopSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -440,7 +440,7 @@ public class SettingsActivity extends Activity {
         TextView raiseDesktopHint = new TextView(this);
         raiseDesktopHint.setText(R.string.raise_desktop_for_soft_keyboard_hint);
         raiseDesktopHint.setTextSize(12);
-        raiseDesktopHint.setTextColor(Color.GRAY);
+        raiseDesktopHint.setTextColor(M3.COLOR_TEXT_MUTED);
         raiseDesktopHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(raiseDesktopHint);
     }
@@ -459,8 +459,8 @@ public class SettingsActivity extends Activity {
         addSectionHeader(root, R.string.section_immersive, dp(24));
 
         Switch immersiveSwitch = new Switch(this);
+        M3.styleSwitch(immersiveSwitch);
         immersiveSwitch.setText(R.string.immersive_switch);
-        immersiveSwitch.setTextSize(14);
         immersiveSwitch.setPadding(0, 0, 0, 0);
         immersiveSwitch.setChecked(prefs.getBoolean(KEY_IMMERSIVE_ENABLED, false));
         immersiveSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -471,7 +471,7 @@ public class SettingsActivity extends Activity {
         TextView immersiveHint = new TextView(this);
         immersiveHint.setText(R.string.immersive_hint);
         immersiveHint.setTextSize(12);
-        immersiveHint.setTextColor(Color.GRAY);
+        immersiveHint.setTextColor(M3.COLOR_TEXT_MUTED);
         immersiveHint.setPadding(0, dp(4), 0, dp(12));
         root.addView(immersiveHint);
 
@@ -517,7 +517,7 @@ public class SettingsActivity extends Activity {
 
             status = new TextView(SettingsActivity.this);
             status.setTextSize(14);
-            status.setTextColor(Color.GRAY);
+            status.setTextColor(M3.COLOR_TEXT_MUTED);
             status.setPadding(0, 0, 0, dp(16));
             root.addView(status);
 
@@ -579,7 +579,7 @@ public class SettingsActivity extends Activity {
             int scan = scanPref == null ? UNBOUND : prefs.getInt(scanPref, UNBOUND);
             if (bound == UNBOUND && scan <= 0) {
                 status.setText(R.string.status_current_none);
-                status.setTextColor(Color.GRAY);
+                status.setTextColor(M3.COLOR_TEXT_MUTED);
                 return;
             }
             String name = KeyCodeMapper.keyName(SettingsActivity.this, bound, scan);
@@ -591,7 +591,7 @@ public class SettingsActivity extends Activity {
                 return;
             }
             status.setText(getString(R.string.status_current, name));
-            status.setTextColor(Color.GRAY);
+            status.setTextColor(M3.COLOR_TEXT_MUTED);
         }
 
         private int resolveEvdev(int keycode, int scancode) {
@@ -604,8 +604,8 @@ public class SettingsActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
         Switch accessibilitySwitch = new Switch(this);
+        M3.styleSwitch(accessibilitySwitch);
         accessibilitySwitch.setText(R.string.accessibility_switch);
-        accessibilitySwitch.setTextSize(14);
         accessibilitySwitch.setPadding(0, dp(16), 0, 0);
         accessibilitySwitch.setChecked(prefs.getBoolean(KEY_ACCESSIBILITY_ENABLED, false));
         accessibilitySwitch.setOnCheckedChangeListener((v, checked) -> {
@@ -622,7 +622,7 @@ public class SettingsActivity extends Activity {
         TextView accessibilityHint = new TextView(this);
         accessibilityHint.setText(R.string.accessibility_hint);
         accessibilityHint.setTextSize(12);
-        accessibilityHint.setTextColor(Color.GRAY);
+        accessibilityHint.setTextColor(M3.COLOR_TEXT_MUTED);
         accessibilityHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(accessibilityHint);
     }
@@ -639,9 +639,9 @@ public class SettingsActivity extends Activity {
         root.addView(header);
 
         // === Back key opens extra keys bar (Legacy only) ===
-        android.widget.Switch backOpensExtraKeysSwitch = new android.widget.Switch(this);
+        Switch backOpensExtraKeysSwitch = new Switch(this);
+        M3.styleSwitch(backOpensExtraKeysSwitch);
         backOpensExtraKeysSwitch.setText(R.string.back_opens_switch);
-        backOpensExtraKeysSwitch.setTextSize(14);
         backOpensExtraKeysSwitch.setPadding(0, dp(16), 0, 0);
         backOpensExtraKeysSwitch.setChecked(prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true));
         backOpensExtraKeysSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -652,7 +652,7 @@ public class SettingsActivity extends Activity {
         TextView backOpensExtraKeysHint = new TextView(this);
         backOpensExtraKeysHint.setText(R.string.back_opens_hint);
         backOpensExtraKeysHint.setTextSize(12);
-        backOpensExtraKeysHint.setTextColor(Color.GRAY);
+        backOpensExtraKeysHint.setTextColor(M3.COLOR_TEXT_MUTED);
         backOpensExtraKeysHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(backOpensExtraKeysHint);
 
@@ -697,7 +697,7 @@ public class SettingsActivity extends Activity {
         TextView modeHint = new TextView(this);
         modeHint.setText(R.string.extra_keys_mode_hint);
         modeHint.setTextSize(12);
-        modeHint.setTextColor(Color.GRAY);
+        modeHint.setTextColor(M3.COLOR_TEXT_MUTED);
         modeHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(modeHint);
     }
@@ -780,7 +780,7 @@ public class SettingsActivity extends Activity {
         TextView layoutHint = new TextView(this);
         layoutHint.setText(R.string.layout_hint);
         layoutHint.setTextSize(12);
-        layoutHint.setTextColor(Color.GRAY);
+        layoutHint.setTextColor(M3.COLOR_TEXT_MUTED);
         layoutHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(layoutHint);
     }
@@ -849,9 +849,8 @@ public class SettingsActivity extends Activity {
         root.addView(header);
 
         Switch hapticSwitch = new Switch(this);
+        M3.styleSwitch(hapticSwitch);
         hapticSwitch.setText("Enable Touch Vibration");
-        hapticSwitch.setTextSize(14);
-        hapticSwitch.setTextColor(Color.WHITE);
         hapticSwitch.setPadding(0, dp(8), 0, 0);
         hapticSwitch.setChecked(prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true));
         hapticSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -879,8 +878,8 @@ public class SettingsActivity extends Activity {
         root.addView(header);
 
         Switch notificationSwitch = new Switch(this);
+        M3.styleSwitch(notificationSwitch);
         notificationSwitch.setText(R.string.notification_switch);
-        notificationSwitch.setTextSize(14);
         notificationSwitch.setPadding(0, dp(8), 0, 0);
         notificationSwitch.setChecked(prefs.getBoolean(KEY_NOTIFICATION_ENABLED, true));
         notificationSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -891,7 +890,7 @@ public class SettingsActivity extends Activity {
         TextView notificationHint = new TextView(this);
         notificationHint.setText(R.string.notification_hint);
         notificationHint.setTextSize(12);
-        notificationHint.setTextColor(Color.GRAY);
+        notificationHint.setTextColor(M3.COLOR_TEXT_MUTED);
         notificationHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(notificationHint);
     }
@@ -943,8 +942,8 @@ public class SettingsActivity extends Activity {
 
         // 触摸板模式开关
         Switch touchpadModeSwitch = new Switch(this);
+        M3.styleSwitch(touchpadModeSwitch);
         touchpadModeSwitch.setText(R.string.touchpad_mode_switch);
-        touchpadModeSwitch.setTextSize(14);
         touchpadModeSwitch.setPadding(0, dp(8), 0, 0);
         touchpadModeSwitch.setChecked(prefs.getBoolean(KEY_TOUCHPAD_MODE, false));
         touchpadModeSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -955,15 +954,15 @@ public class SettingsActivity extends Activity {
         TextView touchpadHint = new TextView(this);
         touchpadHint.setText(R.string.touchpad_hint);
         touchpadHint.setTextSize(12);
-        touchpadHint.setTextColor(Color.GRAY);
+        touchpadHint.setTextColor(M3.COLOR_TEXT_MUTED);
         touchpadHint.setPadding(0, dp(4), 0, dp(12));
         root.addView(touchpadHint);
 
         // External mouse pointer capture.  This is opt-in because it changes
         // Android's mouse event mode from absolute coordinates to relative motion.
         Switch pointerCaptureSwitch = new Switch(this);
+        M3.styleSwitch(pointerCaptureSwitch);
         pointerCaptureSwitch.setText(R.string.pointer_capture_switch);
-        pointerCaptureSwitch.setTextSize(14);
         pointerCaptureSwitch.setPadding(0, dp(8), 0, 0);
         pointerCaptureSwitch.setChecked(prefs.getBoolean(KEY_POINTER_CAPTURE, false));
         pointerCaptureSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -974,7 +973,7 @@ public class SettingsActivity extends Activity {
         TextView pointerCaptureHint = new TextView(this);
         pointerCaptureHint.setText(R.string.pointer_capture_hint);
         pointerCaptureHint.setTextSize(12);
-        pointerCaptureHint.setTextColor(Color.GRAY);
+        pointerCaptureHint.setTextColor(M3.COLOR_TEXT_MUTED);
         pointerCaptureHint.setPadding(0, dp(4), 0, dp(12));
         root.addView(pointerCaptureHint);
 
@@ -1018,8 +1017,8 @@ public class SettingsActivity extends Activity {
 
         // ===== 双指滚动 =====
         Switch reverseScrollSwitch = new Switch(this);
+        M3.styleSwitch(reverseScrollSwitch);
         reverseScrollSwitch.setText(R.string.scroll_reverse_switch);
-        reverseScrollSwitch.setTextSize(14);
         reverseScrollSwitch.setPadding(0, dp(8), 0, 0);
         reverseScrollSwitch.setChecked(prefs.getBoolean(KEY_SCROLL_REVERSE, false));
         reverseScrollSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -1030,14 +1029,14 @@ public class SettingsActivity extends Activity {
         TextView reverseScrollHint = new TextView(this);
         reverseScrollHint.setText(R.string.scroll_reverse_hint);
         reverseScrollHint.setTextSize(12);
-        reverseScrollHint.setTextColor(Color.GRAY);
+        reverseScrollHint.setTextColor(M3.COLOR_TEXT_MUTED);
         reverseScrollHint.setPadding(0, dp(4), 0, dp(12));
         root.addView(reverseScrollHint);
 
         // Disable pinch (two-finger spread) and three-or-more-finger gestures.
         Switch disableMultiFingerSwitch = new Switch(this);
+        M3.styleSwitch(disableMultiFingerSwitch);
         disableMultiFingerSwitch.setText(R.string.disable_multi_finger_switch);
-        disableMultiFingerSwitch.setTextSize(14);
         disableMultiFingerSwitch.setPadding(0, dp(8), 0, 0);
         disableMultiFingerSwitch.setChecked(prefs.getBoolean(
                 KEY_DISABLE_MULTI_FINGER_GESTURES, false));
@@ -1049,7 +1048,7 @@ public class SettingsActivity extends Activity {
         TextView disableMultiFingerHint = new TextView(this);
         disableMultiFingerHint.setText(R.string.disable_multi_finger_hint);
         disableMultiFingerHint.setTextSize(12);
-        disableMultiFingerHint.setTextColor(Color.GRAY);
+        disableMultiFingerHint.setTextColor(M3.COLOR_TEXT_MUTED);
         disableMultiFingerHint.setPadding(0, dp(4), 0, dp(12));
         root.addView(disableMultiFingerHint);
 
@@ -1116,7 +1115,7 @@ public class SettingsActivity extends Activity {
             TextView hint = new TextView(this);
             hint.setText(hintRes);
             hint.setTextSize(12);
-            hint.setTextColor(Color.GRAY);
+            hint.setTextColor(M3.COLOR_TEXT_MUTED);
             hint.setPadding(0, dp(2), 0, dp(12));
             root.addView(hint);
         }
@@ -1132,7 +1131,7 @@ public class SettingsActivity extends Activity {
         TextView sockLabel = new TextView(this);
         sockLabel.setText(R.string.socket_path_label);
         sockLabel.setTextSize(14);
-        sockLabel.setTextColor(Color.GRAY);
+        sockLabel.setTextColor(M3.COLOR_TEXT_MUTED);
         sockLabel.setPadding(0, 0, 0, dp(4));
         root.addView(sockLabel);
 
@@ -1193,8 +1192,8 @@ public class SettingsActivity extends Activity {
 
         // Connect with root
         Switch rootSwitch = new Switch(this);
+        M3.styleSwitch(rootSwitch);
         rootSwitch.setText(R.string.root_switch);
-        rootSwitch.setTextSize(14);
         rootSwitch.setPadding(0, dp(16), 0, 0);
         rootSwitch.setChecked(prefs.getBoolean(KEY_USE_ROOT, true));
         rootSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -1205,7 +1204,7 @@ public class SettingsActivity extends Activity {
         TextView rootHint = new TextView(this);
         rootHint.setText(R.string.root_hint);
         rootHint.setTextSize(12);
-        rootHint.setTextColor(Color.GRAY);
+        rootHint.setTextColor(M3.COLOR_TEXT_MUTED);
         rootHint.setPadding(0, dp(4), 0, 0);
         root.addView(rootHint);
 
@@ -1213,8 +1212,8 @@ public class SettingsActivity extends Activity {
         // desktop as a recording source. Requires the RECORD_AUDIO permission, which
         // MainActivity requests when this is on.
         Switch micSwitch = new Switch(this);
+        M3.styleSwitch(micSwitch);
         micSwitch.setText(R.string.mic_switch);
-        micSwitch.setTextSize(14);
         micSwitch.setPadding(0, dp(16), 0, 0);
         micSwitch.setChecked(prefs.getBoolean(KEY_MIC_ENABLED, false));
         micSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -1225,7 +1224,7 @@ public class SettingsActivity extends Activity {
         TextView micHint = new TextView(this);
         micHint.setText(R.string.mic_hint);
         micHint.setTextSize(12);
-        micHint.setTextColor(Color.GRAY);
+        micHint.setTextColor(M3.COLOR_TEXT_MUTED);
         micHint.setPadding(0, dp(4), 0, 0);
         root.addView(micHint);
 
@@ -1234,8 +1233,8 @@ public class SettingsActivity extends Activity {
         // opened once the desktop actually requests a recording). Requires the CAMERA
         // permission, which MainActivity requests when this is enabled.
         Switch cameraSwitch = new Switch(this);
+        M3.styleSwitch(cameraSwitch);
         cameraSwitch.setText(R.string.camera_switch);
-        cameraSwitch.setTextSize(14);
         cameraSwitch.setPadding(0, dp(16), 0, 0);
         cameraSwitch.setChecked(prefs.getBoolean(KEY_CAMERA_ENABLED, false));
         cameraSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -1246,7 +1245,7 @@ public class SettingsActivity extends Activity {
         TextView cameraHint = new TextView(this);
         cameraHint.setText(R.string.camera_hint);
         cameraHint.setTextSize(12);
-        cameraHint.setTextColor(Color.GRAY);
+        cameraHint.setTextColor(M3.COLOR_TEXT_MUTED);
         cameraHint.setPadding(0, dp(4), 0, 0);
         root.addView(cameraHint);
 
@@ -1255,8 +1254,8 @@ public class SettingsActivity extends Activity {
         // immediately. Off by default so the audio path can sleep when the desktop is
         // silent and save standby power.
         Switch keepaliveSwitch = new Switch(this);
+        M3.styleSwitch(keepaliveSwitch);
         keepaliveSwitch.setText(R.string.audio_keepalive_switch);
-        keepaliveSwitch.setTextSize(14);
         keepaliveSwitch.setPadding(0, dp(16), 0, 0);
         keepaliveSwitch.setChecked(prefs.getBoolean(KEY_AUDIO_KEEPALIVE, false));
         keepaliveSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -1267,7 +1266,7 @@ public class SettingsActivity extends Activity {
         TextView keepaliveHint = new TextView(this);
         keepaliveHint.setText(R.string.audio_keepalive_hint);
         keepaliveHint.setTextSize(12);
-        keepaliveHint.setTextColor(Color.GRAY);
+        keepaliveHint.setTextColor(M3.COLOR_TEXT_MUTED);
         keepaliveHint.setPadding(0, dp(4), 0, 0);
         root.addView(keepaliveHint);
 
@@ -1289,7 +1288,7 @@ public class SettingsActivity extends Activity {
         TextView latHint = new TextView(this);
         latHint.setText(R.string.latency_hint);
         latHint.setTextSize(12);
-        latHint.setTextColor(Color.GRAY);
+        latHint.setTextColor(M3.COLOR_TEXT_MUTED);
         latHint.setPadding(0, dp(4), 0, 0);
         root.addView(latHint);
     }
@@ -1380,13 +1379,13 @@ public class SettingsActivity extends Activity {
     TextView hint = new TextView(this);
     hint.setText(R.string.resolution_hint);
     hint.setTextSize(12);
-    hint.setTextColor(Color.GRAY);
+    hint.setTextColor(M3.COLOR_TEXT_MUTED);
     hint.setPadding(0, dp(4), 0, 0);
     root.addView(hint);
 
     Switch autoStretchSwitch = new Switch(this);
+    M3.styleSwitch(autoStretchSwitch);
     autoStretchSwitch.setText(R.string.auto_stretch_switch);
-    autoStretchSwitch.setTextSize(14);
     autoStretchSwitch.setPadding(0, dp(16), 0, 0);
     autoStretchSwitch.setChecked(prefs.getBoolean("auto_stretch", true));
     autoStretchSwitch.setOnCheckedChangeListener((v, checked) ->
@@ -1396,7 +1395,7 @@ public class SettingsActivity extends Activity {
     TextView autoStretchHint = new TextView(this);
     autoStretchHint.setText(R.string.auto_stretch_hint);
     autoStretchHint.setTextSize(12);
-    autoStretchHint.setTextColor(Color.GRAY);
+    autoStretchHint.setTextColor(M3.COLOR_TEXT_MUTED);
     autoStretchHint.setPadding(0, dp(4), 0, 0);
     root.addView(autoStretchHint);
     }
@@ -1634,7 +1633,7 @@ public class SettingsActivity extends Activity {
     private void updateLayoutStatus(TextView status, String json) {
         if (json == null || json.trim().isEmpty()) {
             status.setText(R.string.layout_status_default);
-            status.setTextColor(Color.GRAY);
+            status.setTextColor(M3.COLOR_TEXT_MUTED);
             return;
         }
         String err = ExtraKeysBar.validateLayout(json);

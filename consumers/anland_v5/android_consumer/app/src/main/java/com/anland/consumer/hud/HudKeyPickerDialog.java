@@ -77,14 +77,37 @@ public final class HudKeyPickerDialog {
         root.setPadding(dp(context, 16), dp(context, 16), dp(context, 16), dp(context, 16));
         root.setBackground(M3.shape(context, M3.RADIUS_CARD, M3.COLOR_SURFACE, M3.COLOR_BORDER_STRONG, 1.0f));
 
-        // Header Title
+        // Header Row: Back Button on left + Title
+        LinearLayout headerRow = new LinearLayout(context);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
+        headerRow.setPadding(0, 0, 0, dp(context, 10));
+
+        AlertDialog dialog = builder.setView(root).create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+        }
+
+        Button btnBack = new Button(context, null, android.R.attr.buttonBarButtonStyle);
+        btnBack.setText("< BACK");
+        btnBack.setTextColor(M3.COLOR_PRIMARY);
+        btnBack.setTextSize(11.5f);
+        btnBack.setTypeface(Typeface.DEFAULT_BOLD);
+        btnBack.setBackground(M3.createRippleDrawable(context, M3.RADIUS_CHIP, M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
+        btnBack.setPadding(dp(context, 10), dp(context, 4), dp(context, 10), dp(context, 4));
+        btnBack.setMinHeight(dp(context, 32));
+        btnBack.setMinWidth(0);
+        btnBack.setOnClickListener(v -> dialog.dismiss());
+        headerRow.addView(btnBack);
+
         TextView title = new TextView(context);
         title.setText("SELECT KEY / ACTION");
         title.setTextColor(M3.COLOR_TEXT_PRIMARY);
-        title.setTextSize(18);
+        title.setTextSize(16);
         title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setPadding(0, 0, 0, dp(context, 12));
-        root.addView(title);
+        title.setPadding(dp(context, 10), 0, 0, 0);
+        headerRow.addView(title);
+        root.addView(headerRow);
 
         // Tab Navigation Bar (wrapped in HorizontalScrollView so the labels
         // never get squeezed on narrow portrait phones).
@@ -123,8 +146,6 @@ public final class HudKeyPickerDialog {
         contentContainer.setMinimumHeight(dp(context, isLandscape ? 180 : 360));
         root.addView(contentContainer, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-
-        AlertDialog dialog = builder.setView(root).create();
 
         Button btnTabKeys = createTabButton(context, "KEYS");
         Button btnTabMods = createTabButton(context, "MODS & SYS");

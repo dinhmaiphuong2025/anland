@@ -192,6 +192,9 @@ public final class ComboBuilderView {
                 .setView(buildContent(ctx, false))
                 .setCancelable(true)
                 .create();
+        if (mDialog.getWindow() != null) {
+            mDialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+        }
         mDialog.show();
     }
 

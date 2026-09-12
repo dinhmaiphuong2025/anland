@@ -20,6 +20,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.SeekBar;
 import android.widget.Spinner;
+import android.widget.Switch;
 import android.widget.TextView;
 
 /**
@@ -211,9 +212,64 @@ public final class M3 {
         spinner.setAdapter(adapter);
     }
 
+    /** Style a Switch with M3 Purist Cyan and subtle track tints across all devices. */
+    public static void styleSwitch(Switch sw) {
+        sw.setTextColor(COLOR_TEXT_PRIMARY);
+        sw.setTextSize(14);
+        int[][] states = new int[][] {
+            new int[] { android.R.attr.state_checked },
+            new int[] { -android.R.attr.state_checked }
+        };
+        int[] trackColors = new int[] {
+            0x6680DEEA,
+            0x33FFFFFF
+        };
+        int[] thumbColors = new int[] {
+            COLOR_PRIMARY,
+            0xFF888888
+        };
+        sw.setTrackTintList(new ColorStateList(states, trackColors));
+        sw.setThumbTintList(new ColorStateList(states, thumbColors));
+    }
+
     // ============================================================
     // VECTOR DRAWN CHEVRON & BACK ARROW VIEWS (Anti-aliased Canvas)
     // ============================================================
+
+    public static final class DragGripView extends View {
+        private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        public DragGripView(Context ctx) {
+            super(ctx);
+            mPaint.setColor(COLOR_TEXT_MUTED);
+            mPaint.setStyle(Paint.Style.FILL);
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            float density = getResources().getDisplayMetrics().density;
+            setMeasuredDimension(Math.round(24 * density), Math.round(20 * density));
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float density = getResources().getDisplayMetrics().density;
+            float r = 1.6f * density;
+            float cx = getWidth() * 0.5f;
+            float cy = getHeight() * 0.5f;
+            float dx = 3.5f * density;
+            float dy = 4.0f * density;
+
+            // 6 dots in 2 columns of 3
+            canvas.drawCircle(cx - dx, cy - dy, r, mPaint);
+            canvas.drawCircle(cx + dx, cy - dy, r, mPaint);
+            canvas.drawCircle(cx - dx, cy, r, mPaint);
+            canvas.drawCircle(cx + dx, cy, r, mPaint);
+            canvas.drawCircle(cx - dx, cy + dy, r, mPaint);
+            canvas.drawCircle(cx + dx, cy + dy, r, mPaint);
+        }
+    }
 
     public static final class ChevronView extends View {
         private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);

@@ -78,17 +78,15 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private EditText mTrackSensitivityInput;
     private SeekBar mTrackDeadzoneSeekBar;
     private EditText mTrackDeadzoneInput;
-    // Bottom action row; cached so bindDockItem can hide it (dock items cannot
-    // be deleted or duplicated from the strip).
-    private LinearLayout mOpRow;
     private Button mBtnDelete;
+    private Button mBtnDuplicate;
     private boolean mConfirmDeleteActive = false;
     private final Handler mDeleteHandler = new Handler(Looper.getMainLooper());
     private final Runnable mResetDeleteRunnable = () -> {
         mConfirmDeleteActive = false;
         if (mBtnDelete != null) {
-            mBtnDelete.setText("DELETE");
-            mBtnDelete.setBackground(M3.shape(getContext(), M3.RADIUS_BUTTON, 0x33FF0000, 0x55F38BA8, 1.0f));
+            mBtnDelete.setText("DEL");
+            mBtnDelete.setBackground(M3.shape(getContext(), M3.RADIUS_INPUT, 0x33FF0000, 0x55F38BA8, 1.0f));
             mBtnDelete.setTextColor(M3.COLOR_ERROR);
         }
     };
@@ -115,10 +113,10 @@ public final class HudPropertyInspectorView extends LinearLayout {
         panelBg.setColor(0xF0181825);
         panelBg.setStroke(dp(1), 0x33FFFFFF);
         setBackground(panelBg);
-        setPadding(dp(12), dp(8), dp(12), dp(12));
+        setPadding(dp(16), dp(8), dp(16), dp(12));
         setElevation(dp(8));
 
-        // 1. Draggable Header Bar
+        // 1. Draggable Header Bar with vector grip icon and top-anchored DUP & DEL buttons
         LinearLayout header = new LinearLayout(getContext());
         header.setOrientation(HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -127,18 +125,63 @@ public final class HudPropertyInspectorView extends LinearLayout {
         headerBg.setCornerRadii(new float[]{hr, hr, hr, hr, 0, 0, 0, 0});
         headerBg.setColor(0x2AFFFFFF);
         header.setBackground(headerBg);
-        header.setPadding(dp(12), dp(8), dp(10), dp(8));
+        header.setPadding(dp(12), dp(6), dp(10), dp(6));
 
-        TextView dragHandle = new TextView(getContext());
-        dragHandle.setText("DRAG PANEL");
-        dragHandle.setTextColor(0xFF80DEEA);
-        dragHandle.setTextSize(12);
-        dragHandle.setTypeface(Typeface.DEFAULT_BOLD);
-        dragHandle.setLayoutParams(new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        header.addView(dragHandle);
+        M3.DragGripView grip = new M3.DragGripView(getContext());
+        header.addView(grip);
 
-        // Round close button. We render "X" inside a programmatic circular
-        // background so we stay consistent with the no-emoji rule.
+        View headerSpacer = new View(getContext());
+        header.addView(headerSpacer, new LinearLayout.LayoutParams(0, 1, 1f));
+
+        Button btnDuplicate = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
+        btnDuplicate.setText("DUP");
+        btnDuplicate.setAllCaps(true);
+        btnDuplicate.setTextColor(M3.COLOR_TEXT_PRIMARY);
+        btnDuplicate.setTextSize(11);
+        btnDuplicate.setTypeface(Typeface.DEFAULT_BOLD);
+        btnDuplicate.setBackground(M3.createRippleDrawable(getContext(), M3.RADIUS_INPUT, M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
+        btnDuplicate.setPadding(dp(10), dp(4), dp(10), dp(4));
+        btnDuplicate.setMinHeight(dp(28));
+        btnDuplicate.setMinWidth(0);
+        btnDuplicate.setOnClickListener(v -> {
+            if (mCallback != null && mActiveButton != null) mCallback.onDuplicateRequested(mActiveButton);
+        });
+        header.addView(btnDuplicate);
+        mBtnDuplicate = btnDuplicate;
+
+        mBtnDelete = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
+        mBtnDelete.setText("DEL");
+        mBtnDelete.setAllCaps(true);
+        mBtnDelete.setTextColor(M3.COLOR_ERROR);
+        mBtnDelete.setTextSize(11);
+        mBtnDelete.setTypeface(Typeface.DEFAULT_BOLD);
+        mBtnDelete.setBackground(M3.shape(getContext(), M3.RADIUS_INPUT, 0x33FF0000, 0x55F38BA8, 1.0f));
+        mBtnDelete.setPadding(dp(10), dp(4), dp(10), dp(4));
+        mBtnDelete.setMinHeight(dp(28));
+        mBtnDelete.setMinWidth(0);
+        LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        delLp.leftMargin = dp(6);
+        delLp.rightMargin = dp(8);
+        mBtnDelete.setLayoutParams(delLp);
+        mBtnDelete.setOnClickListener(v -> {
+            if (!mConfirmDeleteActive) {
+                mConfirmDeleteActive = true;
+                mBtnDelete.setText("CONFIRM?");
+                mBtnDelete.setBackground(M3.shape(getContext(), M3.RADIUS_INPUT, 0xCCFF1744, 0xFFFF5252, 1.0f));
+                mBtnDelete.setTextColor(Color.WHITE);
+                mDeleteHandler.postDelayed(mResetDeleteRunnable, 3000);
+            } else {
+                mDeleteHandler.removeCallbacks(mResetDeleteRunnable);
+                mConfirmDeleteActive = false;
+                if (mCallback != null && mActiveButton != null) {
+                    mCallback.onDeleteRequested(mActiveButton);
+                }
+            }
+        });
+        header.addView(mBtnDelete);
+
+        // Round close button.
         Button btnClose = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
         btnClose.setText("X");
         btnClose.setTextColor(Color.WHITE);
@@ -397,68 +440,15 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mColorThemeRow = (LinearLayout) createColorPresetsRow();
         content.addView(mColorThemeRow);
 
-        // Bottom Operations: Delete (with two-step confirmation) & Duplicate
-        final LinearLayout opRow = new LinearLayout(getContext());
-        opRow.setOrientation(HORIZONTAL);
-        opRow.setPadding(dp(16), dp(16), dp(16), dp(16));
-        LinearLayout.LayoutParams opLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        opLp.topMargin = dp(8);
-        opRow.setLayoutParams(opLp);
-
-        mBtnDelete = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
-        mBtnDelete.setText("DELETE");
-        mBtnDelete.setAllCaps(true);
-        mBtnDelete.setTextColor(M3.COLOR_ERROR);
-        mBtnDelete.setTextSize(12);
-        mBtnDelete.setBackground(M3.shape(getContext(), M3.RADIUS_BUTTON, 0x33FF0000, 0x55F38BA8, 1.0f));
-        mBtnDelete.setPadding(dp(16), dp(12), dp(16), dp(12));
-        mBtnDelete.setLayoutParams(new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        mBtnDelete.setOnClickListener(v -> {
-            if (!mConfirmDeleteActive) {
-                mConfirmDeleteActive = true;
-                mBtnDelete.setText("CONFIRM ?");
-                mBtnDelete.setBackground(M3.shape(getContext(), M3.RADIUS_BUTTON, 0xCCFF1744, 0xFFFF5252, 1.0f));
-                mBtnDelete.setTextColor(Color.WHITE);
-                mDeleteHandler.postDelayed(mResetDeleteRunnable, 3000);
-            } else {
-                mDeleteHandler.removeCallbacks(mResetDeleteRunnable);
-                mConfirmDeleteActive = false;
-                if (mCallback != null && mActiveButton != null) {
-                    mCallback.onDeleteRequested(mActiveButton);
-                }
-            }
-        });
-        opRow.addView(mBtnDelete);
-
-        Button btnDuplicate = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
-        btnDuplicate.setText("DUPLICATE");
-        btnDuplicate.setAllCaps(true);
-        btnDuplicate.setTextColor(Color.WHITE);
-        btnDuplicate.setTextSize(12);
-        btnDuplicate.setBackground(M3.createRippleDrawable(getContext(), M3.RADIUS_BUTTON, M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
-        btnDuplicate.setPadding(dp(16), dp(12), dp(16), dp(12));
-        LinearLayout.LayoutParams dupLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        dupLp.leftMargin = dp(12);
-        btnDuplicate.setLayoutParams(dupLp);
-        btnDuplicate.setOnClickListener(v -> {
-            if (mCallback != null && mActiveButton != null) mCallback.onDuplicateRequested(mActiveButton);
-        });
-        opRow.addView(btnDuplicate);
-
-        content.addView(opRow);
         mScrollView.addView(content);
-        addView(mScrollView, new LayoutParams(dp(260), dp(340)));
-        mOpRow = opRow;
+        addView(mScrollView, new LayoutParams(dp(280), dp(320)));
     }
 
     public void adaptSize(int parentW, int parentH) {
         if (parentW <= 0 || parentH <= 0 || mScrollView == null) return;
         boolean isLandscape = parentW > parentH;
-        int maxH = Math.max(dp(180), parentH - dp(90));
-        int targetH = isLandscape ? Math.min(dp(220), maxH) : Math.min(dp(500), parentH - dp(180));
-        int targetW = isLandscape ? dp(300) : dp(260);
+        int targetH = isLandscape ? Math.min(dp(220), parentH - dp(90)) : dp(320);
+        int targetW = isLandscape ? dp(310) : dp(280);
 
         ViewGroup.LayoutParams lp = mScrollView.getLayoutParams();
         if (lp != null) {
@@ -527,10 +517,11 @@ public final class HudPropertyInspectorView extends LinearLayout {
                 syncSliderAndInput(mTrackDeadzoneSeekBar, mTrackDeadzoneInput, b.trackpointDeadzoneDp, 0, 16);
             }
         }
-        // Floating buttons show size sliders, color presets, and the delete/duplicate row.
+        // Floating buttons show size sliders, color presets, and header action buttons.
         if (mSizeSection != null) mSizeSection.setVisibility(VISIBLE);
         if (mColorThemeRow != null) mColorThemeRow.setVisibility(VISIBLE);
-        if (mOpRow != null) mOpRow.setVisibility(VISIBLE);
+        if (mBtnDelete != null) mBtnDelete.setVisibility(VISIBLE);
+        if (mBtnDuplicate != null) mBtnDuplicate.setVisibility(VISIBLE);
     }
 
     // Slim inspector for a dock strip button: only the display label and the
@@ -557,7 +548,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
         if (mTrackPointOptions != null) mTrackPointOptions.setVisibility(GONE);
         if (mSizeSection != null) mSizeSection.setVisibility(GONE);
         if (mColorThemeRow != null) mColorThemeRow.setVisibility(GONE);
-        if (mOpRow != null) mOpRow.setVisibility(GONE);
+        if (mBtnDelete != null) mBtnDelete.setVisibility(GONE);
+        if (mBtnDuplicate != null) mBtnDuplicate.setVisibility(GONE);
     }
 
     private View createColorPresetsRow() {
@@ -628,6 +620,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
     private View createSliderRow(String title, SeekBar bar, EditText input, int min, int max, ValueConsumer consumer) {
         styleSeekBar(bar, 0xFF80DEEA);
+        bar.setPadding(dp(12), dp(6), dp(12), dp(6));
+        bar.setThumbOffset(dp(0));
         LinearLayout row = new LinearLayout(getContext());
         row.setOrientation(VERTICAL);
         row.setPadding(0, dp(4), 0, dp(4));
