@@ -2652,7 +2652,7 @@ public class MainActivity extends Activity
                 pointerX = event.getX();
                 pointerY = event.getY();
                 ensurePointerPosition();
-                mNative.sendMouseMotion(event.getX()*scaleX, event.getY()*scaleY,
+                mNative.sendMouseMotion(nativeX, nativeY,
                                       event.getAxisValue(MotionEvent.AXIS_RELATIVE_X),
                                       event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y));
                 return true;
@@ -2966,7 +2966,7 @@ public class MainActivity extends Activity
             pointerY = event.getY();
             ensurePointerPosition();
         }
-        mNative.sendMouseMotion(event.getX() * scaleX, event.getY() * scaleY, dx, dy);
+        mNative.sendMouseMotion(nativeX, nativeY, dx, dy);
 
         updateMouseButtonStateFromEvent(event);
         return true;
