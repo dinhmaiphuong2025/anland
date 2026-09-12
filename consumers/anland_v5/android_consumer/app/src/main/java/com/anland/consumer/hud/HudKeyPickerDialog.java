@@ -133,10 +133,10 @@ public final class HudKeyPickerDialog {
         tabRow.addView(btnTabMods);
         tabRow.addView(btnTabCombo);
 
-        // KEYS is dense 4-column; MODS & SYS is wider 3-column so the
-        // longer labels still fit.
+        // KEYS is dense 4-column; MODS & SYS is 3-column so the
+        // labels have ample width.
         final int colsKeys = computeColumnCount(context, 4);
-        final int colsLong = computeColumnCount(context, 3);
+        final int colsLong = 3;
 
         final int[] activeTab = {0};
         final Runnable refreshCurrentTab = () -> {
@@ -284,14 +284,23 @@ public final class HudKeyPickerDialog {
                 final KeyEntry entry = entries.get(idx);
                 Button btn = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
                 btn.setText(entry.label);
-                btn.setTextSize(13);
                 btn.setTextColor(Color.WHITE);
-                btn.setBackgroundColor(0xFF2A2B3D);
-                btn.setPadding(dp(ctx, 2), dp(ctx, 8), dp(ctx, 2), dp(ctx, 8));
+                android.graphics.drawable.GradientDrawable btnBg = new android.graphics.drawable.GradientDrawable();
+                btnBg.setCornerRadius(dp(ctx, 8));
+                btnBg.setColor(0xFF2A2B3D);
+                btn.setBackground(btnBg);
+                btn.setPadding(dp(ctx, 4), dp(ctx, 6), dp(ctx, 4), dp(ctx, 6));
                 btn.setMinHeight(dp(ctx, 44));
-                btn.setSingleLine(true);
+                btn.setMaxLines(2);
+                btn.setSingleLine(false);
                 btn.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                btn.setGravity(Gravity.CENTER);
                 btn.setIncludeFontPadding(false);
+                if (entry.label.length() > 9) {
+                    btn.setTextSize(10.5f);
+                } else {
+                    btn.setTextSize(12.5f);
+                }
                 LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
                         0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
                 if (col > 0) btnLp.leftMargin = hSpacing;
@@ -325,7 +334,7 @@ public final class HudKeyPickerDialog {
 
     // Modifiers, nav / editing keys, and system actions all share the
     // 3-column grid in the "MODS & SYS" tab so the user does not have to
-    // switch tabs just to set a Toggle Soft KB action on a swipe.
+    // switch tabs just to set an action on a swipe.
     private static List<KeyEntry> getModsAndSystemKeys() {
         List<KeyEntry> list = new ArrayList<>();
         // Modifiers
@@ -349,13 +358,13 @@ public final class HudKeyPickerDialog {
         list.add(new KeyEntry("DOWN", HudAction.key(108)));
         list.add(new KeyEntry("LEFT", HudAction.key(105)));
         list.add(new KeyEntry("RIGHT", HudAction.key(106)));
-        // System actions
-        list.add(new KeyEntry("Toggle Soft KB", HudAction.system("toggle_ime")));
-        list.add(new KeyEntry("Toggle Virtual KB", HudAction.system("toggle_vk")));
-        list.add(new KeyEntry("Open Settings", HudAction.system("open_settings")));
+        // System actions - clear, concise titles that fit comfortably on any screen
+        list.add(new KeyEntry("Soft Keyboard", HudAction.system("toggle_ime")));
+        list.add(new KeyEntry("Virtual KB", HudAction.system("toggle_vk")));
+        list.add(new KeyEntry("Settings", HudAction.system("open_settings")));
         list.add(new KeyEntry("Mouse Left", HudAction.system("mouse_left")));
         list.add(new KeyEntry("Mouse Right", HudAction.system("mouse_right")));
-        list.add(new KeyEntry("Mouse Middle", HudAction.system("mouse_middle")));
+        list.add(new KeyEntry("Mouse Mid", HudAction.system("mouse_middle")));
         list.add(new KeyEntry("Scroll Up", HudAction.system("mouse_scroll_up")));
         list.add(new KeyEntry("Scroll Down", HudAction.system("mouse_scroll_down")));
         return list;

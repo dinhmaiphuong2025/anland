@@ -4,8 +4,10 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Insets;
+import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -64,6 +66,7 @@ public class SettingsActivity extends Activity {
     private static final String KEY_NOTIFICATION_ENABLED = "settings_notification";
     private static final String KEY_ORIENTATION = "screen_orientation";
     private static final String[] ORIENTATION_VALUES = {"default", "landscape", "portrait"};
+    public static final String KEY_HAPTIC_FEEDBACK = "haptic_feedback_enabled";
     private static final String DEFAULT_SOCKET_PATH = "/data/local/tmp/display_daemon.sock";
     private static final int UNBOUND = -1;
 
@@ -192,17 +195,17 @@ public class SettingsActivity extends Activity {
         setContent(root);
     }
 
-    // A tappable "title / subtitle >" row styled as a Material card.
+    // A tappable "title / subtitle" row styled as a refined Material card with drawn chevron.
     private void addCategoryRow(LinearLayout parent, int titleRes, int subtitleRes,
                                 final Runnable onClick) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(16), dp(16), dp(16), dp(16));
+        row.setPadding(dp(20), dp(16), dp(20), dp(16));
         row.setClickable(true);
 
         android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
-        cardBg.setCornerRadius(dp(12));
+        cardBg.setCornerRadius(dp(10));
         cardBg.setColor(0xFF181825);
         cardBg.setStroke(dp(1), 0x22FFFFFF);
         row.setBackground(cardBg);
@@ -234,31 +237,37 @@ public class SettingsActivity extends Activity {
 
         row.addView(texts);
 
-        TextView chevron = new TextView(this);
-        chevron.setText(">");
-        chevron.setTextSize(18);
-        chevron.setTypeface(null, Typeface.BOLD);
-        chevron.setTextColor(0xFF80DEEA);
+        ChevronView chevron = new ChevronView(this);
         row.addView(chevron);
 
         parent.addView(row);
     }
 
-    // A fresh page root with a back link and a bold page title.
+    // A fresh page root with a drawn vector back arrow and a bold page title.
     private LinearLayout newPage(int titleRes) {
         stopListening();
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
 
-        TextView back = new TextView(this);
-        back.setText("< BACK");
-        back.setTextSize(14);
-        back.setTypeface(Typeface.DEFAULT_BOLD);
-        back.setTextColor(0xFF80DEEA);
-        back.setPadding(0, 0, 0, dp(16));
-        back.setClickable(true);
-        back.setOnClickListener(v -> showHome());
-        root.addView(back);
+        LinearLayout backRow = new LinearLayout(this);
+        backRow.setOrientation(LinearLayout.HORIZONTAL);
+        backRow.setGravity(Gravity.CENTER_VERTICAL);
+        backRow.setPadding(0, 0, 0, dp(16));
+        backRow.setClickable(true);
+        backRow.setOnClickListener(v -> showHome());
+
+        BackArrowView backArrow = new BackArrowView(this);
+        backRow.addView(backArrow);
+
+        TextView backText = new TextView(this);
+        backText.setText(R.string.settings_short_label);
+        backText.setTextSize(14);
+        backText.setTypeface(null, Typeface.BOLD);
+        backText.setTextColor(0xFF80DEEA);
+        backText.setPadding(dp(8), 0, 0, 0);
+        backRow.addView(backText);
+
+        root.addView(backRow);
 
         TextView title = new TextView(this);
         title.setText(titleRes);
@@ -385,6 +394,7 @@ public class SettingsActivity extends Activity {
         currentPage = Page.GENERAL;
         LinearLayout root = newPage(R.string.cat_general_title);
         buildOrientationSection(root);
+        buildHapticSection(root);
         buildNotificationSection(root);
         setContent(root);
     }
@@ -761,9 +771,18 @@ public class SettingsActivity extends Activity {
         TextView label = new TextView(this);
         label.setText(R.string.orientation_label);
         label.setTextSize(14);
-        label.setTextColor(Color.WHITE);
-        label.setPadding(0, dp(8), 0, dp(4));
+        label.setTextColor(0xFFA6ADC8);
+        label.setPadding(0, dp(4), 0, dp(8));
         root.addView(label);
+
+        LinearLayout spinnerCard = new LinearLayout(this);
+        spinnerCard.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable spBg = new android.graphics.drawable.GradientDrawable();
+        spBg.setCornerRadius(dp(8));
+        spBg.setColor(0xFF181825);
+        spBg.setStroke(dp(1), 0x22FFFFFF);
+        spinnerCard.setBackground(spBg);
+        spinnerCard.setPadding(dp(12), dp(4), dp(12), dp(4));
 
         Spinner spinner = new Spinner(this);
         spinner.setAdapter(new ArrayAdapter<>(this,
@@ -785,7 +804,38 @@ public class SettingsActivity extends Activity {
             @Override
             public void onNothingSelected(AdapterView<?> parent) {}
         });
-        root.addView(spinner);
+        spinnerCard.addView(spinner);
+        root.addView(spinnerCard);
+    }
+
+    private void buildHapticSection(LinearLayout root) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+
+        TextView header = new TextView(this);
+        header.setText("Haptic Feedback");
+        header.setTextSize(16);
+        header.setTextColor(Color.WHITE);
+        header.setTypeface(null, Typeface.BOLD);
+        header.setPadding(0, dp(24), 0, dp(8));
+        root.addView(header);
+
+        Switch hapticSwitch = new Switch(this);
+        hapticSwitch.setText("Enable Touch Vibration");
+        hapticSwitch.setTextSize(14);
+        hapticSwitch.setTextColor(Color.WHITE);
+        hapticSwitch.setPadding(0, dp(8), 0, 0);
+        hapticSwitch.setChecked(prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true));
+        hapticSwitch.setOnCheckedChangeListener((v, checked) ->
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putBoolean(KEY_HAPTIC_FEEDBACK, checked).apply());
+        root.addView(hapticSwitch);
+
+        TextView hapticHint = new TextView(this);
+        hapticHint.setText("Vibrate on on-screen button taps, gesture swipes, and trackpoint interactions.");
+        hapticHint.setTextSize(12);
+        hapticHint.setTextColor(0xFFA6ADC8);
+        hapticHint.setPadding(0, dp(4), 0, dp(8));
+        root.addView(hapticHint);
     }
 
     private void buildNotificationSection(LinearLayout root) {
@@ -868,14 +918,17 @@ public class SettingsActivity extends Activity {
         TextView accelLabel = new TextView(this);
         accelLabel.setText(R.string.mouse_sensitivity_label);
         accelLabel.setTextSize(14);
+        accelLabel.setTextColor(Color.WHITE);
         accelLayout.addView(accelLabel);
 
         final TextView accelValue = new TextView(this);
         accelValue.setTextSize(14);
-        accelValue.setTextColor(Color.BLUE);
+        accelValue.setTextColor(0xFFB4BEFE);
+        accelValue.setPadding(0, dp(2), 0, dp(4));
         accelLayout.addView(accelValue);
 
         SeekBar accelSeek = new SeekBar(this);
+        styleSeekBar(accelSeek, 0xFFB4BEFE);
         accelSeek.setMax(190); // 0.5 ~ 10.0 step 0.05
         float curAccel = prefs.getFloat(KEY_MOUSE_ACCEL, 1.0f);
         curAccel = Math.max(0.5f, Math.min(10.0f, curAccel));
@@ -962,14 +1015,17 @@ public class SettingsActivity extends Activity {
         TextView label = new TextView(this);
         label.setText(labelRes);
         label.setTextSize(14);
+        label.setTextColor(Color.WHITE);
         layout.addView(label);
 
         final TextView value = new TextView(this);
         value.setTextSize(14);
-        value.setTextColor(Color.BLUE);
+        value.setTextColor(0xFFB4BEFE);
+        value.setPadding(0, dp(2), 0, dp(4));
         layout.addView(value);
 
         SeekBar seek = new SeekBar(this);
+        styleSeekBar(seek, 0xFFB4BEFE);
         seek.setMax(Math.round((max - min) / step));
         float cur = Math.max(min, Math.min(max, prefs.getFloat(key, defValue)));
         seek.setProgress(Math.round((cur - min) / step));
@@ -1203,6 +1259,15 @@ public class SettingsActivity extends Activity {
     // Preset picker: fills width/height (which persist via their watchers). Index
     // 0 is a no-op placeholder so the Spinner's initial auto-selection and manual
     // edits leave the fields untouched.
+    LinearLayout spinnerCard = new LinearLayout(this);
+    spinnerCard.setOrientation(LinearLayout.VERTICAL);
+    android.graphics.drawable.GradientDrawable spBg = new android.graphics.drawable.GradientDrawable();
+    spBg.setCornerRadius(dp(8));
+    spBg.setColor(0xFF181825);
+    spBg.setStroke(dp(1), 0x22FFFFFF);
+    spinnerCard.setBackground(spBg);
+    spinnerCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+
     Spinner presetSpinner = new Spinner(this);
     presetSpinner.setAdapter(new ArrayAdapter<>(this,
         android.R.layout.simple_spinner_dropdown_item,
@@ -1218,10 +1283,37 @@ public class SettingsActivity extends Activity {
         @Override
         public void onNothingSelected(AdapterView<?> parent) {}
     });
-    root.addView(presetSpinner);
+    spinnerCard.addView(presetSpinner);
+    root.addView(spinnerCard);
 
-    root.addView(widthInput);
-    root.addView(heightInput);
+    LinearLayout inputsRow = new LinearLayout(this);
+    inputsRow.setOrientation(LinearLayout.HORIZONTAL);
+    inputsRow.setPadding(0, dp(10), 0, dp(4));
+
+    android.graphics.drawable.GradientDrawable inputBg1 = new android.graphics.drawable.GradientDrawable();
+    inputBg1.setCornerRadius(dp(8));
+    inputBg1.setColor(0xFF181825);
+    inputBg1.setStroke(dp(1), 0x22FFFFFF);
+    widthInput.setBackground(inputBg1);
+    widthInput.setTextColor(Color.WHITE);
+    widthInput.setPadding(dp(14), dp(10), dp(14), dp(10));
+    LinearLayout.LayoutParams wLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    widthInput.setLayoutParams(wLp);
+    inputsRow.addView(widthInput);
+
+    android.graphics.drawable.GradientDrawable inputBg2 = new android.graphics.drawable.GradientDrawable();
+    inputBg2.setCornerRadius(dp(8));
+    inputBg2.setColor(0xFF181825);
+    inputBg2.setStroke(dp(1), 0x22FFFFFF);
+    heightInput.setBackground(inputBg2);
+    heightInput.setTextColor(Color.WHITE);
+    heightInput.setPadding(dp(14), dp(10), dp(14), dp(10));
+    LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+    hLp.leftMargin = dp(10);
+    heightInput.setLayoutParams(hLp);
+    inputsRow.addView(heightInput);
+
+    root.addView(inputsRow);
 
     TextView hint = new TextView(this);
     hint.setText(R.string.resolution_hint);
@@ -1413,6 +1505,104 @@ public class SettingsActivity extends Activity {
         mode = autoShow ? MODE_WITH_KEYBOARD : (enabled ? MODE_ALWAYS : MODE_NEVER);
         prefs.edit().putString(KEY_EXTRA_KEYS_MODE, mode)
               .remove("auto_show_extra_keys").remove("extra_keys_bar").apply();
-        return mode;
+    public static void styleSeekBar(SeekBar bar, int activeColor) {
+        float density = bar.getContext().getResources().getDisplayMetrics().density;
+        
+        android.graphics.drawable.GradientDrawable bgTrack = new android.graphics.drawable.GradientDrawable();
+        bgTrack.setCornerRadius(2.5f * density);
+        bgTrack.setColor(0x33FFFFFF);
+        bgTrack.setSize(-1, Math.round(5 * density));
+
+        android.graphics.drawable.GradientDrawable progressTrack = new android.graphics.drawable.GradientDrawable();
+        progressTrack.setCornerRadius(2.5f * density);
+        progressTrack.setColor(activeColor);
+        progressTrack.setSize(-1, Math.round(5 * density));
+        android.graphics.drawable.ClipDrawable clipProgress = new android.graphics.drawable.ClipDrawable(
+                progressTrack, Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL);
+
+        android.graphics.drawable.Drawable[] layers = new android.graphics.drawable.Drawable[] {
+                bgTrack, clipProgress
+        };
+        android.graphics.drawable.LayerDrawable layerDrawable = new android.graphics.drawable.LayerDrawable(layers);
+        layerDrawable.setId(0, android.R.id.background);
+        layerDrawable.setId(1, android.R.id.progress);
+        bar.setProgressDrawable(layerDrawable);
+
+        android.graphics.drawable.GradientDrawable thumb = new android.graphics.drawable.GradientDrawable();
+        thumb.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        thumb.setSize(Math.round(16 * density), Math.round(16 * density));
+        thumb.setColor(activeColor);
+        bar.setThumb(thumb);
+        bar.setSplitTrack(false);
+    }
+
+    public static final class ChevronView extends View {
+        private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        public ChevronView(android.content.Context ctx) {
+            super(ctx);
+            mPaint.setColor(0xFFA6ADC8);
+            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setStrokeCap(Paint.Cap.ROUND);
+            mPaint.setStrokeJoin(Paint.Join.ROUND);
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            float density = getResources().getDisplayMetrics().density;
+            setMeasuredDimension(Math.round(10 * density), Math.round(16 * density));
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float density = getResources().getDisplayMetrics().density;
+            mPaint.setStrokeWidth(2.0f * density);
+            float w = getWidth();
+            float h = getHeight();
+            float left = 2f * density;
+            float right = w - 2.5f * density;
+            float top = 3f * density;
+            float midY = h * 0.5f;
+            float bot = h - 3f * density;
+
+            canvas.drawLine(left, top, right, midY, mPaint);
+            canvas.drawLine(right, midY, left, bot, mPaint);
+        }
+    }
+
+    public static final class BackArrowView extends View {
+        private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        public BackArrowView(android.content.Context ctx) {
+            super(ctx);
+            mPaint.setColor(0xFF80DEEA);
+            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setStrokeCap(Paint.Cap.ROUND);
+            mPaint.setStrokeJoin(Paint.Join.ROUND);
+        }
+
+        @Override
+        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+            float density = getResources().getDisplayMetrics().density;
+            setMeasuredDimension(Math.round(16 * density), Math.round(16 * density));
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            float density = getResources().getDisplayMetrics().density;
+            mPaint.setStrokeWidth(2.2f * density);
+            float w = getWidth();
+            float h = getHeight();
+            float midY = h * 0.5f;
+            float startX = 3f * density;
+            float endX = w - 2f * density;
+
+            canvas.drawLine(startX, midY, endX, midY, mPaint);
+            float arm = 5f * density;
+            canvas.drawLine(startX, midY, startX + arm, midY - arm, mPaint);
+            canvas.drawLine(startX, midY, startX + arm, midY + arm, mPaint);
+        }
     }
 }

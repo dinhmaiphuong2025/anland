@@ -53,6 +53,11 @@ public final class HudFreeformButtonView extends View {
         return mModel;
     }
 
+    private boolean isHapticEnabled() {
+        return getContext().getSharedPreferences("anland_settings", Context.MODE_PRIVATE)
+                .getBoolean("haptic_feedback_enabled", true);
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         float density = getResources().getDisplayMetrics().density;
@@ -118,7 +123,7 @@ public final class HudFreeformButtonView extends View {
                 mDownY = y;
                 mIsPressed = true;
                 mPopupTriggered = false;
-                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                 invalidate();
                 if (mListener != null) mListener.onButtonPress(mModel, true);
                 return true;
@@ -127,7 +132,7 @@ public final class HudFreeformButtonView extends View {
                 if (mModel.popupAction != null && !mPopupTriggered && (mDownY - y) > 30 * density) {
                     mPopupTriggered = true;
                     mIsPressed = false;
-                    performHapticFeedback(HapticFeedbackConstants.CONFIRM);
+                    if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.CONFIRM);
                     invalidate();
                     if (mListener != null) {
                         mListener.onButtonPress(mModel, false);

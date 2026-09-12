@@ -125,6 +125,11 @@ public final class TrackpointNubView extends View {
         canvas.drawCircle(nubCx, nubCy + dotOffset, dotR, mPaint);
     }
 
+    private boolean isHapticEnabled() {
+        return getContext().getSharedPreferences("anland_settings", Context.MODE_PRIVATE)
+                .getBoolean("haptic_feedback_enabled", true);
+    }
+
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         // Edit mode: the parent's OnTouchListener owns this widget for
@@ -143,7 +148,7 @@ public final class TrackpointNubView extends View {
                 mTouchDownTime = System.currentTimeMillis();
                 mCenterTouchX = x;
                 mCenterTouchY = y;
-                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+                if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
                 updateOffset(x - cx, y - cy);
                 mLoopHandler.post(mLoopRunnable);
                 return true;
@@ -161,7 +166,7 @@ public final class TrackpointNubView extends View {
                 long duration = System.currentTimeMillis() - mTouchDownTime;
                 float dist = (float) Math.hypot(x - mCenterTouchX, y - mCenterTouchY);
                 if (duration < 250 && dist < 15) {
-                    performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                    if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                     if (mDispatcher != null) {
                         mDispatcher.onPointerClick(1); // Left Click
                     }

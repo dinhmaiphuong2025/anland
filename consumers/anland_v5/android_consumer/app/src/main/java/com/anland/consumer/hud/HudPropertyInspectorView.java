@@ -594,7 +594,39 @@ public final class HudPropertyInspectorView extends LinearLayout {
         void accept(int val);
     }
 
+    public static void styleSeekBar(SeekBar bar, int activeColor) {
+        float density = bar.getContext().getResources().getDisplayMetrics().density;
+
+        android.graphics.drawable.GradientDrawable bgTrack = new android.graphics.drawable.GradientDrawable();
+        bgTrack.setCornerRadius(2.5f * density);
+        bgTrack.setColor(0x33FFFFFF);
+        bgTrack.setSize(-1, Math.round(5 * density));
+
+        android.graphics.drawable.GradientDrawable progressTrack = new android.graphics.drawable.GradientDrawable();
+        progressTrack.setCornerRadius(2.5f * density);
+        progressTrack.setColor(activeColor);
+        progressTrack.setSize(-1, Math.round(5 * density));
+        android.graphics.drawable.ClipDrawable clipProgress = new android.graphics.drawable.ClipDrawable(
+                progressTrack, Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL);
+
+        android.graphics.drawable.Drawable[] layers = new android.graphics.drawable.Drawable[] {
+                bgTrack, clipProgress
+        };
+        android.graphics.drawable.LayerDrawable layerDrawable = new android.graphics.drawable.LayerDrawable(layers);
+        layerDrawable.setId(0, android.R.id.background);
+        layerDrawable.setId(1, android.R.id.progress);
+        bar.setProgressDrawable(layerDrawable);
+
+        android.graphics.drawable.GradientDrawable thumb = new android.graphics.drawable.GradientDrawable();
+        thumb.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        thumb.setSize(Math.round(16 * density), Math.round(16 * density));
+        thumb.setColor(activeColor);
+        bar.setThumb(thumb);
+        bar.setSplitTrack(false);
+    }
+
     private View createSliderRow(String title, SeekBar bar, EditText input, int min, int max, ValueConsumer consumer) {
+        styleSeekBar(bar, 0xFF80DEEA);
         LinearLayout row = new LinearLayout(getContext());
         row.setOrientation(VERTICAL);
         row.setPadding(0, dp(4), 0, dp(4));

@@ -109,6 +109,11 @@ public final class SuperGestureButtonView extends View {
         canvas.drawLine(w - 9 * density, h * 0.5f, w - 4 * density, h * 0.5f, mPaint); // Right tick
     }
 
+    private boolean isHapticEnabled() {
+        return getContext().getSharedPreferences("anland_settings", Context.MODE_PRIVATE)
+                .getBoolean("haptic_feedback_enabled", true);
+    }
+
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (mInEditMode) return false;
@@ -124,7 +129,7 @@ public final class SuperGestureButtonView extends View {
                 mDownTime = System.currentTimeMillis();
                 mIsPressed = true;
                 mGestureFired = false;
-                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                 invalidate();
                 return true;
 
@@ -135,7 +140,7 @@ public final class SuperGestureButtonView extends View {
                     if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
                         mGestureFired = true;
                         mIsPressed = false;
-                        performHapticFeedback(HapticFeedbackConstants.GESTURE_END);
+                        if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.GESTURE_END);
                         invalidate();
                         if (mListener != null) {
                             if (Math.abs(dx) > Math.abs(dy)) {
@@ -155,7 +160,7 @@ public final class SuperGestureButtonView extends View {
                 if (!mGestureFired && event.getActionMasked() == MotionEvent.ACTION_UP) {
                     long duration = System.currentTimeMillis() - mDownTime;
                     if (duration > 450) {
-                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                        if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                         if (mListener != null) mListener.onLongPress(mModel);
                     } else {
                         if (mListener != null) mListener.onSingleTap(mModel);
