@@ -199,6 +199,24 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         invalidate();
     }
 
+    private void showFirstTimeNoticeDialog() {
+        new AlertDialog.Builder(getContext(), AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("ORIENTATION NOTICE")
+                .setMessage("Portrait and Landscape layouts are stored independently.\n\nRotate your device to customize buttons and dock positions for each orientation separately.")
+                .setPositiveButton("GOT IT", (d, w) -> {
+                    mProfile.firstTimeNoticeShown = true;
+                    saveProfile();
+                })
+                .setCancelable(false)
+                .show();
+    }
+
+    public HudLayout getActiveLayout() {
+        int orientation = getResources().getConfiguration().orientation;
+        return (orientation == Configuration.ORIENTATION_LANDSCAPE)
+                ? mProfile.landscapeLayout : mProfile.portraitLayout;
+    }
+
     public static int getSystemStatusBarHeight(Context ctx) {
         int resId = ctx.getResources().getIdentifier("status_bar_height", "dimen", "android");
         int res = (resId > 0) ? ctx.getResources().getDimensionPixelSize(resId) : 0;
