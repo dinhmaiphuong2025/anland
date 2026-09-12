@@ -87,15 +87,16 @@ public final class SuperGestureButtonView extends View {
         mPaint.setColor(0x88FFFFFF);
         canvas.drawRoundRect(mBounds, corner, corner, mPaint);
 
-        // Main Center Text with auto font scaling
+        // Main Center Text with safe auto font scaling away from chevrons
         mTextPaint.setColor(mIsPressed ? 0xFF11111B : mModel.textColor);
         String label = mModel.label != null ? mModel.label : "SUPER";
-        float maxTextWidth = w - 16 * density;
-        float textSize = Math.min(w, h) * 0.28f;
+        float maxTextWidth = Math.max(10 * density, w - 30 * density);
+        float textSize = Math.min(w * 0.20f, Math.min(h * 0.24f, 14 * density));
         mTextPaint.setTextSize(textSize);
         float textW = mTextPaint.measureText(label);
         if (textW > maxTextWidth && textW > 0) {
-            mTextPaint.setTextSize(Math.max(8 * density, textSize * (maxTextWidth / textW)));
+            textSize = Math.max(7 * density, textSize * (maxTextWidth / textW));
+            mTextPaint.setTextSize(textSize);
         }
         float textY = h * 0.5f - ((mTextPaint.descent() + mTextPaint.ascent()) * 0.5f);
         canvas.drawText(label, w * 0.5f, textY, mTextPaint);
@@ -103,32 +104,32 @@ public final class SuperGestureButtonView extends View {
         // 4-way outward vector chevrons (Top, Bottom, Left, Right)
         mPaint.setColor(0xCC80DEEA);
         mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(2.0f * density);
+        mPaint.setStrokeWidth(1.8f * density);
         mPaint.setStrokeCap(Paint.Cap.ROUND);
         mPaint.setStrokeJoin(Paint.Join.ROUND);
 
         float cx = w * 0.5f;
         float cy = h * 0.5f;
-        float wing = 3.5f * density;
-        float depth = 3.5f * density;
+        float wing = 2.8f * density;
+        float depth = 2.5f * density;
 
         // Up chevron (pointing up)
-        float topTip = 5f * density;
+        float topTip = 4f * density;
         canvas.drawLine(cx - wing, topTip + depth, cx, topTip, mPaint);
         canvas.drawLine(cx, topTip, cx + wing, topTip + depth, mPaint);
 
         // Down chevron (pointing down)
-        float botTip = h - 5f * density;
+        float botTip = h - 4f * density;
         canvas.drawLine(cx - wing, botTip - depth, cx, botTip, mPaint);
         canvas.drawLine(cx, botTip, cx + wing, botTip - depth, mPaint);
 
         // Left chevron (pointing left)
-        float leftTip = 5f * density;
+        float leftTip = 4f * density;
         canvas.drawLine(leftTip + depth, cy - wing, leftTip, cy, mPaint);
         canvas.drawLine(leftTip, cy, leftTip + depth, cy + wing, mPaint);
 
         // Right chevron (pointing right)
-        float rightTip = w - 5f * density;
+        float rightTip = w - 4f * density;
         canvas.drawLine(rightTip - depth, cy - wing, rightTip, cy, mPaint);
         canvas.drawLine(rightTip, cy, rightTip - depth, cy + wing, mPaint);
     }

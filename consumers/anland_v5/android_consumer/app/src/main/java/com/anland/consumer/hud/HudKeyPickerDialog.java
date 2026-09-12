@@ -66,6 +66,10 @@ public final class HudKeyPickerDialog {
     }
 
     public static void show(Context context, OnActionSelectedListener listener) {
+        show(context, listener, null);
+    }
+
+    public static void show(Context context, OnActionSelectedListener listener, Runnable onDismiss) {
         AlertDialog.Builder builder = new AlertDialog.Builder(context, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
 
         LinearLayout root = new LinearLayout(context);
@@ -110,13 +114,15 @@ public final class HudKeyPickerDialog {
         searchInput.setLayoutParams(searchLp);
         root.addView(searchInput);
 
+        boolean isLandscape = context.getResources().getConfiguration().orientation
+                == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
+
         // Content Container
         LinearLayout contentContainer = new LinearLayout(context);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
-        contentContainer.setMinimumHeight(dp(context, 480));
+        contentContainer.setMinimumHeight(dp(context, isLandscape ? 180 : 360));
         root.addView(contentContainer, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
         AlertDialog dialog = builder.setView(root).create();
 
@@ -128,10 +134,9 @@ public final class HudKeyPickerDialog {
         tabRow.addView(btnTabMods);
         tabRow.addView(btnTabCombo);
 
-        // KEYS is dense 4-column; MODS & SYS is 3-column so the
-        // labels have ample width.
-        final int colsKeys = computeColumnCount(context, 4);
-        final int colsLong = 3;
+        // KEYS is dense 4-column (6 in landscape); MODS & SYS is 3-column (4 in landscape)
+        final int colsKeys = isLandscape ? 6 : computeColumnCount(context, 4);
+        final int colsLong = isLandscape ? 4 : 3;
 
         final int[] activeTab = {0};
         final Runnable refreshCurrentTab = () -> {
@@ -186,6 +191,10 @@ public final class HudKeyPickerDialog {
         btnTabKeys.setOnClickListener(v -> selectTab[0].run());
         btnTabMods.setOnClickListener(v -> selectTab[1].run());
         btnTabCombo.setOnClickListener(v -> selectTab[2].run());
+
+        dialog.setOnDismissListener(d -> {
+            if (onDismiss != null) onDismiss.run();
+        });
 
         selectTab[0].run();
         dialog.show();
@@ -252,7 +261,7 @@ public final class HudKeyPickerDialog {
         int hSpacing = dp(ctx, 6);
         int vSpacing = dp(ctx, 6);
         int sidePad = dp(ctx, 4);
-        grid.setPadding(sidePad, 0, sidePad, 0);
+        grid.setPadding(sidePad, dp(ctx, 6), sidePad, dp(ctx, 8));
 
         for (int row = 0; row < entries.size(); row += columns) {
             LinearLayout rowView = new LinearLayout(ctx);
@@ -308,8 +317,7 @@ public final class HudKeyPickerDialog {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
         container.addView(scroll, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
     }
 
     private static int computeColumnCount(Context ctx, int minColumns) {

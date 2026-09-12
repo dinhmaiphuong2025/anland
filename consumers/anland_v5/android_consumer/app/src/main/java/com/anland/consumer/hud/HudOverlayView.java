@@ -8,12 +8,14 @@ import android.content.res.Configuration;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.DashPathEffect;
+import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -86,6 +88,11 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     // but no view renders it. See HudLayoutProfile for the migration note.
     private LinearLayout mTopToolbar;
     private HudPropertyInspectorView mInspectorView;
+
+    private int mInsetTop = 0;
+    private int mInsetBottom = 0;
+    private int mInsetLeft = 0;
+    private int mInsetRight = 0;
 
     private float mTouchDownX;
     private float mTouchDownY;
@@ -205,6 +212,31 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 ? mProfile.landscapeLayout : mProfile.portraitLayout;
     }
 
+    @Override
+    public WindowInsets onApplyWindowInsets(WindowInsets insets) {
+        Insets statusCutout = insets.getInsets(
+                WindowInsets.Type.statusBars() | WindowInsets.Type.displayCutout());
+        Insets nav = insets.getInsets(
+                WindowInsets.Type.navigationBars());
+        mInsetTop = statusCutout.top;
+        mInsetLeft = statusCutout.left;
+        mInsetRight = statusCutout.right;
+        mInsetBottom = nav.bottom;
+        updateToolbarMargins();
+        invalidate();
+        return super.onApplyWindowInsets(insets);
+    }
+
+    private void updateToolbarMargins() {
+        if (mTopToolbar != null) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mTopToolbar.getLayoutParams();
+            if (lp != null) {
+                lp.setMargins(dp(10) + mInsetLeft, dp(6) + mInsetTop, dp(10) + mInsetRight, 0);
+                mTopToolbar.setLayoutParams(lp);
+            }
+        }
+    }
+
     private void initViews() {
         removeAllViews();
         setClipChildren(false);
@@ -248,10 +280,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             @Override
             public void onPickActionRequested(HudButton button, int targetSlot) {
                 // All five action slots (main / popup / 4 swipes) share a
-                // single picker dialog. The dialog has a free-form combo
-                // builder tab on top of its key/action grids, so even the
-                // swipe actions can be assigned an arbitrary 1-3 key combo
-                // if the user wants.
+                // single picker dialog. Temporarily hide the inspector view
+                // while the modal picker is open to eliminate background clutter.
+                mInspectorView.setVisibility(GONE);
                 HudKeyPickerDialog.show(getContext(), (action, displayLabel) -> {
                     switch (targetSlot) {
                         case 0:
@@ -276,6 +307,10 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     }
                     mInspectorView.bindButton(button);
                     rebuildActiveLayout();
+                }, () -> {
+                    if (mSelectedButton != null) {
+                        mInspectorView.setVisibility(VISIBLE);
+                    }
                 });
             }
             @Override
@@ -372,6 +407,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 "Load Niri Default Preset",
                 "Clear Active Layout"
         };
+        mInspectorView.setVisibility(GONE);
         new AlertDialog.Builder(getContext(), AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                 .setTitle("Layout Options")
                 .setItems(options, (dialog, which) -> {
@@ -442,6 +478,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     }
                     dialog.dismiss();
                 })
+                .setOnDismissListener(d -> {
+                    if (mSelectedButton != null) mInspectorView.setVisibility(VISIBLE);
+                })
                 .setNegativeButton("CANCEL", null)
                 .show();
     }
@@ -460,12 +499,16 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 HudButton.WidgetKind.SUPER_GESTURE,
                 HudButton.WidgetKind.TRACKPOINT
         };
+        mInspectorView.setVisibility(GONE);
         new android.app.AlertDialog.Builder(getContext(),
                 android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                 .setTitle("Add Widget")
                 .setItems(labels, (dialog, which) -> {
                     if (mIsEditMode) addWidgetOfKind(kinds[which]);
                     dialog.dismiss();
+                })
+                .setOnDismissListener(d -> {
+                    if (mSelectedButton != null) mInspectorView.setVisibility(VISIBLE);
                 })
                 .setNegativeButton("CANCEL", null)
                 .show();
@@ -528,6 +571,11 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     @Override
     protected void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        post(() -> {
+            if (mInspectorView != null && getWidth() > 0 && getHeight() > 0) {
+                mInspectorView.adaptSize(getWidth(), getHeight());
+            }
+        });
         rebuildActiveLayout();
     }
 
@@ -847,13 +895,14 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             post(() -> {
                 int pw = getWidth();
                 int ph = getHeight();
-                int iw = mInspectorView.getWidth();
-                int ih = mInspectorView.getHeight();
-                if (pw > 0 && ph > 0 && iw > 0 && ih > 0) {
-                    float targetX = (b.posXPercent < 0.5f) ? (pw - iw - dp(16)) : dp(16);
-                    float targetY = (b.posYPercent < 0.5f) ? (ph - ih - dp(24)) : dp(56);
-                    targetX = Math.max(dp(8), Math.min(pw - iw - dp(8), targetX));
-                    targetY = Math.max(dp(56), Math.min(ph - ih - dp(8), targetY));
+                if (pw > 0 && ph > 0) {
+                    mInspectorView.adaptSize(pw, ph);
+                    int iw = mInspectorView.getWidth() > 0 ? mInspectorView.getWidth() : dp(pw > ph ? 290 : 260);
+                    int ih = mInspectorView.getHeight() > 0 ? mInspectorView.getHeight() : dp(pw > ph ? 240 : 350);
+                    float targetX = (b.posXPercent < 0.5f) ? (pw - iw - dp(16) - mInsetRight) : (dp(16) + mInsetLeft);
+                    float targetY = (b.posYPercent < 0.5f) ? (ph - ih - dp(16) - mInsetBottom) : (dp(56) + mInsetTop);
+                    targetX = Math.max(dp(8) + mInsetLeft, Math.min(pw - iw - dp(8) - mInsetRight, targetX));
+                    targetY = Math.max(dp(56) + mInsetTop, Math.min(ph - ih - dp(8) - mInsetBottom, targetY));
                     mInspectorView.setTranslationX(targetX);
                     mInspectorView.setTranslationY(targetY);
                 }
@@ -919,7 +968,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         float bannerH = 26f * density;
         float bannerW = Math.min(w - 60f * density, 240f * density);
         float left = (w - bannerW) / 2f;
-        float top = h - bannerH - 12f * density;
+        float top = h - bannerH - mInsetBottom - 12f * density;
         if (top < 16f * density) top = 16f * density;
 
         mBannerFillPaint.setStyle(Paint.Style.FILL);
@@ -995,8 +1044,8 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     }
 
     public void applyImeBottom(int imeBottom) {
-        // Dock strip removed. The legacy ExtraKeysBar lives in MainActivity
-        // and is positioned separately when the IME is up.
+        mInsetBottom = Math.max(mInsetBottom, imeBottom);
+        invalidate();
     }
 
     private int dp(int val) {

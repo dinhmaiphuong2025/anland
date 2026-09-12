@@ -189,7 +189,7 @@ public final class ComboBuilderView {
     public void showDialog(Context ctx, OnComboBuiltListener listener) {
         mListener = listener;
         mDialog = new AlertDialog.Builder(ctx, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                .setView(buildContent(ctx))
+                .setView(buildContent(ctx, false))
                 .setCancelable(true)
                 .create();
         mDialog.show();
@@ -206,50 +206,53 @@ public final class ComboBuilderView {
         mListener = listener;
         mDialog = null;
         host.removeAllViews();
-        host.addView(buildContent(ctx));
+        host.addView(buildContent(ctx, true), new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
-    // Build the dialog body. Used by both the standalone AlertDialog flow
-    // (showDialog) and the inline flow (showInline) so the layout is
-    // consistent across both.
-    private LinearLayout buildContent(final Context ctx) {
+    // Build the dialog body. Uses flex weight=1f on the key grid so that
+    // CLEAR ALL and APPLY COMBO are ALWAYS pinned at the bottom and never
+    // pushed off-screen in landscape orientation.
+    private LinearLayout buildContent(final Context ctx, boolean isInline) {
+        boolean isLandscape = ctx.getResources().getConfiguration().orientation
+                == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
         LinearLayout root = new LinearLayout(ctx);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(0xFF1E1E2E);
-        root.setPadding(dp(ctx, 16), dp(ctx, 16), dp(ctx, 16), dp(ctx, 16));
+        root.setPadding(dp(ctx, 12), dp(ctx, isInline ? 4 : 12), dp(ctx, 12), dp(ctx, 10));
 
-        TextView title = new TextView(ctx);
-        title.setText("COMBO BUILDER");
-        title.setTextColor(Color.WHITE);
-        title.setTextSize(18);
-        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-        title.setPadding(0, 0, 0, dp(ctx, 12));
-        root.addView(title);
+        if (!isInline) {
+            TextView title = new TextView(ctx);
+            title.setText("COMBO BUILDER");
+            title.setTextColor(Color.WHITE);
+            title.setTextSize(16);
+            title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            title.setPadding(0, 0, 0, dp(ctx, 6));
+            root.addView(title);
+        }
 
-        TextView hint = new TextView(ctx);
-        hint.setText("Pick up to three keys. The active slot is highlighted blue; pick a key to fill it and advance to the next slot.");
-        hint.setTextColor(0xFFAAAAAA);
-        hint.setTextSize(12);
-        hint.setPadding(0, 0, 0, dp(ctx, 12));
-        root.addView(hint);
+        if (!isLandscape) {
+            TextView hint = new TextView(ctx);
+            hint.setText("Pick up to 3 keys. Active slot is highlighted; pick a key to fill it.");
+            hint.setTextColor(0xFFAAAAAA);
+            hint.setTextSize(11);
+            hint.setPadding(0, 0, 0, dp(ctx, 8));
+            root.addView(hint);
+        }
 
         // Slot row
         LinearLayout slotRow = new LinearLayout(ctx);
         slotRow.setOrientation(LinearLayout.HORIZONTAL);
         slotRow.setGravity(Gravity.CENTER_VERTICAL);
-        slotRow.setPadding(0, 0, 0, dp(ctx, 12));
+        slotRow.setPadding(0, 0, 0, dp(ctx, 8));
         for (int i = 0; i < MAX_SLOTS; i++) {
             TextView slot = new TextView(ctx);
             slot.setText("Slot " + (i + 1));
-            slot.setTextSize(15);
+            slot.setTextSize(13);
             slot.setAllCaps(false);
             slot.setTextColor(0xFF888888);
             slot.setGravity(Gravity.CENTER);
-            slot.setBackgroundColor(0xFF2A2B3D);
-            slot.setPadding(dp(ctx, 12), dp(ctx, 12), dp(ctx, 12), dp(ctx, 12));
-            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-            bg.setCornerRadius(dp(ctx, 8));
-            slot.setBackground(bg);
+            slot.setPadding(dp(ctx, 8), dp(ctx, 8), dp(ctx, 8), dp(ctx, 8));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             if (i > 0) lp.leftMargin = dp(ctx, 8);
             slotRow.addView(slot, lp);
@@ -266,24 +269,13 @@ public final class ComboBuilderView {
         }
         root.addView(slotRow);
 
-        // Live preview, e.g. "CTRL + C"
-        mPreview = new TextView(ctx);
-        mPreview.setText("");
-        mPreview.setTextColor(0xFF80DEEA);
-        mPreview.setTextSize(14);
-        mPreview.setGravity(Gravity.CENTER);
-        mPreview.setPadding(0, dp(ctx, 8), 0, dp(ctx, 8));
-        // Preview is added below the key picker; it is shown next to
-        // the action buttons so the user sees the result of their picks
-        // before pressing APPLY.
-
-        // Key picker grid
+        // Key picker grid inside flex ScrollView (weight = 1f)
         ScrollView keyScroll = new ScrollView(ctx);
         keyScroll.setBackgroundColor(0xFF15151E);
-        keyScroll.setPadding(dp(ctx, 8), dp(ctx, 8), dp(ctx, 8), dp(ctx, 8));
+        keyScroll.setPadding(dp(ctx, 6), dp(ctx, 6), dp(ctx, 6), dp(ctx, 6));
         LinearLayout keyGrid = new LinearLayout(ctx);
         keyGrid.setOrientation(LinearLayout.VERTICAL);
-        final int keyCols = 4;
+        final int keyCols = isLandscape ? 6 : 4;
         final int hSpacing = dp(ctx, 6);
         final int vSpacing = dp(ctx, 6);
         for (int i = 0; i < mKeycodes.size(); i += keyCols) {
@@ -306,12 +298,12 @@ public final class ComboBuilderView {
                 final String lbl = mKeyLabels.get(idx);
                 Button k = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
                 k.setText(lbl);
-                k.setTextSize(12);
+                k.setTextSize(11.5f);
                 k.setAllCaps(false);
                 k.setTextColor(Color.WHITE);
                 k.setBackground(M3.createRippleDrawable(ctx, M3.RADIUS_CHIP, M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
-                k.setMinHeight(dp(ctx, 40));
-                k.setPadding(dp(ctx, 2), dp(ctx, 6), dp(ctx, 2), dp(ctx, 6));
+                k.setMinHeight(dp(ctx, 38));
+                k.setPadding(dp(ctx, 2), dp(ctx, 4), dp(ctx, 2), dp(ctx, 4));
                 k.setSingleLine(true);
                 LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
                 if (col > 0) blp.leftMargin = hSpacing;
@@ -326,17 +318,28 @@ public final class ComboBuilderView {
         keyScroll.addView(keyGrid, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(keyScroll, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(ctx, 320)));
 
-        // Preview is shown just below the key grid, above the action row.
+        // Weight = 1f ensures the key grid takes the flex space and never pushes actions off screen!
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
+        scrollLp.setMargins(0, 0, 0, dp(ctx, 6));
+        root.addView(keyScroll, scrollLp);
+
+        // Preview is shown right above the action row
+        mPreview = new TextView(ctx);
+        mPreview.setText("");
+        mPreview.setTextColor(M3.COLOR_PRIMARY);
+        mPreview.setTextSize(13);
+        mPreview.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        mPreview.setGravity(Gravity.CENTER);
+        mPreview.setPadding(0, dp(ctx, 4), 0, dp(ctx, 4));
         root.addView(mPreview);
 
-        // Action row: Clear All + Apply Combo
+        // Action row: Clear All + Apply Combo (always pinned at the bottom)
         LinearLayout actions = new LinearLayout(ctx);
         actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setPadding(0, dp(ctx, 12), 0, 0);
+        actions.setPadding(0, dp(ctx, 4), 0, 0);
+
         Button btnClear = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
         btnClear.setText("CLEAR ALL");
         btnClear.setTextSize(12);

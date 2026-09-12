@@ -100,6 +100,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
     private float mDragStartX;
     private float mDragStartY;
+    private ScrollView mScrollView;
 
     public HudPropertyInspectorView(Context context, InspectorCallback callback) {
         super(context);
@@ -178,7 +179,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         });
         addView(header);
 
-        ScrollView scroll = new ScrollView(getContext());
+        mScrollView = new ScrollView(getContext());
         LinearLayout content = new LinearLayout(getContext());
         content.setOrientation(VERTICAL);
         content.setPadding(0, dp(8), 0, dp(4));
@@ -447,9 +448,24 @@ public final class HudPropertyInspectorView extends LinearLayout {
         opRow.addView(btnDuplicate);
 
         content.addView(opRow);
-        scroll.addView(content);
-        addView(scroll, new LayoutParams(dp(260), dp(340)));
+        mScrollView.addView(content);
+        addView(mScrollView, new LayoutParams(dp(260), dp(340)));
         mOpRow = opRow;
+    }
+
+    public void adaptSize(int parentW, int parentH) {
+        if (parentW <= 0 || parentH <= 0 || mScrollView == null) return;
+        boolean isLandscape = parentW > parentH;
+        int maxH = Math.max(dp(180), parentH - dp(90));
+        int targetH = isLandscape ? Math.min(dp(220), maxH) : Math.min(dp(350), maxH);
+        int targetW = isLandscape ? dp(290) : dp(260);
+
+        ViewGroup.LayoutParams lp = mScrollView.getLayoutParams();
+        if (lp != null) {
+            lp.width = targetW;
+            lp.height = targetH;
+            mScrollView.setLayoutParams(lp);
+        }
     }
 
     public void bindButton(HudButton b) {
@@ -460,7 +476,11 @@ public final class HudPropertyInspectorView extends LinearLayout {
             return;
         }
         setVisibility(VISIBLE);
-        mTitleText.setText(b.widgetType.toUpperCase() + " PROPERTIES");
+        View p = (View) getParent();
+        if (p != null && p.getWidth() > 0 && p.getHeight() > 0) {
+            adaptSize(p.getWidth(), p.getHeight());
+        }
+        mTitleText.setText(b.widgetType.replace('_', ' ').toUpperCase() + " PROPERTIES");
         // Setting label text would otherwise re-trigger the TextWatcher and
         // call back into onModelChanged -> rebuildActiveLayout -> bindButton
         // in a tight loop. The flag is reset by syncSliderAndInput too, so
