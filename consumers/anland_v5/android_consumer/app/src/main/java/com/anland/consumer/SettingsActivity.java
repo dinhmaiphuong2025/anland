@@ -37,7 +37,11 @@ import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
+import java.util.Map;
+import org.json.JSONObject;
 
 
 public class SettingsActivity extends Activity {
@@ -98,6 +102,8 @@ public class SettingsActivity extends Activity {
     // Custom extra-keys layout editor (JSON), and the SAF file-picker request code.
     private EditText layoutInput;
     private static final int REQ_PICK_LAYOUT = 2001;
+    private static final int REQ_BACKUP_SETTINGS = 2002;
+    private static final int REQ_RESTORE_SETTINGS = 2003;
 
     // The socket path and window name of the Droidspaces-owned MainActivity
     // window that launched us. We have to forward them to every child Intent
@@ -398,6 +404,7 @@ public class SettingsActivity extends Activity {
         buildOrientationSection(root);
         buildHapticSection(root);
         buildNotificationSection(root);
+        buildBackupRestoreSection(root);
         setContent(root);
     }
 
@@ -656,13 +663,21 @@ public class SettingsActivity extends Activity {
         TextView modeLabel = new TextView(this);
         modeLabel.setText(R.string.extra_keys_mode_label);
         modeLabel.setTextSize(14);
+        modeLabel.setTextColor(0xFFA6ADC8);
         modeLabel.setPadding(0, dp(8), 0, dp(4));
         root.addView(modeLabel);
 
-        android.widget.Spinner modeSpinner = new android.widget.Spinner(this);
-        modeSpinner.setAdapter(new android.widget.ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_dropdown_item,
-            getResources().getStringArray(R.array.extra_keys_mode_options)));
+        LinearLayout spCard = new LinearLayout(this);
+        spCard.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable spBg = new android.graphics.drawable.GradientDrawable();
+        spBg.setCornerRadius(dp(8));
+        spBg.setColor(0xFF181825);
+        spBg.setStroke(dp(1), 0x22FFFFFF);
+        spCard.setBackground(spBg);
+        spCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+
+        Spinner modeSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
+        setupDarkSpinner(modeSpinner, getResources().getStringArray(R.array.extra_keys_mode_options));
 
         String curMode = getExtraKeysMode(prefs);
         int modeIdx = 0; // default: always
@@ -679,7 +694,8 @@ public class SettingsActivity extends Activity {
             @Override
             public void onNothingSelected(android.widget.AdapterView<?> parent) {}
         });
-        root.addView(modeSpinner);
+        spCard.addView(modeSpinner);
+        root.addView(spCard);
 
         TextView modeHint = new TextView(this);
         modeHint.setText(R.string.extra_keys_mode_hint);
@@ -739,7 +755,7 @@ public class SettingsActivity extends Activity {
 
         Button loadDefaultBtn = new Button(this);
         styleSettingsButton(loadDefaultBtn);
-        loadDefaultBtn.setText(R.string.btn_load_default);
+        loadDefaultBtn.setText("Load Default");
         loadDefaultBtn.setOnClickListener(v ->
             layoutInput.setText(ExtraKeysBar.defaultLayoutJson()));
         LinearLayout.LayoutParams defLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -748,7 +764,7 @@ public class SettingsActivity extends Activity {
 
         Button loadFileBtn = new Button(this);
         styleSettingsButton(loadFileBtn);
-        loadFileBtn.setText(R.string.btn_load_file);
+        loadFileBtn.setText("Load File...");
         loadFileBtn.setOnClickListener(v -> pickLayoutFile());
         LinearLayout.LayoutParams fileLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         fileLp.leftMargin = dp(10);
@@ -874,6 +890,45 @@ public class SettingsActivity extends Activity {
         notificationHint.setTextColor(Color.GRAY);
         notificationHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(notificationHint);
+    }
+
+    private void buildBackupRestoreSection(LinearLayout root) {
+        TextView header = new TextView(this);
+        header.setText("Backup & Restore Settings");
+        header.setTextSize(16);
+        header.setTextColor(Color.WHITE);
+        header.setTypeface(null, Typeface.BOLD);
+        header.setPadding(0, dp(24), 0, dp(8));
+        root.addView(header);
+
+        TextView hint = new TextView(this);
+        hint.setText("Export all settings and HUD layouts to a JSON backup file, or restore from a previously saved file.");
+        hint.setTextSize(12);
+        hint.setTextColor(0xFFA6ADC8);
+        hint.setPadding(0, 0, 0, dp(12));
+        root.addView(hint);
+
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button btnBackup = new Button(this);
+        styleSettingsButton(btnBackup);
+        btnBackup.setText("Backup Settings");
+        btnBackup.setOnClickListener(v -> backupSettings());
+        LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        btnBackup.setLayoutParams(bLp);
+        row.addView(btnBackup);
+
+        Button btnRestore = new Button(this);
+        styleSettingsButton(btnRestore);
+        btnRestore.setText("Restore Settings");
+        btnRestore.setOnClickListener(v -> restoreSettings());
+        LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        rLp.leftMargin = dp(10);
+        btnRestore.setLayoutParams(rLp);
+        row.addView(btnRestore);
+
+        root.addView(row);
     }
 
     // ============================================================
@@ -1462,20 +1517,104 @@ public class SettingsActivity extends Activity {
         }
     }
 
+    private void backupSettings() {
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("application/json");
+        intent.putExtra(Intent.EXTRA_TITLE, "anland_settings_backup.json");
+        try {
+            startActivityForResult(intent, REQ_BACKUP_SETTINGS);
+        } catch (android.content.ActivityNotFoundException e) {
+            Toast.makeText(this, R.string.toast_no_picker, Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void restoreSettings() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES,
+            new String[]{"application/json", "text/plain"});
+        try {
+            startActivityForResult(intent, REQ_RESTORE_SETTINGS);
+        } catch (android.content.ActivityNotFoundException e) {
+            Toast.makeText(this, R.string.toast_no_picker, Toast.LENGTH_SHORT).show();
+        }
+    }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQ_PICK_LAYOUT || resultCode != RESULT_OK || data == null)
-            return;
+        if (resultCode != RESULT_OK || data == null) return;
         Uri uri = data.getData();
         if (uri == null) return;
-        String text = readTextFromUri(uri);
-        if (text == null) {
-            Toast.makeText(this, R.string.toast_read_failed, Toast.LENGTH_SHORT).show();
+
+        if (requestCode == REQ_PICK_LAYOUT) {
+            String text = readTextFromUri(uri);
+            if (text == null) {
+                Toast.makeText(this, R.string.toast_read_failed, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (layoutInput != null) layoutInput.setText(text);
+        } else if (requestCode == REQ_BACKUP_SETTINGS) {
+            exportSettingsToUri(uri);
+        } else if (requestCode == REQ_RESTORE_SETTINGS) {
+            importSettingsFromUri(uri);
+        }
+    }
+
+    private void exportSettingsToUri(Uri uri) {
+        try {
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+            Map<String, ?> all = prefs.getAll();
+            JSONObject obj = new JSONObject();
+            for (Map.Entry<String, ?> entry : all.entrySet()) {
+                obj.put(entry.getKey(), entry.getValue());
+            }
+            try (OutputStream os = getContentResolver().openOutputStream(uri)) {
+                if (os != null) {
+                    os.write(obj.toString(2).getBytes(StandardCharsets.UTF_8));
+                    Toast.makeText(this, "Settings Backed Up", Toast.LENGTH_SHORT).show();
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to backup settings", e);
+            Toast.makeText(this, "Backup Failed", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void importSettingsFromUri(Uri uri) {
+        String json = readTextFromUri(uri);
+        if (json == null || json.trim().isEmpty()) {
+            Toast.makeText(this, "Restore Failed: Empty File", Toast.LENGTH_SHORT).show();
             return;
         }
-        // setText flows through the editor's TextWatcher, which persists + validates.
-        if (layoutInput != null) layoutInput.setText(text);
+        try {
+            JSONObject obj = new JSONObject(json);
+            SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+            Iterator<String> keys = obj.keys();
+            while (keys.hasNext()) {
+                String k = keys.next();
+                Object v = obj.get(k);
+                if (v instanceof Boolean) {
+                    editor.putBoolean(k, (Boolean) v);
+                } else if (v instanceof Integer) {
+                    editor.putInt(k, (Integer) v);
+                } else if (v instanceof Long) {
+                    editor.putLong(k, (Long) v);
+                } else if (v instanceof Float || v instanceof Double) {
+                    editor.putFloat(k, (float) obj.getDouble(k));
+                } else if (v instanceof String) {
+                    editor.putString(k, (String) v);
+                }
+            }
+            editor.apply();
+            Toast.makeText(this, "Settings Restored Successfully", Toast.LENGTH_SHORT).show();
+            showGeneralPage();
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to restore settings", e);
+            Toast.makeText(this, "Restore Failed: Invalid JSON", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private String readTextFromUri(Uri uri) {
@@ -1528,7 +1667,7 @@ public class SettingsActivity extends Activity {
 
     private void setupDarkSpinner(Spinner spinner, String[] items) {
         android.graphics.drawable.GradientDrawable popupBg = new android.graphics.drawable.GradientDrawable();
-        popupBg.setCornerRadius(dp(8));
+        popupBg.setCornerRadius(dp(4)); // sleek clean 4dp rectangle, eliminates over-rounding
         popupBg.setColor(0xFF1E1E2E);
         popupBg.setStroke(dp(1), 0x33FFFFFF);
         spinner.setPopupBackgroundDrawable(popupBg);
@@ -1563,16 +1702,15 @@ public class SettingsActivity extends Activity {
 
     public static void styleSeekBar(SeekBar bar, int activeColor) {
         float density = bar.getContext().getResources().getDisplayMetrics().density;
-        
+        int trackHeight = Math.max(1, Math.round(3.5f * density));
+
         android.graphics.drawable.GradientDrawable bgTrack = new android.graphics.drawable.GradientDrawable();
-        bgTrack.setCornerRadius(2.5f * density);
+        bgTrack.setCornerRadius(trackHeight * 0.5f);
         bgTrack.setColor(0x33FFFFFF);
-        bgTrack.setSize(-1, Math.round(5 * density));
 
         android.graphics.drawable.GradientDrawable progressTrack = new android.graphics.drawable.GradientDrawable();
-        progressTrack.setCornerRadius(2.5f * density);
+        progressTrack.setCornerRadius(trackHeight * 0.5f);
         progressTrack.setColor(activeColor);
-        progressTrack.setSize(-1, Math.round(5 * density));
         android.graphics.drawable.ClipDrawable clipProgress = new android.graphics.drawable.ClipDrawable(
                 progressTrack, Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL);
 
@@ -1582,11 +1720,18 @@ public class SettingsActivity extends Activity {
         android.graphics.drawable.LayerDrawable layerDrawable = new android.graphics.drawable.LayerDrawable(layers);
         layerDrawable.setId(0, android.R.id.background);
         layerDrawable.setId(1, android.R.id.progress);
+
+        layerDrawable.setLayerHeight(0, trackHeight);
+        layerDrawable.setLayerGravity(0, Gravity.CENTER_VERTICAL | Gravity.FILL_HORIZONTAL);
+        layerDrawable.setLayerHeight(1, trackHeight);
+        layerDrawable.setLayerGravity(1, Gravity.CENTER_VERTICAL | Gravity.FILL_HORIZONTAL);
+
         bar.setProgressDrawable(layerDrawable);
 
         android.graphics.drawable.GradientDrawable thumb = new android.graphics.drawable.GradientDrawable();
         thumb.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        thumb.setSize(Math.round(16 * density), Math.round(16 * density));
+        int thumbSize = Math.round(14 * density);
+        thumb.setSize(thumbSize, thumbSize);
         thumb.setColor(activeColor);
         bar.setThumb(thumb);
         bar.setSplitTrack(false);
@@ -1594,13 +1739,17 @@ public class SettingsActivity extends Activity {
 
     public void styleSettingsButton(Button btn) {
         btn.setTextColor(Color.WHITE);
-        btn.setTextSize(13);
+        btn.setTextSize(12.5f);
+        btn.setGravity(Gravity.CENTER);
+        btn.setMaxLines(2);
+        btn.setSingleLine(false);
+        btn.setMinHeight(dp(42));
         android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
         bg.setCornerRadius(dp(11));
         bg.setColor(0xFF2A2B3D);
         bg.setStroke(dp(1), 0x33FFFFFF);
         btn.setBackground(bg);
-        btn.setPadding(dp(16), dp(10), dp(16), dp(10));
+        btn.setPadding(dp(12), dp(8), dp(12), dp(8));
     }
 
     public static final class ChevronView extends View {

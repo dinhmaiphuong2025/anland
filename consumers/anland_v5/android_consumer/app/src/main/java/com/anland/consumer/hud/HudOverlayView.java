@@ -155,6 +155,15 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         return mIsEditMode;
     }
 
+    public void cancelEditMode() {
+        if (!mIsEditMode) return;
+        // Reload saved profile from disk to discard all uncommitted in-memory edits
+        loadProfile();
+        selectButton(null, null);
+        setEditMode(false);
+        Toast.makeText(getContext(), "Changes Discarded", Toast.LENGTH_SHORT).show();
+    }
+
     public void setEditMode(boolean editMode) {
         this.mIsEditMode = editMode;
         if (editMode) {
@@ -351,7 +360,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         // Cancel / Exit Edit.
         Button btnExit = createToolButton("CANCEL");
         btnExit.setTextColor(0xFFF38BA8);
-        btnExit.setOnClickListener(v -> setEditMode(false));
+        btnExit.setOnClickListener(v -> cancelEditMode());
         bar.addView(btnExit);
 
         return bar;

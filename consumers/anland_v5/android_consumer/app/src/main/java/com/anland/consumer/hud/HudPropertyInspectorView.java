@@ -615,16 +615,15 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
     public static void styleSeekBar(SeekBar bar, int activeColor) {
         float density = bar.getContext().getResources().getDisplayMetrics().density;
+        int trackHeight = Math.max(1, Math.round(3.5f * density));
 
         android.graphics.drawable.GradientDrawable bgTrack = new android.graphics.drawable.GradientDrawable();
-        bgTrack.setCornerRadius(1.75f * density);
+        bgTrack.setCornerRadius(trackHeight * 0.5f);
         bgTrack.setColor(0x33FFFFFF);
-        bgTrack.setSize(-1, Math.round(3.5f * density));
 
         android.graphics.drawable.GradientDrawable progressTrack = new android.graphics.drawable.GradientDrawable();
-        progressTrack.setCornerRadius(1.75f * density);
+        progressTrack.setCornerRadius(trackHeight * 0.5f);
         progressTrack.setColor(activeColor);
-        progressTrack.setSize(-1, Math.round(3.5f * density));
         android.graphics.drawable.ClipDrawable clipProgress = new android.graphics.drawable.ClipDrawable(
                 progressTrack, Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL);
 
@@ -634,11 +633,18 @@ public final class HudPropertyInspectorView extends LinearLayout {
         android.graphics.drawable.LayerDrawable layerDrawable = new android.graphics.drawable.LayerDrawable(layers);
         layerDrawable.setId(0, android.R.id.background);
         layerDrawable.setId(1, android.R.id.progress);
+
+        layerDrawable.setLayerHeight(0, trackHeight);
+        layerDrawable.setLayerGravity(0, Gravity.CENTER_VERTICAL | Gravity.FILL_HORIZONTAL);
+        layerDrawable.setLayerHeight(1, trackHeight);
+        layerDrawable.setLayerGravity(1, Gravity.CENTER_VERTICAL | Gravity.FILL_HORIZONTAL);
+
         bar.setProgressDrawable(layerDrawable);
 
         android.graphics.drawable.GradientDrawable thumb = new android.graphics.drawable.GradientDrawable();
         thumb.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        thumb.setSize(Math.round(12 * density), Math.round(12 * density));
+        int thumbSize = Math.round(14 * density);
+        thumb.setSize(thumbSize, thumbSize);
         thumb.setColor(activeColor);
         bar.setThumb(thumb);
         bar.setSplitTrack(false);
