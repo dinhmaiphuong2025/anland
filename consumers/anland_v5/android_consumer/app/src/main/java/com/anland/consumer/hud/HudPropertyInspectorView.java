@@ -437,7 +437,6 @@ public final class HudPropertyInspectorView extends LinearLayout {
         btnDuplicate.setTextColor(Color.WHITE);
         btnDuplicate.setTextSize(12);
         btnDuplicate.setBackground(M3.createRippleDrawable(getContext(), M3.RADIUS_BUTTON, M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
-        btnDuplicate.setBackground(bgDup);
         btnDuplicate.setPadding(dp(16), dp(12), dp(16), dp(12));
         LinearLayout.LayoutParams dupLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         dupLp.leftMargin = dp(12);
