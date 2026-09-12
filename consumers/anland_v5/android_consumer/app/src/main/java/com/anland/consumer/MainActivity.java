@@ -813,6 +813,7 @@ public class MainActivity extends Activity
             applyImeInset(insets);
             if (mHudOverlay != null) {
                 mHudOverlay.applyImeBottom(mImeBottom);
+                mHudOverlay.applySystemInsets(insets);
             }
             return v.onApplyWindowInsets(insets);
         });

@@ -11,6 +11,7 @@ import android.graphics.DashPathEffect;
 import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.view.DisplayCutout;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -114,6 +115,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         this.mHost = host;
         this.mSnapEngine = new SnapGeometryEngine(getResources().getDisplayMetrics().density);
 
+        this.mInsetTop = getSystemStatusBarHeight(context);
+        this.mInsetBottom = getSystemNavigationBarHeight(context);
+
         mGuidePaint.setColor(0xFF4CAF50); // Vibrant Green magnetic line
         mGuidePaint.setStrokeWidth(2f);
         mGuidePaint.setStyle(Paint.Style.STROKE);
@@ -176,6 +180,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         this.mIsEditMode = editMode;
         if (editMode) {
             setVisibility(VISIBLE);
+            updateToolbarMargins();
         }
         if (editMode && !mProfile.firstTimeNoticeShown) {
             showFirstTimeNoticeDialog();
@@ -194,36 +199,39 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         invalidate();
     }
 
-    private void showFirstTimeNoticeDialog() {
-        new AlertDialog.Builder(getContext(), AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                .setTitle("ORIENTATION NOTICE")
-                .setMessage("Portrait and Landscape layouts are stored independently.\n\nRotate your device to customize buttons and dock positions for each orientation separately.")
-                .setPositiveButton("GOT IT", (d, w) -> {
-                    mProfile.firstTimeNoticeShown = true;
-                    saveProfile();
-                })
-                .setCancelable(false)
-                .show();
+    public static int getSystemStatusBarHeight(Context ctx) {
+        int resId = ctx.getResources().getIdentifier("status_bar_height", "dimen", "android");
+        int res = (resId > 0) ? ctx.getResources().getDimensionPixelSize(resId) : 0;
+        return Math.max(res, Math.round(34 * ctx.getResources().getDisplayMetrics().density));
     }
 
-    public HudLayout getActiveLayout() {
-        int orientation = getResources().getConfiguration().orientation;
-        return (orientation == Configuration.ORIENTATION_LANDSCAPE)
-                ? mProfile.landscapeLayout : mProfile.portraitLayout;
+    public static int getSystemNavigationBarHeight(Context ctx) {
+        int resId = ctx.getResources().getIdentifier("navigation_bar_height", "dimen", "android");
+        int res = (resId > 0) ? ctx.getResources().getDimensionPixelSize(resId) : 0;
+        return Math.max(res, Math.round(20 * ctx.getResources().getDisplayMetrics().density));
+    }
+
+    public void applySystemInsets(WindowInsets insets) {
+        if (insets != null) {
+            Insets statusCutout = insets.getInsetsIgnoringVisibility(
+                    WindowInsets.Type.statusBars() | WindowInsets.Type.displayCutout());
+            Insets nav = insets.getInsetsIgnoringVisibility(
+                    WindowInsets.Type.navigationBars());
+            DisplayCutout cutout = insets.getDisplayCutout();
+            int cutoutTop = cutout != null ? cutout.getSafeInsetTop() : 0;
+
+            mInsetTop = Math.max(getSystemStatusBarHeight(getContext()), Math.max(statusCutout.top, cutoutTop));
+            mInsetLeft = statusCutout.left;
+            mInsetRight = statusCutout.right;
+            mInsetBottom = Math.max(getSystemNavigationBarHeight(getContext()), nav.bottom);
+            updateToolbarMargins();
+            invalidate();
+        }
     }
 
     @Override
     public WindowInsets onApplyWindowInsets(WindowInsets insets) {
-        Insets statusCutout = insets.getInsets(
-                WindowInsets.Type.statusBars() | WindowInsets.Type.displayCutout());
-        Insets nav = insets.getInsets(
-                WindowInsets.Type.navigationBars());
-        mInsetTop = statusCutout.top;
-        mInsetLeft = statusCutout.left;
-        mInsetRight = statusCutout.right;
-        mInsetBottom = nav.bottom;
-        updateToolbarMargins();
-        invalidate();
+        applySystemInsets(insets);
         return super.onApplyWindowInsets(insets);
     }
 
@@ -231,7 +239,8 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         if (mTopToolbar != null) {
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mTopToolbar.getLayoutParams();
             if (lp != null) {
-                lp.setMargins(dp(10) + mInsetLeft, dp(6) + mInsetTop, dp(10) + mInsetRight, 0);
+                int topMargin = Math.max(dp(36), mInsetTop + dp(6));
+                lp.setMargins(dp(10) + mInsetLeft, topMargin, dp(10) + mInsetRight, 0);
                 mTopToolbar.setLayoutParams(lp);
             }
         }
@@ -256,7 +265,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mTopToolbar.setVisibility(GONE);
         FrameLayout.LayoutParams tbLp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP);
-        tbLp.setMargins(dp(10), dp(8), dp(10), 0);
+        tbLp.setMargins(dp(10) + mInsetLeft, Math.max(dp(36), mInsetTop + dp(6)), dp(10) + mInsetRight, 0);
         addView(mTopToolbar, tbLp);
 
         // Property Inspector Panel (Floating, initially hidden)
@@ -968,7 +977,8 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         float bannerH = 26f * density;
         float bannerW = Math.min(w - 60f * density, 240f * density);
         float left = (w - bannerW) / 2f;
-        float top = h - bannerH - mInsetBottom - 12f * density;
+        float bottomMargin = Math.max(mInsetBottom, getSystemNavigationBarHeight(getContext())) + 8f * density;
+        float top = h - bannerH - bottomMargin;
         if (top < 16f * density) top = 16f * density;
 
         mBannerFillPaint.setStyle(Paint.Style.FILL);

@@ -457,8 +457,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
         if (parentW <= 0 || parentH <= 0 || mScrollView == null) return;
         boolean isLandscape = parentW > parentH;
         int maxH = Math.max(dp(180), parentH - dp(90));
-        int targetH = isLandscape ? Math.min(dp(220), maxH) : Math.min(dp(350), maxH);
-        int targetW = isLandscape ? dp(290) : dp(260);
+        int targetH = isLandscape ? Math.min(dp(220), maxH) : Math.min(dp(500), parentH - dp(180));
+        int targetW = isLandscape ? dp(300) : dp(260);
 
         ViewGroup.LayoutParams lp = mScrollView.getLayoutParams();
         if (lp != null) {
