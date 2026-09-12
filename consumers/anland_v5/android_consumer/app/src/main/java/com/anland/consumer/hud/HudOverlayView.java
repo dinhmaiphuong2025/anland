@@ -807,11 +807,11 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         int h = Math.round(model.heightDp * density);
 
         view.setLayoutParams(new LayoutParams(w, h));
-        int parentW = getWidth();
-        int parentH = getHeight();
-        if (parentW > 0 && parentH > 0) {
-            view.setX(model.posXPercent * parentW - w * 0.5f);
-            view.setY(model.posYPercent * parentH - h * 0.5f);
+        int curPw = getWidth();
+        int curPh = getHeight();
+        if (curPw > 0 && curPh > 0) {
+            view.setX(model.posXPercent * curPw - w * 0.5f);
+            view.setY(model.posYPercent * curPh - h * 0.5f);
         } else {
             post(() -> {
                 int pw = getWidth();
