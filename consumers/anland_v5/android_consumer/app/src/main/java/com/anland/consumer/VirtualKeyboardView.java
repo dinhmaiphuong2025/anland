@@ -23,15 +23,15 @@ package com.anland.consumer;
   
      private static final String TAG = "VirtualKeyboard"; 
   
-     // ---------- 最终键盘布局 ---------- 
-     private final String[][] keyboardRows = { 
-             {"ESC", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"}, 
-             {"`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "⌫"}, 
-             {"Tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "\\"}, 
-             {"Caps", "A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'", "Enter"}, 
-             {"Shift", "Z", "X", "C", "V", "B", "N", "M", ",", "↑", ".", "/", "Shift"},   // ↑ 在 . 前面 
-             {"Ctrl", "Alt", "Space", "Alt", "Home", "←", "↓", "→", "End", "Ctrl"} 
-     }; 
+// ---------- 最终键盘布局 ---------- 
+      private final String[][] keyboardRows = { 
+              {"ESC", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"}, 
+              {"`", "1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "=", "BKSP"}, 
+              {"Tab", "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P", "[", "]", "\\"}, 
+              {"Caps", "A", "S", "D", "F", "G", "H", "J", "K", "L", ";", "'", "Enter"}, 
+              {"Shift", "Z", "X", "C", "V", "B", "N", "M", ",", "UP", ".", "/", "Shift"},   
+              {"Ctrl", "Alt", "Space", "Alt", "Home", "LT", "DN", "RT", "End", "Ctrl"} 
+      };
   
      // ---------- 符号映射表 ---------- 
      private static final Map<String, String> SYMBOL_CHAR_MAP = new HashMap<>(); 
@@ -88,11 +88,11 @@ package com.anland.consumer;
      private int padding = 4; 
      private int cornerRadius = 6; 
   
-     private int keyColor = Color.parseColor("#88E8E8E8"); 
-     private int pressedColor = Color.parseColor("#88B0B0B0"); 
-     private int modActiveColor = Color.parseColor("#8866B0FF"); 
-     private int textColor = Color.WHITE;
-     private int bgColor = Color.parseColor("#33000000");
+      private int keyColor = Color.parseColor("#2A2B3D"); 
+      private int pressedColor = Color.parseColor("#2A2B3D");
+      private int modActiveColor = 0xFF80DEEA;
+      private int textColor = Color.WHITE;
+      private int bgColor = Color.parseColor("#CC181825");
 
      // Precomputed colors used per-frame in onDraw. Parsing these strings on
      // every frame (and once per key) was a source of jank while typing/dragging.

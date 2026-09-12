@@ -4,10 +4,13 @@ import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -86,13 +89,31 @@ public final class HudKeyPickerDialog {
         LinearLayout tabRow = new LinearLayout(context);
         tabRow.setOrientation(LinearLayout.HORIZONTAL);
         tabRow.setGravity(Gravity.CENTER_VERTICAL);
-        tabRow.setPadding(dp(context, 4), 0, dp(context, 4), dp(context, 12));
+        tabRow.setPadding(dp(context, 4), 0, dp(context, 4), dp(context, 8));
         tabScroller.addView(tabRow, new HorizontalScrollView.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
         root.addView(tabScroller, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        // Search filter input
+        EditText searchInput = new EditText(context);
+        searchInput.setHint("Search keys...");
+        searchInput.setHintTextColor(0xFF888888);
+        searchInput.setTextColor(Color.WHITE);
+        searchInput.setTextSize(13);
+        searchInput.setSingleLine(true);
+        android.graphics.drawable.GradientDrawable searchBg = new android.graphics.drawable.GradientDrawable();
+        searchBg.setCornerRadius(dp(context, 8));
+        searchBg.setColor(0xFF2A2B3D);
+        searchInput.setBackground(searchBg);
+        searchInput.setPadding(dp(context, 12), dp(context, 8), dp(context, 12), dp(context, 8));
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        searchLp.setMargins(0, 0, 0, dp(context, 8));
+        searchInput.setLayoutParams(searchLp);
+        root.addView(searchInput);
 
         // Content Container
         LinearLayout contentContainer = new LinearLayout(context);
@@ -117,14 +138,43 @@ public final class HudKeyPickerDialog {
         final int colsKeys = computeColumnCount(context, 4);
         final int colsLong = computeColumnCount(context, 3);
 
+        final int[] activeTab = {0};
+        final Runnable refreshCurrentTab = () -> {
+            String query = searchInput.getText() != null ? searchInput.getText().toString().trim().toLowerCase() : "";
+            List<KeyEntry> source = (activeTab[0] == 0) ? getStandardKeys() : getModsAndSystemKeys();
+            List<KeyEntry> filtered = new ArrayList<>();
+            if (query.isEmpty()) {
+                filtered.addAll(source);
+            } else {
+                for (KeyEntry e : source) {
+                    if (e.label.toLowerCase().contains(query)) {
+                        filtered.add(e);
+                    }
+                }
+            }
+            int cols = (activeTab[0] == 0) ? colsKeys : colsLong;
+            showGrid(context, contentContainer, filtered, listener, dialog, cols);
+        };
+        searchInput.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable s) {
+                if (activeTab[0] != 2) refreshCurrentTab.run();
+            }
+        });
+
         Runnable[] selectTab = new Runnable[3];
         selectTab[0] = () -> {
+            activeTab[0] = 0;
+            searchInput.setVisibility(View.VISIBLE);
             highlightTab(tabRow, 0);
-            showGrid(context, contentContainer, getStandardKeys(), listener, dialog, colsKeys);
+            refreshCurrentTab.run();
         };
         selectTab[1] = () -> {
+            activeTab[0] = 1;
+            searchInput.setVisibility(View.VISIBLE);
             highlightTab(tabRow, 1);
-            showGrid(context, contentContainer, getModsAndSystemKeys(), listener, dialog, colsLong);
+            refreshCurrentTab.run();
         };
         // The COMBO tab inlines the combo builder so the user does not get a
         // second nested dialog. Tapping APPLY calls onComboBuilt which
@@ -132,6 +182,8 @@ public final class HudKeyPickerDialog {
         // to the caller's onActionSelected (via the default in
         // OnActionSelectedListener).
         selectTab[2] = () -> {
+            activeTab[0] = 2;
+            searchInput.setVisibility(View.GONE);
             highlightTab(tabRow, 2);
             showComboTab(context, contentContainer, listener, dialog);
         };
@@ -175,9 +227,14 @@ public final class HudKeyPickerDialog {
             if (i == activeIdx) {
                 b.setTextColor(0xFF80DEEA);
                 b.setTypeface(Typeface.DEFAULT_BOLD);
+                android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+                bg.setCornerRadius(dp(b.getContext(), 8));
+                bg.setColor(0x3380DEEA);
+                b.setBackground(bg);
             } else {
                 b.setTextColor(0xFF888888);
                 b.setTypeface(Typeface.DEFAULT);
+                b.setBackgroundColor(Color.TRANSPARENT);
             }
         }
     }

@@ -5,6 +5,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -81,17 +82,24 @@ public final class HudFreeformButtonView extends View {
         mPaint.setColor(0x66FFFFFF);
         canvas.drawRoundRect(mBounds, corner, corner, mPaint);
 
-        // Text
+        // Text with auto font scaling
         mTextPaint.setColor(mIsPressed ? 0xFF11111B : mModel.textColor);
-        mTextPaint.setTextSize(Math.min(w, h) * 0.35f);
+        String label = mModel.label != null ? mModel.label : "BTN";
+        float maxTextWidth = w - 12 * density;
+        float textSize = Math.min(w, h) * 0.35f;
+        mTextPaint.setTextSize(textSize);
+        float textW = mTextPaint.measureText(label);
+        if (textW > maxTextWidth && textW > 0) {
+            mTextPaint.setTextSize(Math.max(8 * density, textSize * (maxTextWidth / textW)));
+        }
         float textY = h * 0.5f - ((mTextPaint.descent() + mTextPaint.ascent()) * 0.5f);
-        canvas.drawText(mModel.label != null ? mModel.label : "BTN", w * 0.5f, textY, mTextPaint);
+        canvas.drawText(label, w * 0.5f, textY, mTextPaint);
 
         // Secondary popup glyph dot if configured
         if (mModel.popupAction != null) {
             mPaint.setStyle(Paint.Style.FILL);
-            mPaint.setColor(0xAAFFFFFF);
-            canvas.drawCircle(w - 6 * density, 6 * density, 2 * density, mPaint);
+            mPaint.setColor(0xCC80DEEA);
+            canvas.drawCircle(w - 7 * density, 7 * density, 2.5f * density, mPaint);
         }
     }
 
@@ -110,6 +118,7 @@ public final class HudFreeformButtonView extends View {
                 mDownY = y;
                 mIsPressed = true;
                 mPopupTriggered = false;
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                 invalidate();
                 if (mListener != null) mListener.onButtonPress(mModel, true);
                 return true;
@@ -118,6 +127,7 @@ public final class HudFreeformButtonView extends View {
                 if (mModel.popupAction != null && !mPopupTriggered && (mDownY - y) > 30 * density) {
                     mPopupTriggered = true;
                     mIsPressed = false;
+                    performHapticFeedback(HapticFeedbackConstants.CONFIRM);
                     invalidate();
                     if (mListener != null) {
                         mListener.onButtonPress(mModel, false);

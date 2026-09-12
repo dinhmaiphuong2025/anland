@@ -7,6 +7,7 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -95,10 +96,11 @@ public final class TrackpointNubView extends View {
         mPaint.setColor(0x66000000);
         canvas.drawCircle(cx, cy, radius, mPaint);
 
-        // Outer rim stroke
+        // Outer rim stroke - color indicates mode
+        boolean isScroll = HudButton.MODE_SCROLL.equals(mModel.trackpointMode);
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(2f * density);
-        mPaint.setColor(0x88FFFFFF);
+        mPaint.setColor(isScroll ? 0xAA80DEEA : 0x88FFFFFF);
         canvas.drawCircle(cx, cy, radius, mPaint);
 
         // Center Nub / Nipple
@@ -107,11 +109,12 @@ public final class TrackpointNubView extends View {
         float nubCy = cy + mCurrentOffsetY;
 
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mModel.bgColor != 0 ? mModel.bgColor : 0xFFD32F2F); // ThinkPad Red
+        int defaultNubColor = isScroll ? 0xFF00838F : 0xFFD32F2F;
+        mPaint.setColor(mModel.bgColor != 0 ? mModel.bgColor : defaultNubColor);
         canvas.drawCircle(nubCx, nubCy, nubRadius, mPaint);
 
         // Nub textured grip dots
-        mPaint.setColor(0xFFFFFFFF);
+        mPaint.setColor(isScroll ? 0xFFE0F7FA : 0xFFFFFFFF);
         mPaint.setStyle(Paint.Style.FILL);
         float dotR = Math.max(1.5f, 2f * density);
         float dotOffset = nubRadius * 0.4f;
@@ -140,6 +143,7 @@ public final class TrackpointNubView extends View {
                 mTouchDownTime = System.currentTimeMillis();
                 mCenterTouchX = x;
                 mCenterTouchY = y;
+                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
                 updateOffset(x - cx, y - cy);
                 mLoopHandler.post(mLoopRunnable);
                 return true;
@@ -157,6 +161,7 @@ public final class TrackpointNubView extends View {
                 long duration = System.currentTimeMillis() - mTouchDownTime;
                 float dist = (float) Math.hypot(x - mCenterTouchX, y - mCenterTouchY);
                 if (duration < 250 && dist < 15) {
+                    performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                     if (mDispatcher != null) {
                         mDispatcher.onPointerClick(1); // Left Click
                     }

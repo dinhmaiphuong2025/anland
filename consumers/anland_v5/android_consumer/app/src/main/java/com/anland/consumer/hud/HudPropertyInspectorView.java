@@ -3,6 +3,8 @@ package com.anland.consumer.hud;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
@@ -64,14 +66,35 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private LinearLayout mSizeSection;
 
     private Button mBtnPickMainAction;
+    private Button mBtnPickPopupAction;
+    private LinearLayout mPopupActionRow;
     private LinearLayout mSuperGestureOptions;
     // TrackPoint mode toggle row: visible only for the trackpoint widget.
     // Two buttons (MOUSE / SCROLL) plus a small status text underneath.
     private LinearLayout mTrackPointOptions;
     private Button mBtnTrackPointMode;
+    private SeekBar mTrackSensitivitySeekBar;
+    private EditText mTrackSensitivityInput;
+    private SeekBar mTrackDeadzoneSeekBar;
+    private EditText mTrackDeadzoneInput;
     // Bottom action row; cached so bindDockItem can hide it (dock items cannot
     // be deleted or duplicated from the strip).
     private LinearLayout mOpRow;
+    private Button mBtnDelete;
+    private boolean mConfirmDeleteActive = false;
+    private final Handler mDeleteHandler = new Handler(Looper.getMainLooper());
+    private final Runnable mResetDeleteRunnable = () -> {
+        mConfirmDeleteActive = false;
+        if (mBtnDelete != null) {
+            mBtnDelete.setText("DELETE");
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setCornerRadius(dp(12));
+            bg.setColor(0x33FF0000);
+            mBtnDelete.setBackground(bg);
+            mBtnDelete.setTextColor(0xFFF38BA8);
+        }
+    };
+    private LinearLayout mColorThemeRow;
     private Button mBtnPickSwipeLeft;
     private Button mBtnPickSwipeRight;
     private Button mBtnPickSwipeUp;
@@ -124,7 +147,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         });
         header.addView(btnClose);
 
-        // Header drag listener
+        // Header drag listener with screen bounds clamping
         header.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
@@ -132,8 +155,17 @@ public final class HudPropertyInspectorView extends LinearLayout {
                     mDragStartY = event.getRawY() - getTranslationY();
                     return true;
                 case MotionEvent.ACTION_MOVE:
-                    setTranslationX(event.getRawX() - mDragStartX);
-                    setTranslationY(event.getRawY() - mDragStartY);
+                    float targetX = event.getRawX() - mDragStartX;
+                    float targetY = event.getRawY() - mDragStartY;
+                    View p = (View) getParent();
+                    if (p != null && p.getWidth() > 0 && p.getHeight() > 0) {
+                        float maxX = Math.max(0, p.getWidth() - getWidth());
+                        float maxY = Math.max(0, p.getHeight() - getHeight());
+                        targetX = Math.max(0, Math.min(maxX, targetX));
+                        targetY = Math.max(0, Math.min(maxY, targetY));
+                    }
+                    setTranslationX(targetX);
+                    setTranslationY(targetY);
                     return true;
             }
             return false;
@@ -217,14 +249,38 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         // Action Assignment rendered as a left-right row: the "Action" label
         // on the left, a badge button on the right showing the currently
-        // bound key / combo. The text is rebuilt in bindButton / bindDockItem
-        // so the badge always reflects the live model.
+        // bound key / combo. Long-press clears the slot.
         content.addView(createSectionLabel("Action Mapping:"));
         mBtnPickMainAction = createBadgeButton(formatMainActionLabel(null));
         mBtnPickMainAction.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 0);
         });
+        mBtnPickMainAction.setOnLongClickListener(v -> {
+            if (mActiveButton != null) {
+                mActiveButton.action = new HudAction();
+                mBtnPickMainAction.setText(UNASSIGNED_LABEL);
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                return true;
+            }
+            return false;
+        });
         content.addView(createLabelValueRow("Main Action", null, mBtnPickMainAction));
+
+        mBtnPickPopupAction = createBadgeButton(UNASSIGNED_LABEL);
+        mBtnPickPopupAction.setOnClickListener(v -> {
+            if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 1);
+        });
+        mBtnPickPopupAction.setOnLongClickListener(v -> {
+            if (mActiveButton != null) {
+                mActiveButton.popupAction = null;
+                mBtnPickPopupAction.setText(UNASSIGNED_LABEL);
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                return true;
+            }
+            return false;
+        });
+        mPopupActionRow = createLabelValueRow("Popup (Swipe Up)", null, mBtnPickPopupAction);
+        content.addView(mPopupActionRow);
 
         // Super Gesture Specific Options
         mSuperGestureOptions = new LinearLayout(getContext());
@@ -236,11 +292,29 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mBtnPickSwipeLeft.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 2);
         });
+        mBtnPickSwipeLeft.setOnLongClickListener(v -> {
+            if (mActiveButton != null) {
+                mActiveButton.swipeLeftAction = null;
+                mBtnPickSwipeLeft.setText(UNASSIGNED_LABEL);
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                return true;
+            }
+            return false;
+        });
         mSuperGestureOptions.addView(createLabelValueRow("Left", null, mBtnPickSwipeLeft));
 
         mBtnPickSwipeRight = createBadgeButton(UNASSIGNED_LABEL);
         mBtnPickSwipeRight.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 3);
+        });
+        mBtnPickSwipeRight.setOnLongClickListener(v -> {
+            if (mActiveButton != null) {
+                mActiveButton.swipeRightAction = null;
+                mBtnPickSwipeRight.setText(UNASSIGNED_LABEL);
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                return true;
+            }
+            return false;
         });
         mSuperGestureOptions.addView(createLabelValueRow("Right", null, mBtnPickSwipeRight));
 
@@ -248,17 +322,34 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mBtnPickSwipeUp.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 4);
         });
+        mBtnPickSwipeUp.setOnLongClickListener(v -> {
+            if (mActiveButton != null) {
+                mActiveButton.swipeUpAction = null;
+                mBtnPickSwipeUp.setText(UNASSIGNED_LABEL);
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                return true;
+            }
+            return false;
+        });
         mSuperGestureOptions.addView(createLabelValueRow("Up", null, mBtnPickSwipeUp));
 
         mBtnPickSwipeDown = createBadgeButton(UNASSIGNED_LABEL);
         mBtnPickSwipeDown.setOnClickListener(v -> {
             if (mCallback != null && mActiveButton != null) mCallback.onPickActionRequested(mActiveButton, 5);
         });
+        mBtnPickSwipeDown.setOnLongClickListener(v -> {
+            if (mActiveButton != null) {
+                mActiveButton.swipeDownAction = null;
+                mBtnPickSwipeDown.setText(UNASSIGNED_LABEL);
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                return true;
+            }
+            return false;
+        });
         mSuperGestureOptions.addView(createLabelValueRow("Down", null, mBtnPickSwipeDown));
         content.addView(mSuperGestureOptions);
 
-        // TrackPoint specific options: a single button that cycles between
-        // "MOUSE" (relative pointer motion) and "SCROLL" (wheel deltas).
+        // TrackPoint specific options: Mode toggle + Sensitivity & Deadzone sliders
         mTrackPointOptions = new LinearLayout(getContext());
         mTrackPointOptions.setOrientation(VERTICAL);
         mTrackPointOptions.setPadding(0, dp(6), 0, 0);
@@ -274,14 +365,32 @@ public final class HudPropertyInspectorView extends LinearLayout {
             if (mCallback != null) mCallback.onModelChanged(mActiveButton);
         });
         mTrackPointOptions.addView(createLabelValueRow("Mode", null, mBtnTrackPointMode));
+
+        mTrackSensitivitySeekBar = new SeekBar(getContext());
+        mTrackSensitivityInput = createExactNumberInput();
+        mTrackPointOptions.addView(createSliderRow("Sensitivity (x10):", mTrackSensitivitySeekBar, mTrackSensitivityInput, 5, 30, val -> {
+            if (mActiveButton != null) {
+                mActiveButton.trackpointSensitivity = val / 10f;
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+            }
+        }));
+
+        mTrackDeadzoneSeekBar = new SeekBar(getContext());
+        mTrackDeadzoneInput = createExactNumberInput();
+        mTrackPointOptions.addView(createSliderRow("Deadzone (dp):", mTrackDeadzoneSeekBar, mTrackDeadzoneInput, 0, 16, val -> {
+            if (mActiveButton != null) {
+                mActiveButton.trackpointDeadzoneDp = val;
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+            }
+        }));
         content.addView(mTrackPointOptions);
 
-        // Bottom Operations: Delete & Duplicate. Hidden for dock items since
-        // they live in a fixed-size strip and don't have a per-button position
-        // to delete/duplicate.
-        // Bottom Operations: Delete & Duplicate. Styled with Material 12dp
-        // corner radius and 16dp insets on all four sides so the pair sits
-        // inside the panel instead of clinging to its borders.
+        // Color Theme Presets
+        content.addView(createSectionLabel("Color Theme:"));
+        mColorThemeRow = (LinearLayout) createColorPresetsRow();
+        content.addView(mColorThemeRow);
+
+        // Bottom Operations: Delete (with two-step confirmation) & Duplicate
         final LinearLayout opRow = new LinearLayout(getContext());
         opRow.setOrientation(HORIZONTAL);
         opRow.setPadding(dp(16), dp(16), dp(16), dp(16));
@@ -291,21 +400,36 @@ public final class HudPropertyInspectorView extends LinearLayout {
         opLp.topMargin = dp(8);
         opRow.setLayoutParams(opLp);
 
-        Button btnDelete = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
-        btnDelete.setText("DELETE");
-        btnDelete.setAllCaps(true);
-        btnDelete.setTextColor(0xFFF38BA8);
-        btnDelete.setTextSize(12);
+        mBtnDelete = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
+        mBtnDelete.setText("DELETE");
+        mBtnDelete.setAllCaps(true);
+        mBtnDelete.setTextColor(0xFFF38BA8);
+        mBtnDelete.setTextSize(12);
         android.graphics.drawable.GradientDrawable bgDel = new android.graphics.drawable.GradientDrawable();
         bgDel.setCornerRadius(dp(12));
         bgDel.setColor(0x33FF0000);
-        btnDelete.setBackground(bgDel);
-        btnDelete.setPadding(dp(16), dp(12), dp(16), dp(12));
-        btnDelete.setLayoutParams(new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        btnDelete.setOnClickListener(v -> {
-            if (mCallback != null && mActiveButton != null) mCallback.onDeleteRequested(mActiveButton);
+        mBtnDelete.setBackground(bgDel);
+        mBtnDelete.setPadding(dp(16), dp(12), dp(16), dp(12));
+        mBtnDelete.setLayoutParams(new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        mBtnDelete.setOnClickListener(v -> {
+            if (!mConfirmDeleteActive) {
+                mConfirmDeleteActive = true;
+                mBtnDelete.setText("CONFIRM ?");
+                android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+                bg.setCornerRadius(dp(12));
+                bg.setColor(0xCCFF1744);
+                mBtnDelete.setBackground(bg);
+                mBtnDelete.setTextColor(Color.WHITE);
+                mDeleteHandler.postDelayed(mResetDeleteRunnable, 3000);
+            } else {
+                mDeleteHandler.removeCallbacks(mResetDeleteRunnable);
+                mConfirmDeleteActive = false;
+                if (mCallback != null && mActiveButton != null) {
+                    mCallback.onDeleteRequested(mActiveButton);
+                }
+            }
         });
-        opRow.addView(btnDelete);
+        opRow.addView(mBtnDelete);
 
         Button btnDuplicate = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
         btnDuplicate.setText("DUPLICATE");
@@ -333,6 +457,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
     public void bindButton(HudButton b) {
         this.mActiveButton = b;
+        mResetDeleteRunnable.run();
         if (b == null) {
             setVisibility(GONE);
             return;
@@ -357,6 +482,15 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         // Update the badges with the live values from the model.
         mBtnPickMainAction.setText(formatMainActionLabel(b));
+
+        boolean isStandardBtn = HudButton.WIDGET_STANDARD.equals(b.widgetType);
+        if (mPopupActionRow != null) {
+            mPopupActionRow.setVisibility(isStandardBtn ? VISIBLE : GONE);
+            if (isStandardBtn) {
+                mBtnPickPopupAction.setText(formatActionBadge(b.popupAction, null));
+            }
+        }
+
         if (HudButton.WIDGET_SUPER_GESTURE.equals(b.widgetType)) {
             mSuperGestureOptions.setVisibility(VISIBLE);
             mBtnPickSwipeLeft.setText(swipeBadgeLabel(b.swipeLeftAction, "Left"));
@@ -372,10 +506,13 @@ public final class HudPropertyInspectorView extends LinearLayout {
             if (isTrackpoint) {
                 String mode = b.trackpointMode != null ? b.trackpointMode : HudButton.MODE_MOUSE;
                 mBtnTrackPointMode.setText(mode.toUpperCase());
+                syncSliderAndInput(mTrackSensitivitySeekBar, mTrackSensitivityInput, Math.round(b.trackpointSensitivity * 10), 5, 30);
+                syncSliderAndInput(mTrackDeadzoneSeekBar, mTrackDeadzoneInput, b.trackpointDeadzoneDp, 0, 16);
             }
         }
-        // Floating buttons show size sliders and the delete/duplicate row.
+        // Floating buttons show size sliders, color presets, and the delete/duplicate row.
         if (mSizeSection != null) mSizeSection.setVisibility(VISIBLE);
+        if (mColorThemeRow != null) mColorThemeRow.setVisibility(VISIBLE);
         if (mOpRow != null) mOpRow.setVisibility(VISIBLE);
     }
 
@@ -384,6 +521,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
     // by the strip layout and cannot be deleted/duplicated from the strip.
     public void bindDockItem(HudButton b) {
         this.mActiveButton = b;
+        mResetDeleteRunnable.run();
         if (b == null) {
             setVisibility(GONE);
             return;
@@ -397,10 +535,59 @@ public final class HudPropertyInspectorView extends LinearLayout {
             mIsProgrammaticChange = false;
         }
         mBtnPickMainAction.setText(formatMainActionLabel(b));
+        if (mPopupActionRow != null) mPopupActionRow.setVisibility(GONE);
         mSuperGestureOptions.setVisibility(GONE);
         if (mTrackPointOptions != null) mTrackPointOptions.setVisibility(GONE);
         if (mSizeSection != null) mSizeSection.setVisibility(GONE);
+        if (mColorThemeRow != null) mColorThemeRow.setVisibility(GONE);
         if (mOpRow != null) mOpRow.setVisibility(GONE);
+    }
+
+    private View createColorPresetsRow() {
+        LinearLayout container = new LinearLayout(getContext());
+        container.setOrientation(HORIZONTAL);
+        container.setPadding(0, dp(4), 0, dp(4));
+
+        int[][] themes = {
+            {0xE62A2B3D, 0xFF80DEEA, 0xFF80DEEA}, // Slate / Cyan
+            {0xE61A3B4D, 0xFF00E5FF, 0xFF00E5FF}, // Cyber Cyan
+            {0xE64A202A, 0xFFFF5252, 0xFFFF5252}, // Crimson Alert
+            {0xE64A3820, 0xFFFFAB40, 0xFFFFAB40}, // Amber Warning
+            {0xE61E3D2F, 0xFF69F0AE, 0xFF69F0AE}, // Emerald
+            {0xE614141E, 0xFFCCCCCC, 0xFF888888}, // Stealth Dark
+        };
+        String[] themeNames = {"Slate", "Cyan", "Crimson", "Amber", "Emerald", "Stealth"};
+
+        for (int i = 0; i < themes.length; i++) {
+            final int bg = themes[i][0];
+            final int active = themes[i][1];
+            final int accent = themes[i][2];
+            Button chip = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
+            chip.setText(themeNames[i]);
+            chip.setTextSize(10);
+            chip.setAllCaps(true);
+            chip.setTextColor(accent);
+            android.graphics.drawable.GradientDrawable chipBg = new android.graphics.drawable.GradientDrawable();
+            chipBg.setCornerRadius(dp(8));
+            chipBg.setColor(bg);
+            chipBg.setStroke(dp(1), accent);
+            chip.setBackground(chipBg);
+            chip.setPadding(dp(2), dp(4), dp(2), dp(4));
+            chip.setMinHeight(dp(32));
+            chip.setMinWidth(0);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (i > 0) lp.leftMargin = dp(4);
+            chip.setLayoutParams(lp);
+            chip.setOnClickListener(v -> {
+                if (mActiveButton != null) {
+                    mActiveButton.bgColor = bg;
+                    mActiveButton.activeColor = active;
+                    if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                }
+            });
+            container.addView(chip);
+        }
+        return container;
     }
 
     private interface ValueConsumer {
@@ -705,6 +892,17 @@ public final class HudPropertyInspectorView extends LinearLayout {
             case 68: return "F10";
             case 87: return "F11";
             case 88: return "F12";
+            case 12: return "-";
+            case 13: return "=";
+            case 26: return "[";
+            case 27: return "]";
+            case 43: return "\\";
+            case 39: return ";";
+            case 40: return "'";
+            case 51: return ",";
+            case 52: return ".";
+            case 53: return "/";
+            case 41: return "`";
             default: return "Key " + code;
         }
     }

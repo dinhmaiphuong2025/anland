@@ -60,6 +60,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private View mSelectedView = null;
 
     private final SnapGeometryEngine mSnapEngine;
+    private boolean mSnapEnabled = true;
     private final Paint mGuidePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     // Self-edge guides are drawn in a different color so the user can
     // distinguish "the canvas edge my button snapped to" (green, sibling)
@@ -68,6 +69,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private final Paint mSelectBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mGridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mBannerFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mBannerStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mBannerTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final List<Float> mActiveVerticalGuides = new ArrayList<>();
     private final List<Float> mActiveHorizontalGuides = new ArrayList<>();
@@ -125,6 +127,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mBannerTextPaint.setColor(Color.WHITE);
         mBannerTextPaint.setFakeBoldText(true);
         mBannerTextPaint.setTextAlign(Paint.Align.CENTER);
+
+        mBannerStrokePaint.setStyle(Paint.Style.STROKE);
+        mBannerStrokePaint.setStrokeWidth(1.5f);
 
         setWillNotDraw(false);
         loadProfile();
@@ -207,7 +212,10 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         // Top Toolbar (Visible only in Edit Mode)
         mTopToolbar = createTopToolbar();
         mTopToolbar.setVisibility(GONE);
-        addView(mTopToolbar, new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP));
+        FrameLayout.LayoutParams tbLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP);
+        tbLp.setMargins(dp(10), dp(8), dp(10), 0);
+        addView(mTopToolbar, tbLp);
 
         // Property Inspector Panel (Floating, initially hidden)
         mInspectorView = new HudPropertyInspectorView(getContext(), new HudPropertyInspectorView.InspectorCallback() {
@@ -292,38 +300,145 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         LinearLayout bar = new LinearLayout(getContext());
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setBackgroundColor(0xF0181825);
-        bar.setPadding(dp(8), dp(6), dp(8), dp(6));
 
-        // Save / Done stays on the right of the bar so the user can confirm
-        // their changes at a glance. The action color is a calm teal/green
-        // that signals "all good".
+        android.graphics.drawable.GradientDrawable barBg = new android.graphics.drawable.GradientDrawable();
+        barBg.setCornerRadius(dp(16));
+        barBg.setColor(0xF0181825);
+        barBg.setStroke(dp(1), 0x33FFFFFF);
+        bar.setBackground(barBg);
+        bar.setPadding(dp(8), dp(6), dp(8), dp(6));
+        bar.setElevation(dp(8));
+
+        // Save
         Button btnSave = createToolButton("SAVE");
         btnSave.setTextColor(0xFF80DEEA);
         btnSave.setOnClickListener(v -> saveProfile());
         bar.addView(btnSave);
 
-        // Single "+ ADD" button instead of three separate add buttons.
-        // Tapping it opens a chooser so the user picks Standard Key,
-        // Super Gesture nub, or TrackPoint (mouse / scroll). The popup
-        // menu gives us more room for richer labels without eating the
-        // top bar's tiny real estate on a portrait phone.
+        // + ADD
         Button btnAdd = createToolButton("+ ADD");
         btnAdd.setOnClickListener(v -> showAddWidgetChooser());
+        LinearLayout.LayoutParams addLp = (LinearLayout.LayoutParams) btnAdd.getLayoutParams();
+        addLp.leftMargin = dp(6);
+        btnAdd.setLayoutParams(addLp);
         bar.addView(btnAdd);
+
+        // SNAP toggle
+        Button btnSnap = createToolButton(mSnapEnabled ? "SNAP: ON" : "SNAP: OFF");
+        btnSnap.setTextColor(mSnapEnabled ? 0xFF80DEEA : 0xFF888888);
+        btnSnap.setOnClickListener(v -> {
+            mSnapEnabled = !mSnapEnabled;
+            btnSnap.setText(mSnapEnabled ? "SNAP: ON" : "SNAP: OFF");
+            btnSnap.setTextColor(mSnapEnabled ? 0xFF80DEEA : 0xFF888888);
+        });
+        LinearLayout.LayoutParams snapLp = (LinearLayout.LayoutParams) btnSnap.getLayoutParams();
+        snapLp.leftMargin = dp(6);
+        btnSnap.setLayoutParams(snapLp);
+        bar.addView(btnSnap);
+
+        // LAYOUT (Copy / Presets / Clear)
+        Button btnLayout = createToolButton("LAYOUT");
+        btnLayout.setOnClickListener(v -> showLayoutOptionsChooser());
+        LinearLayout.LayoutParams layoutLp = (LinearLayout.LayoutParams) btnLayout.getLayoutParams();
+        layoutLp.leftMargin = dp(6);
+        btnLayout.setLayoutParams(layoutLp);
+        bar.addView(btnLayout);
 
         // Spacer pushes the cancel button to the right edge.
         View spacer = new View(getContext());
         bar.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
 
-        // Cancel / Exit Edit. Calm red so it reads as a warning rather
-        // than a destructive action.
+        // Cancel / Exit Edit.
         Button btnExit = createToolButton("CANCEL");
         btnExit.setTextColor(0xFFF38BA8);
         btnExit.setOnClickListener(v -> setEditMode(false));
         bar.addView(btnExit);
 
         return bar;
+    }
+
+    private void showLayoutOptionsChooser() {
+        int orientation = getResources().getConfiguration().orientation;
+        boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        String copyOption = isLandscape ? "Copy Portrait Layout Here" : "Copy Landscape Layout Here";
+
+        final String[] options = new String[] {
+                copyOption,
+                "Load Niri Default Preset",
+                "Clear Active Layout"
+        };
+        new AlertDialog.Builder(getContext(), AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("Layout Options")
+                .setItems(options, (dialog, which) -> {
+                    if (!mIsEditMode) return;
+                    if (which == 0) {
+                        // Copy from opposite layout
+                        HudLayout src = isLandscape ? mProfile.portraitLayout : mProfile.landscapeLayout;
+                        HudLayout dst = getActiveLayout();
+                        dst.floatingButtons.clear();
+                        for (HudButton b : src.floatingButtons) {
+                            dst.floatingButtons.add(b.duplicate());
+                        }
+                        selectButton(null, null);
+                        rebuildActiveLayout();
+                        Toast.makeText(getContext(), "Layout Copied", Toast.LENGTH_SHORT).show();
+                    } else if (which == 1) {
+                        // Load Niri Default Preset
+                        HudLayout dst = getActiveLayout();
+                        dst.floatingButtons.clear();
+
+                        HudButton superNub = new HudButton();
+                        superNub.widgetType = HudButton.WIDGET_SUPER_GESTURE;
+                        superNub.label = "SUPER";
+                        superNub.widthDp = 58;
+                        superNub.heightDp = 58;
+                        superNub.cornerRadiusDp = 29;
+                        superNub.posXPercent = isLandscape ? 0.88f : 0.82f;
+                        superNub.posYPercent = 0.72f;
+                        dst.floatingButtons.add(superNub);
+
+                        HudButton mouseNub = new HudButton();
+                        mouseNub.widgetType = HudButton.WIDGET_TRACKPOINT;
+                        mouseNub.label = "MOUSE";
+                        mouseNub.widthDp = 60;
+                        mouseNub.heightDp = 60;
+                        mouseNub.cornerRadiusDp = 30;
+                        mouseNub.posXPercent = isLandscape ? 0.12f : 0.18f;
+                        mouseNub.posYPercent = 0.72f;
+                        dst.floatingButtons.add(mouseNub);
+
+                        HudButton btnEsc = new HudButton();
+                        btnEsc.label = "ESC";
+                        btnEsc.action = HudAction.key(1);
+                        btnEsc.widthDp = 52;
+                        btnEsc.heightDp = 38;
+                        btnEsc.posXPercent = 0.08f;
+                        btnEsc.posYPercent = 0.20f;
+                        dst.floatingButtons.add(btnEsc);
+
+                        HudButton btnTab = new HudButton();
+                        btnTab.label = "TAB";
+                        btnTab.action = HudAction.key(15);
+                        btnTab.widthDp = 52;
+                        btnTab.heightDp = 38;
+                        btnTab.posXPercent = 0.08f;
+                        btnTab.posYPercent = 0.30f;
+                        dst.floatingButtons.add(btnTab);
+
+                        selectButton(null, null);
+                        rebuildActiveLayout();
+                        Toast.makeText(getContext(), "Niri Preset Loaded", Toast.LENGTH_SHORT).show();
+                    } else if (which == 2) {
+                        // Clear
+                        getActiveLayout().floatingButtons.clear();
+                        selectButton(null, null);
+                        rebuildActiveLayout();
+                        Toast.makeText(getContext(), "Layout Cleared", Toast.LENGTH_SHORT).show();
+                    }
+                    dialog.dismiss();
+                })
+                .setNegativeButton("CANCEL", null)
+                .show();
     }
 
     // Modal chooser for the "what kind of widget do you want to add?"
@@ -655,37 +770,41 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     float targetX = mInitialBtnLeft + (rawX - mTouchDownX);
                     float targetY = mInitialBtnTop + (rawY - mTouchDownY);
 
-                    RectF candidate = new RectF(targetX, targetY, targetX + view.getWidth(), targetY + view.getHeight());
-                    List<RectF> siblings = getSiblingBounds(model);
+                    float snappedX = targetX;
+                    float snappedY = targetY;
 
-                    // Dock strip removed - widgets can use the full screen
-                    // height for snap-to-bottom alignment.
-                    float dockTop = getHeight();
-                    SnapGeometryEngine.SnapResult snap = mSnapEngine.computeSnap(candidate, siblings, getWidth(), getHeight(), dockTop);
-
-                    view.setX(snap.snappedX);
-                    view.setY(snap.snappedY);
-
-                    model.posXPercent = (snap.snappedX + view.getWidth() * 0.5f) / getWidth();
-                    model.posYPercent = (snap.snappedY + view.getHeight() * 0.5f) / getHeight();
-
-                    // Sibling guides: xanh lá, snap-to-other-buttons
                     mActiveVerticalGuides.clear();
-                    mActiveVerticalGuides.addAll(snap.verticalGuidelines);
                     mActiveHorizontalGuides.clear();
-                    mActiveHorizontalGuides.addAll(snap.horizontalGuidelines);
-                    // Self guides: cyan, các cạnh của chính nút đang kéo (left,
-                    // right, center X, top, bottom, center Y). Luôn vẽ để
-                    // người dùng thấy được vị trí nút khi kéo thả, kể cả khi
-                    // không có sibling nào gần.
                     mActiveSelfVerticalGuides.clear();
-                    mActiveSelfVerticalGuides.add(snap.snappedX);
-                    mActiveSelfVerticalGuides.add(snap.snappedX + view.getWidth());
-                    mActiveSelfVerticalGuides.add(snap.snappedX + view.getWidth() * 0.5f);
                     mActiveSelfHorizontalGuides.clear();
-                    mActiveSelfHorizontalGuides.add(snap.snappedY);
-                    mActiveSelfHorizontalGuides.add(snap.snappedY + view.getHeight());
-                    mActiveSelfHorizontalGuides.add(snap.snappedY + view.getHeight() * 0.5f);
+
+                    if (mSnapEnabled) {
+                        RectF candidate = new RectF(targetX, targetY, targetX + view.getWidth(), targetY + view.getHeight());
+                        List<RectF> siblings = getSiblingBounds(model);
+
+                        float dockTop = getHeight();
+                        SnapGeometryEngine.SnapResult snap = mSnapEngine.computeSnap(candidate, siblings, getWidth(), getHeight(), dockTop);
+
+                        snappedX = snap.snappedX;
+                        snappedY = snap.snappedY;
+
+                        // Sibling guides: xanh lá, snap-to-other-buttons
+                        mActiveVerticalGuides.addAll(snap.verticalGuidelines);
+                        mActiveHorizontalGuides.addAll(snap.horizontalGuidelines);
+                        // Self guides: cyan, các cạnh của chính nút đang kéo
+                        mActiveSelfVerticalGuides.add(snappedX);
+                        mActiveSelfVerticalGuides.add(snappedX + view.getWidth());
+                        mActiveSelfVerticalGuides.add(snappedX + view.getWidth() * 0.5f);
+                        mActiveSelfHorizontalGuides.add(snappedY);
+                        mActiveSelfHorizontalGuides.add(snappedY + view.getHeight());
+                        mActiveSelfHorizontalGuides.add(snappedY + view.getHeight() * 0.5f);
+                    }
+
+                    view.setX(snappedX);
+                    view.setY(snappedY);
+
+                    model.posXPercent = (snappedX + view.getWidth() * 0.5f) / getWidth();
+                    model.posYPercent = (snappedY + view.getHeight() * 0.5f) / getHeight();
                     invalidate();
                     return true;
 
@@ -720,7 +839,24 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private void selectButton(HudButton b, View v) {
         this.mSelectedButton = b;
         this.mSelectedView = v;
+        boolean wasHidden = mInspectorView.getVisibility() != VISIBLE;
         mInspectorView.bindButton(b);
+        if (b != null && wasHidden) {
+            post(() -> {
+                int pw = getWidth();
+                int ph = getHeight();
+                int iw = mInspectorView.getWidth();
+                int ih = mInspectorView.getHeight();
+                if (pw > 0 && ph > 0 && iw > 0 && ih > 0) {
+                    float targetX = (b.posXPercent < 0.5f) ? (pw - iw - dp(16)) : dp(16);
+                    float targetY = (b.posYPercent < 0.5f) ? (ph - ih - dp(24)) : dp(56);
+                    targetX = Math.max(dp(8), Math.min(pw - iw - dp(8), targetX));
+                    targetY = Math.max(dp(56), Math.min(ph - ih - dp(8), targetY));
+                    mInspectorView.setTranslationX(targetX);
+                    mInspectorView.setTranslationY(targetY);
+                }
+            });
+        }
         invalidate();
     }
 
@@ -778,25 +914,31 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     private void drawDaemonBanner(Canvas canvas, float w, float h, float density) {
         boolean nativeReady = mHost.isNativeReady();
-        // The banner sits near the bottom of the screen. There is no dock
-        // strip anymore, so we simply leave a small bottom margin.
-        float bannerH = 38f * density;
-        float bannerW = Math.min(w - 40f * density, 420f * density);
+        float bannerH = 26f * density;
+        float bannerW = Math.min(w - 60f * density, 240f * density);
         float left = (w - bannerW) / 2f;
-        float top = h - bannerH - 24f * density;
+        float top = h - bannerH - 12f * density;
         if (top < 16f * density) top = 16f * density;
 
-        mBannerFillPaint.setColor(nativeReady ? 0xCC2E7D32 : 0xCCE53935);
-        canvas.drawRoundRect(left, top, left + bannerW, top + bannerH,
-                              8f * density, 8f * density, mBannerFillPaint);
+        mBannerFillPaint.setStyle(Paint.Style.FILL);
+        mBannerFillPaint.setColor(nativeReady ? 0xEE14281A : 0xEE301616);
+        float radius = bannerH / 2f;
+        canvas.drawRoundRect(left, top, left + bannerW, top + bannerH, radius, radius, mBannerFillPaint);
 
-        mBannerTextPaint.setTextSize(14f * density);
-        float textY = top + bannerH / 2f -
-            ((mBannerTextPaint.descent() + mBannerTextPaint.ascent()) * 0.5f);
-        String msg = nativeReady
-            ? "DAEMON READY  ·  TAP EXIT EDIT TO USE DESKTOP"
-            : "DAEMON OFFLINE  ·  EDITOR MODE ONLY";
-        canvas.drawText(msg, left + bannerW / 2f, textY, mBannerTextPaint);
+        mBannerStrokePaint.setColor(nativeReady ? 0x884CAF50 : 0x88E53935);
+        canvas.drawRoundRect(left, top, left + bannerW, top + bannerH, radius, radius, mBannerStrokePaint);
+
+        // Status indicator dot
+        mBannerFillPaint.setColor(nativeReady ? 0xFF4CAF50 : 0xFFE53935);
+        float dotX = left + 14f * density;
+        float dotY = top + bannerH / 2f;
+        canvas.drawCircle(dotX, dotY, 3.5f * density, mBannerFillPaint);
+
+        // Text
+        mBannerTextPaint.setTextSize(11f * density);
+        float textY = top + bannerH / 2f - ((mBannerTextPaint.descent() + mBannerTextPaint.ascent()) * 0.5f);
+        String msg = nativeReady ? "DAEMON CONNECTED" : "DAEMON OFFLINE";
+        canvas.drawText(msg, left + bannerW / 2f + 4f * density, textY, mBannerTextPaint);
     }
 
     // MainActivity calls this whenever the native pipeline state may have

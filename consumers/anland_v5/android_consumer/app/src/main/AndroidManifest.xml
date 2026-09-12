@@ -71,7 +71,7 @@
             android:name=".SettingsActivity"
             android:exported="true"
             android:enableOnBackInvokedCallback="false"
-            android:theme="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
             </intent-filter>

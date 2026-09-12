@@ -126,11 +126,11 @@ public class SettingsActivity extends Activity {
     // Every page is a fresh LinearLayout wrapped by setContent().
     // ============================================================
 
-    // Wrap `content` in the standard white ScrollView, apply edge-to-edge insets,
+    // Wrap `content` in the standard dark ScrollView, apply edge-to-edge insets,
     // and install it. Reused by the home list and every secondary page.
     private void setContent(final LinearLayout content) {
         ScrollView scroll = new ScrollView(this);
-        scroll.setBackgroundColor(Color.WHITE);
+        scroll.setBackgroundColor(0xFF11111B);
         scroll.addView(content);
         setContentView(scroll);
 
@@ -161,6 +161,7 @@ public class SettingsActivity extends Activity {
         TextView title = new TextView(this);
         title.setText(R.string.settings_title);
         title.setTextSize(24);
+        title.setTextColor(Color.WHITE);
         title.setTypeface(null, Typeface.BOLD);
         title.setGravity(Gravity.START);
         title.setPadding(0, 0, 0, dp(24));
@@ -182,27 +183,34 @@ public class SettingsActivity extends Activity {
         version.setText(BuildConfig.VERSION_NAME
             + " (" + BuildConfig.VERSION_CODE + ")");
         version.setTextSize(12);
+        version.setTextColor(0xFFA6ADC8);
         version.setGravity(Gravity.START);
         version.setPadding(0, dp(24), 0, 0);
-        version.setAlpha(0.5f);
+        version.setAlpha(0.6f);
         root.addView(version);
 
         setContent(root);
     }
 
-    // A tappable "title / subtitle ›" row plus a hairline divider.
+    // A tappable "title / subtitle >" row styled as a Material card.
     private void addCategoryRow(LinearLayout parent, int titleRes, int subtitleRes,
                                 final Runnable onClick) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(0, dp(16), 0, dp(16));
+        row.setPadding(dp(16), dp(16), dp(16), dp(16));
         row.setClickable(true);
-        TypedValue tv = new TypedValue();
-        if (getTheme().resolveAttribute(
-                android.R.attr.selectableItemBackground, tv, true)) {
-            row.setBackgroundResource(tv.resourceId);
-        }
+
+        android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
+        cardBg.setCornerRadius(dp(12));
+        cardBg.setColor(0xFF181825);
+        cardBg.setStroke(dp(1), 0x22FFFFFF);
+        row.setBackground(cardBg);
+
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowLp.setMargins(0, 0, 0, dp(10));
+        row.setLayoutParams(rowLp);
         row.setOnClickListener(v -> onClick.run());
 
         LinearLayout texts = new LinearLayout(this);
@@ -212,32 +220,28 @@ public class SettingsActivity extends Activity {
 
         TextView t = new TextView(this);
         t.setText(titleRes);
-        t.setTextSize(18);
-        t.setTextColor(Color.BLACK);
+        t.setTextSize(17);
+        t.setTypeface(null, Typeface.BOLD);
+        t.setTextColor(Color.WHITE);
         texts.addView(t);
 
         TextView s = new TextView(this);
         s.setText(subtitleRes);
         s.setTextSize(13);
-        s.setTextColor(Color.GRAY);
+        s.setTextColor(0xFFA6ADC8);
         s.setPadding(0, dp(2), 0, 0);
         texts.addView(s);
 
         row.addView(texts);
 
         TextView chevron = new TextView(this);
-        chevron.setText("›");
-        chevron.setTextSize(22);
-        chevron.setTextColor(Color.GRAY);
+        chevron.setText(">");
+        chevron.setTextSize(18);
+        chevron.setTypeface(null, Typeface.BOLD);
+        chevron.setTextColor(0xFF80DEEA);
         row.addView(chevron);
 
         parent.addView(row);
-
-        View divider = new View(this);
-        divider.setLayoutParams(new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, Math.max(1, dp(1))));
-        divider.setBackgroundColor(0xFFE0E0E0);
-        parent.addView(divider);
     }
 
     // A fresh page root with a back link and a bold page title.
@@ -247,10 +251,11 @@ public class SettingsActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
 
         TextView back = new TextView(this);
-        back.setText(R.string.nav_back);
-        back.setTextSize(16);
-        back.setTextColor(0xFF1565C0);
-        back.setPadding(0, 0, 0, dp(12));
+        back.setText("< BACK");
+        back.setTextSize(14);
+        back.setTypeface(Typeface.DEFAULT_BOLD);
+        back.setTextColor(0xFF80DEEA);
+        back.setPadding(0, 0, 0, dp(16));
         back.setClickable(true);
         back.setOnClickListener(v -> showHome());
         root.addView(back);
@@ -258,9 +263,10 @@ public class SettingsActivity extends Activity {
         TextView title = new TextView(this);
         title.setText(titleRes);
         title.setTextSize(24);
+        title.setTextColor(Color.WHITE);
         title.setTypeface(null, Typeface.BOLD);
         title.setGravity(Gravity.START);
-        title.setPadding(0, 0, 0, dp(24));
+        title.setPadding(0, 0, 0, dp(20));
         root.addView(title);
 
         return root;
@@ -294,6 +300,7 @@ public class SettingsActivity extends Activity {
         TextView header = new TextView(this);
         header.setText("Custom HUD Control");
         header.setTextSize(16);
+        header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
         header.setPadding(0, dp(24), 0, dp(8));
         root.addView(header);
@@ -461,6 +468,7 @@ public class SettingsActivity extends Activity {
         TextView header = new TextView(this);
         header.setText(titleRes);
         header.setTextSize(16);
+        header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
         header.setPadding(0, topPadding, 0, dp(8));
         root.addView(header);
@@ -608,6 +616,7 @@ public class SettingsActivity extends Activity {
         TextView header = new TextView(this);
         header.setText(R.string.section_extra_keys);
         header.setTextSize(16);
+        header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
         header.setPadding(0, dp(24), 0, dp(8));
         root.addView(header);
@@ -744,6 +753,7 @@ public class SettingsActivity extends Activity {
         TextView header = new TextView(this);
         header.setText(R.string.section_orientation);
         header.setTextSize(16);
+        header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
         header.setPadding(0, 0, 0, dp(8));
         root.addView(header);
@@ -751,6 +761,7 @@ public class SettingsActivity extends Activity {
         TextView label = new TextView(this);
         label.setText(R.string.orientation_label);
         label.setTextSize(14);
+        label.setTextColor(Color.WHITE);
         label.setPadding(0, dp(8), 0, dp(4));
         root.addView(label);
 
@@ -783,6 +794,7 @@ public class SettingsActivity extends Activity {
         TextView header = new TextView(this);
         header.setText(R.string.section_notification);
         header.setTextSize(16);
+        header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
         header.setPadding(0, 0, 0, dp(8));
         root.addView(header);

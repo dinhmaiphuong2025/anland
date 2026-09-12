@@ -438,7 +438,7 @@ public class MainActivity extends Activity
         boolean isEditingHud = (mHudOverlay != null && mHudOverlay.isEditMode()) || mPendingOpenHudEditor;
         if (!isSocketFile(resolveSocketPath())) {
             if (!isEditingHud) {
-                android.widget.Toast.makeText(this, "Deamon Down",
+                android.widget.Toast.makeText(this, "Daemon Disconnected",
                         android.widget.Toast.LENGTH_SHORT).show();
                 finish();
             }
@@ -566,7 +566,7 @@ public class MainActivity extends Activity
         boolean socketOk = isSocketFile(resolveSocketPath());
         if (!socketOk && !mPendingOpenHudEditor) {
             if (mSocketOverride != null) {
-                android.widget.Toast.makeText(this, "Socket Not Found",
+                android.widget.Toast.makeText(this, "Daemon Disconnected",
                         android.widget.Toast.LENGTH_SHORT).show();
                 finishAndRemoveTask();
                 return;
@@ -2509,7 +2509,7 @@ public class MainActivity extends Activity
             // can recover by themselves.
             boolean userInProduction = mUserInteracted && !editingNow && !wasPendingEditor;
             if (!isSocketFile(resolveSocketPath()) && !editingNow && !userInProduction) {
-                android.widget.Toast.makeText(this, "Deamon Down",
+                android.widget.Toast.makeText(this, "Daemon Disconnected",
                         android.widget.Toast.LENGTH_SHORT).show();
                 // Editor-only windows never registered with sInstance, so it
                 // is safe to remove the task from Recents. Production windows

@@ -5,6 +5,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 
@@ -86,19 +87,26 @@ public final class SuperGestureButtonView extends View {
         mPaint.setColor(0x88FFFFFF);
         canvas.drawRoundRect(mBounds, corner, corner, mPaint);
 
-        // Main Center Text
+        // Main Center Text with auto font scaling
         mTextPaint.setColor(mIsPressed ? 0xFF11111B : mModel.textColor);
-        mTextPaint.setTextSize(Math.min(w, h) * 0.28f);
+        String label = mModel.label != null ? mModel.label : "SUPER";
+        float maxTextWidth = w - 16 * density;
+        float textSize = Math.min(w, h) * 0.28f;
+        mTextPaint.setTextSize(textSize);
+        float textW = mTextPaint.measureText(label);
+        if (textW > maxTextWidth && textW > 0) {
+            mTextPaint.setTextSize(Math.max(8 * density, textSize * (maxTextWidth / textW)));
+        }
         float textY = h * 0.5f - ((mTextPaint.descent() + mTextPaint.ascent()) * 0.5f);
-        canvas.drawText(mModel.label != null ? mModel.label : "SUPER", w * 0.5f, textY, mTextPaint);
+        canvas.drawText(label, w * 0.5f, textY, mTextPaint);
 
         // Direction indicator ticks (top, bottom, left, right)
-        mPaint.setColor(0x66FFFFFF);
-        mPaint.setStrokeWidth(2f);
-        canvas.drawLine(w * 0.5f, 4, w * 0.5f, 8, mPaint); // Up tick
-        canvas.drawLine(w * 0.5f, h - 8, w * 0.5f, h - 4, mPaint); // Down tick
-        canvas.drawLine(4, h * 0.5f, 8, h * 0.5f, mPaint); // Left tick
-        canvas.drawLine(w - 8, h * 0.5f, w - 4, h * 0.5f, mPaint); // Right tick
+        mPaint.setColor(0xCC80DEEA);
+        mPaint.setStrokeWidth(2.5f * density);
+        canvas.drawLine(w * 0.5f, 4 * density, w * 0.5f, 9 * density, mPaint); // Up tick
+        canvas.drawLine(w * 0.5f, h - 9 * density, w * 0.5f, h - 4 * density, mPaint); // Down tick
+        canvas.drawLine(4 * density, h * 0.5f, 9 * density, h * 0.5f, mPaint); // Left tick
+        canvas.drawLine(w - 9 * density, h * 0.5f, w - 4 * density, h * 0.5f, mPaint); // Right tick
     }
 
     @Override
@@ -116,6 +124,7 @@ public final class SuperGestureButtonView extends View {
                 mDownTime = System.currentTimeMillis();
                 mIsPressed = true;
                 mGestureFired = false;
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                 invalidate();
                 return true;
 
@@ -126,6 +135,7 @@ public final class SuperGestureButtonView extends View {
                     if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
                         mGestureFired = true;
                         mIsPressed = false;
+                        performHapticFeedback(HapticFeedbackConstants.GESTURE_END);
                         invalidate();
                         if (mListener != null) {
                             if (Math.abs(dx) > Math.abs(dy)) {
@@ -145,6 +155,7 @@ public final class SuperGestureButtonView extends View {
                 if (!mGestureFired && event.getActionMasked() == MotionEvent.ACTION_UP) {
                     long duration = System.currentTimeMillis() - mDownTime;
                     if (duration > 450) {
+                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                         if (mListener != null) mListener.onLongPress(mModel);
                     } else {
                         if (mListener != null) mListener.onSingleTap(mModel);

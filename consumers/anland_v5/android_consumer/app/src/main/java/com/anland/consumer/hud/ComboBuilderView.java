@@ -51,40 +51,50 @@ public final class ComboBuilderView {
     private final List<String> mKeyLabels = new ArrayList<>();
 
     public ComboBuilderView() {
-        // Modifiers
+        // 1. Modifiers (evdev scancodes)
         for (int i = 0; i < MODIFIER_CODES.length; i++) {
             mKeycodes.add(MODIFIER_CODES[i]);
             mKeyLabels.add(MODIFIER_LABELS[i]);
         }
-        // Letters A-Z (Android keycodes 29-50 are mapped in KeyCodeMapper)
-        for (char c = 'A'; c <= 'Z'; c++) {
-            mKeycodes.add(android.view.KeyEvent.keyCodeFromString("KEYCODE_" + c));
-            mKeyLabels.add(String.valueOf(c));
+        // 2. Navigation & Arrow keys (evdev scancodes)
+        int[] navCodes = {103, 108, 105, 106, 102, 107, 104, 109};
+        String[] navLabels = {"UP", "DOWN", "LEFT", "RIGHT", "HOME", "END", "PGUP", "PGDN"};
+        for (int i = 0; i < navCodes.length; i++) {
+            mKeycodes.add(navCodes[i]);
+            mKeyLabels.add(navLabels[i]);
         }
-        // Numbers 0-9
+        // 3. Common editing keys (evdev scancodes)
+        int[] editCodes = {1, 15, 28, 57, 14, 111};
+        String[] editLabels = {"ESC", "TAB", "ENTER", "SPACE", "BKSP", "DEL"};
+        for (int i = 0; i < editCodes.length; i++) {
+            mKeycodes.add(editCodes[i]);
+            mKeyLabels.add(editLabels[i]);
+        }
+        // 4. Letters A-Z (evdev scancodes: 30=A, 48=B, etc.)
+        int[] letterCodes = {30, 48, 46, 32, 18, 33, 34, 35, 23, 36, 37, 38, 50, 49, 24, 25, 16, 19, 31, 20, 22, 47, 17, 45, 21, 44};
+        for (int i = 0; i < 26; i++) {
+            mKeycodes.add(letterCodes[i]);
+            mKeyLabels.add(String.valueOf((char) ('A' + i)));
+        }
+        // 5. Numbers 0-9 (evdev scancodes: 11=0, 2=1..10=9)
+        int[] numCodes = {11, 2, 3, 4, 5, 6, 7, 8, 9, 10};
         for (int d = 0; d <= 9; d++) {
-            mKeycodes.add(android.view.KeyEvent.keyCodeFromString("KEYCODE_" + d));
+            mKeycodes.add(numCodes[d]);
             mKeyLabels.add(String.valueOf(d));
         }
-        // F1-F12 (59-68, then 87, 88 for F11/F12)
+        // 6. F1-F12 (evdev scancodes: 59-68, 87, 88)
         int[] fCodes = {59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 87, 88};
         for (int i = 0; i < fCodes.length; i++) {
             mKeycodes.add(fCodes[i]);
             mKeyLabels.add("F" + (i + 1));
         }
-        // Common editing
-        mKeycodes.add(android.view.KeyEvent.KEYCODE_SPACE);
-        mKeyLabels.add("SPACE");
-        mKeycodes.add(android.view.KeyEvent.KEYCODE_TAB);
-        mKeyLabels.add("TAB");
-        mKeycodes.add(android.view.KeyEvent.KEYCODE_ENTER);
-        mKeyLabels.add("ENTER");
-        mKeycodes.add(android.view.KeyEvent.KEYCODE_ESCAPE);
-        mKeyLabels.add("ESC");
-        mKeycodes.add(android.view.KeyEvent.KEYCODE_DEL);
-        mKeyLabels.add("BKSP");
-        mKeycodes.add(android.view.KeyEvent.KEYCODE_FORWARD_DEL);
-        mKeyLabels.add("DEL");
+        // 7. Symbols (evdev scancodes)
+        int[] symCodes = {12, 13, 26, 27, 43, 39, 40, 51, 52, 53, 41};
+        String[] symLabels = {"-", "=", "[", "]", "\\", ";", "'", ",", ".", "/", "`"};
+        for (int i = 0; i < symCodes.length; i++) {
+            mKeycodes.add(symCodes[i]);
+            mKeyLabels.add(symLabels[i]);
+        }
     }
 
     /** Reset all slots to empty. */
@@ -94,6 +104,15 @@ public final class ComboBuilderView {
             if (mSlotLabels[i] != null) mSlotLabels[i].setText("Slot " + (i + 1));
         }
         mActiveSlot = 0;
+        refreshActiveSlot();
+    }
+
+    /** Clear a single slot by index. */
+    public void clearSlot(int index) {
+        if (index < 0 || index >= MAX_SLOTS) return;
+        mSlotCodes[index] = 0;
+        if (mSlotLabels[index] != null) mSlotLabels[index].setText("Slot " + (index + 1));
+        mActiveSlot = index;
         refreshActiveSlot();
     }
 
@@ -121,14 +140,20 @@ public final class ComboBuilderView {
     private void refreshActiveSlot() {
         for (int i = 0; i < MAX_SLOTS; i++) {
             if (mSlotLabels[i] == null) continue;
+            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+            bg.setCornerRadius(dp(mSlotLabels[i].getContext(), 8));
             if (i == mActiveSlot) {
-                mSlotLabels[i].setBackgroundColor(0xFF1F6FEB);
+                bg.setColor(0xFF1F6FEB);
+                mSlotLabels[i].setBackground(bg);
                 mSlotLabels[i].setTextColor(Color.WHITE);
             } else if (mSlotCodes[i] != 0) {
-                mSlotLabels[i].setBackgroundColor(0xFF2A2B3D);
+                bg.setColor(0xFF2A2B3D);
+                bg.setStroke(dp(mSlotLabels[i].getContext(), 1), 0xFF80DEEA);
+                mSlotLabels[i].setBackground(bg);
                 mSlotLabels[i].setTextColor(0xFF80DEEA);
             } else {
-                mSlotLabels[i].setBackgroundColor(0xFF2A2B3D);
+                bg.setColor(0xFF20202F);
+                mSlotLabels[i].setBackground(bg);
                 mSlotLabels[i].setTextColor(0xFF888888);
             }
         }
@@ -136,14 +161,7 @@ public final class ComboBuilderView {
 
     private String labelFor(int keycode) {
         if (keycode == 0) return "Slot " + (mActiveSlot + 1);
-        // Modifiers get a friendly name; otherwise the letter itself.
-        for (int i = 0; i < MODIFIER_CODES.length; i++) {
-            if (MODIFIER_CODES[i] == keycode) return MODIFIER_LABELS[i];
-        }
-        for (int i = 0; i < mKeycodes.size(); i++) {
-            if (mKeycodes.get(i) == keycode) return mKeyLabels.get(i);
-        }
-        return "Key " + keycode;
+        return HudPropertyInspectorView.labelForEvdev(keycode);
     }
 
     private void commit() {
@@ -238,7 +256,14 @@ public final class ComboBuilderView {
             slotRow.addView(slot, lp);
             mSlotLabels[i] = slot;
             final int slotIndex = i;
-            slot.setOnClickListener(v -> setActiveSlot(slotIndex));
+            slot.setOnClickListener(v -> {
+                if (mActiveSlot == slotIndex && mSlotCodes[slotIndex] != 0) {
+                    clearSlot(slotIndex);
+                } else {
+                    setActiveSlot(slotIndex);
+                }
+                updatePreview();
+            });
         }
         root.addView(slotRow);
 
