@@ -1505,6 +1505,9 @@ public class SettingsActivity extends Activity {
         mode = autoShow ? MODE_WITH_KEYBOARD : (enabled ? MODE_ALWAYS : MODE_NEVER);
         prefs.edit().putString(KEY_EXTRA_KEYS_MODE, mode)
               .remove("auto_show_extra_keys").remove("extra_keys_bar").apply();
+        return mode;
+    }
+
     public static void styleSeekBar(SeekBar bar, int activeColor) {
         float density = bar.getContext().getResources().getDisplayMetrics().density;
         
