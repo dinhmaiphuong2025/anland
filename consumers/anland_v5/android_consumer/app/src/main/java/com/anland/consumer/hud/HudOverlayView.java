@@ -1,5 +1,6 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.theme.M3;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -309,18 +310,13 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         LinearLayout bar = new LinearLayout(getContext());
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-
-        android.graphics.drawable.GradientDrawable barBg = new android.graphics.drawable.GradientDrawable();
-        barBg.setCornerRadius(dp(16));
-        barBg.setColor(0xF0181825);
-        barBg.setStroke(dp(1), 0x33FFFFFF);
-        bar.setBackground(barBg);
-        bar.setPadding(dp(8), dp(6), dp(8), dp(6));
+        bar.setBackground(M3.shape(getContext(), M3.RADIUS_PILL, 0xF0181825, M3.COLOR_BORDER_STRONG, 1.0f));
+        bar.setPadding(dp(10), dp(6), dp(10), dp(6));
         bar.setElevation(dp(8));
 
         // Save
         Button btnSave = createToolButton("SAVE");
-        btnSave.setTextColor(0xFF80DEEA);
+        btnSave.setTextColor(M3.COLOR_PRIMARY);
         btnSave.setOnClickListener(v -> saveProfile());
         bar.addView(btnSave);
 
@@ -518,10 +514,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         b.setAllCaps(true);
         b.setTextSize(11);
         b.setTextColor(Color.WHITE);
-        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setCornerRadius(dp(8));
-        bg.setColor(0x33FFFFFF);
-        b.setBackground(bg);
+        b.setBackground(M3.createRippleDrawable(getContext(), M3.RADIUS_CHIP, 0x22FFFFFF, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
         b.setPadding(dp(12), dp(6), dp(12), dp(6));
         b.setMinWidth(0);
         b.setMinHeight(0);
@@ -934,11 +927,11 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         float radius = bannerH / 2f;
         canvas.drawRoundRect(left, top, left + bannerW, top + bannerH, radius, radius, mBannerFillPaint);
 
-        mBannerStrokePaint.setColor(nativeReady ? 0x884CAF50 : 0x88E53935);
+        mBannerStrokePaint.setColor(nativeReady ? 0x88A6E3A1 : 0x88F38BA8);
         canvas.drawRoundRect(left, top, left + bannerW, top + bannerH, radius, radius, mBannerStrokePaint);
 
         // Status indicator dot
-        mBannerFillPaint.setColor(nativeReady ? 0xFF4CAF50 : 0xFFE53935);
+        mBannerFillPaint.setColor(nativeReady ? M3.COLOR_SUCCESS : M3.COLOR_ERROR);
         float dotX = left + 14f * density;
         float dotY = top + bannerH / 2f;
         canvas.drawCircle(dotX, dotY, 3.5f * density, mBannerFillPaint);

@@ -88,16 +88,16 @@ package com.anland.consumer;
      private int padding = 4; 
      private int cornerRadius = 6; 
   
-      private int keyColor = Color.parseColor("#2A2B3D"); 
-      private int pressedColor = Color.parseColor("#2A2B3D");
+      private int keyColor = 0xFF2A2B3D; 
+      private int pressedColor = 0xFF35395E;
       private int modActiveColor = 0xFF80DEEA;
       private int textColor = Color.WHITE;
-      private int bgColor = Color.parseColor("#CC181825");
+      private int bgColor = 0xEE181825;
 
      // Precomputed colors used per-frame in onDraw. Parsing these strings on
      // every frame (and once per key) was a source of jank while typing/dragging.
      private static final int HANDLE_COLOR     = 0x66FFFFFF;
-     private static final int KEY_STROKE_COLOR = 0x44FFFFFF;
+     private static final int KEY_STROKE_COLOR = 0x22FFFFFF;
   
      public interface OnKeyEventListener { 
          void onKeyDown(int scanCode); 

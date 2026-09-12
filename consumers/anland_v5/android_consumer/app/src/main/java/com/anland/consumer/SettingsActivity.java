@@ -35,6 +35,7 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.anland.consumer.theme.M3;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -211,11 +212,7 @@ public class SettingsActivity extends Activity {
         row.setPadding(dp(20), dp(16), dp(20), dp(16));
         row.setClickable(true);
 
-        android.graphics.drawable.GradientDrawable cardBg = new android.graphics.drawable.GradientDrawable();
-        cardBg.setCornerRadius(dp(10));
-        cardBg.setColor(0xFF181825);
-        cardBg.setStroke(dp(1), 0x22FFFFFF);
-        row.setBackground(cardBg);
+        row.setBackground(M3.createRippleDrawable(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_SURFACE_HIGH, M3.COLOR_BORDER_SUBTLE));
 
         LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -232,19 +229,19 @@ public class SettingsActivity extends Activity {
         t.setText(titleRes);
         t.setTextSize(17);
         t.setTypeface(null, Typeface.BOLD);
-        t.setTextColor(Color.WHITE);
+        t.setTextColor(M3.COLOR_TEXT_PRIMARY);
         texts.addView(t);
 
         TextView s = new TextView(this);
         s.setText(subtitleRes);
         s.setTextSize(13);
-        s.setTextColor(0xFFA6ADC8);
+        s.setTextColor(M3.COLOR_TEXT_MUTED);
         s.setPadding(0, dp(2), 0, 0);
         texts.addView(s);
 
         row.addView(texts);
 
-        ChevronView chevron = new ChevronView(this);
+        M3.ChevronView chevron = new M3.ChevronView(this);
         row.addView(chevron);
 
         parent.addView(row);
@@ -263,14 +260,14 @@ public class SettingsActivity extends Activity {
         backRow.setClickable(true);
         backRow.setOnClickListener(v -> showHome());
 
-        BackArrowView backArrow = new BackArrowView(this);
+        M3.BackArrowView backArrow = new M3.BackArrowView(this);
         backRow.addView(backArrow);
 
         TextView backText = new TextView(this);
         backText.setText(R.string.settings_short_label);
         backText.setTextSize(14);
         backText.setTypeface(null, Typeface.BOLD);
-        backText.setTextColor(0xFF80DEEA);
+        backText.setTextColor(M3.COLOR_PRIMARY);
         backText.setPadding(dp(8), 0, 0, 0);
         backRow.addView(backText);
 
@@ -279,7 +276,7 @@ public class SettingsActivity extends Activity {
         TextView title = new TextView(this);
         title.setText(titleRes);
         title.setTextSize(24);
-        title.setTextColor(Color.WHITE);
+        title.setTextColor(M3.COLOR_TEXT_PRIMARY);
         title.setTypeface(null, Typeface.BOLD);
         title.setGravity(Gravity.START);
         title.setPadding(0, 0, 0, dp(20));
@@ -722,12 +719,19 @@ public class SettingsActivity extends Activity {
         layoutInput = new EditText(this);
         layoutInput.setTypeface(Typeface.MONOSPACE);
         layoutInput.setTextSize(12);
+        layoutInput.setTextColor(M3.COLOR_TEXT_PRIMARY);
         layoutInput.setGravity(Gravity.TOP | Gravity.START);
         layoutInput.setInputType(InputType.TYPE_CLASS_TEXT
             | InputType.TYPE_TEXT_FLAG_MULTI_LINE
             | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         layoutInput.setHorizontallyScrolling(false);
         layoutInput.setMinLines(6);
+        layoutInput.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+        layoutInput.setPadding(dp(14), dp(12), dp(14), dp(12));
+        LinearLayout.LayoutParams layoutLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        layoutLp.setMargins(0, dp(4), 0, dp(8));
+        layoutInput.setLayoutParams(layoutLp);
         String savedLayout = prefs.getString(KEY_EXTRA_KEYS_LAYOUT, "");
         if (savedLayout.isEmpty()) savedLayout = ExtraKeysBar.defaultLayoutJson();
         layoutInput.setText(savedLayout);
@@ -1133,6 +1137,7 @@ public class SettingsActivity extends Activity {
         root.addView(sockLabel);
 
         EditText socketInput = new EditText(this);
+        M3.styleInput(socketInput);
         socketInput.setSingleLine(true);
         socketInput.setText(prefs.getString(KEY_SOCKET_PATH, DEFAULT_SOCKET_PATH));
         socketInput.setHint(DEFAULT_SOCKET_PATH);
@@ -1152,18 +1157,24 @@ public class SettingsActivity extends Activity {
         TextView secLabel = new TextView(this);
         secLabel.setText(R.string.second_window_label);
         secLabel.setTextSize(14);
-        secLabel.setTextColor(Color.GRAY);
+        secLabel.setTextColor(M3.COLOR_TEXT_MUTED);
         secLabel.setPadding(0, dp(16), 0, dp(4));
         root.addView(secLabel);
 
         EditText secName = new EditText(this);
+        M3.styleInput(secName);
         secName.setSingleLine(true);
         secName.setHint(R.string.second_window_name_hint);
         root.addView(secName);
 
         EditText secSocket = new EditText(this);
+        M3.styleInput(secSocket);
         secSocket.setSingleLine(true);
         secSocket.setHint(DEFAULT_SOCKET_PATH);
+        LinearLayout.LayoutParams secSockLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        secSockLp.setMargins(0, dp(8), 0, dp(8));
+        secSocket.setLayoutParams(secSockLp);
         root.addView(secSocket);
 
         Button secOpen = new Button(this);
@@ -1353,24 +1364,12 @@ public class SettingsActivity extends Activity {
     inputsRow.setOrientation(LinearLayout.HORIZONTAL);
     inputsRow.setPadding(0, dp(10), 0, dp(4));
 
-    android.graphics.drawable.GradientDrawable inputBg1 = new android.graphics.drawable.GradientDrawable();
-    inputBg1.setCornerRadius(dp(8));
-    inputBg1.setColor(0xFF181825);
-    inputBg1.setStroke(dp(1), 0x22FFFFFF);
-    widthInput.setBackground(inputBg1);
-    widthInput.setTextColor(Color.WHITE);
-    widthInput.setPadding(dp(14), dp(10), dp(14), dp(10));
+    M3.styleInput(widthInput);
     LinearLayout.LayoutParams wLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
     widthInput.setLayoutParams(wLp);
     inputsRow.addView(widthInput);
 
-    android.graphics.drawable.GradientDrawable inputBg2 = new android.graphics.drawable.GradientDrawable();
-    inputBg2.setCornerRadius(dp(8));
-    inputBg2.setColor(0xFF181825);
-    inputBg2.setStroke(dp(1), 0x22FFFFFF);
-    heightInput.setBackground(inputBg2);
-    heightInput.setTextColor(Color.WHITE);
-    heightInput.setPadding(dp(14), dp(10), dp(14), dp(10));
+    M3.styleInput(heightInput);
     LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
     hLp.leftMargin = dp(10);
     heightInput.setLayoutParams(hLp);
@@ -1666,159 +1665,14 @@ public class SettingsActivity extends Activity {
     }
 
     private void setupDarkSpinner(Spinner spinner, String[] items) {
-        android.graphics.drawable.GradientDrawable popupBg = new android.graphics.drawable.GradientDrawable();
-        popupBg.setCornerRadius(dp(4)); // sleek clean 4dp rectangle, eliminates over-rounding
-        popupBg.setColor(0xFF1E1E2E);
-        popupBg.setStroke(dp(1), 0x33FFFFFF);
-        spinner.setPopupBackgroundDrawable(popupBg);
-
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this,
-                android.R.layout.simple_spinner_item, items) {
-            @Override
-            public View getDropDownView(int position, View convertView, ViewGroup parent) {
-                View v = super.getDropDownView(position, convertView, parent);
-                if (v instanceof TextView) {
-                    TextView tv = (TextView) v;
-                    tv.setTextColor(Color.WHITE);
-                    tv.setTextSize(13);
-                    tv.setPadding(dp(16), dp(12), dp(16), dp(12));
-                    tv.setBackgroundColor(0xFF1E1E2E);
-                }
-                return v;
-            }
-
-            @Override
-            public View getView(int position, View convertView, ViewGroup parent) {
-                View v = super.getView(position, convertView, parent);
-                if (v instanceof TextView) {
-                    ((TextView) v).setTextColor(Color.WHITE);
-                    ((TextView) v).setTextSize(14);
-                }
-                return v;
-            }
-        };
-        spinner.setAdapter(adapter);
+        M3.styleDropdown(spinner, items);
     }
 
     public static void styleSeekBar(SeekBar bar, int activeColor) {
-        float density = bar.getContext().getResources().getDisplayMetrics().density;
-        int trackHeight = Math.max(1, Math.round(3.5f * density));
-
-        android.graphics.drawable.GradientDrawable bgTrack = new android.graphics.drawable.GradientDrawable();
-        bgTrack.setCornerRadius(trackHeight * 0.5f);
-        bgTrack.setColor(0x33FFFFFF);
-
-        android.graphics.drawable.GradientDrawable progressTrack = new android.graphics.drawable.GradientDrawable();
-        progressTrack.setCornerRadius(trackHeight * 0.5f);
-        progressTrack.setColor(activeColor);
-        android.graphics.drawable.ClipDrawable clipProgress = new android.graphics.drawable.ClipDrawable(
-                progressTrack, Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL);
-
-        android.graphics.drawable.Drawable[] layers = new android.graphics.drawable.Drawable[] {
-                bgTrack, clipProgress
-        };
-        android.graphics.drawable.LayerDrawable layerDrawable = new android.graphics.drawable.LayerDrawable(layers);
-        layerDrawable.setId(0, android.R.id.background);
-        layerDrawable.setId(1, android.R.id.progress);
-
-        layerDrawable.setLayerHeight(0, trackHeight);
-        layerDrawable.setLayerGravity(0, Gravity.CENTER_VERTICAL | Gravity.FILL_HORIZONTAL);
-        layerDrawable.setLayerHeight(1, trackHeight);
-        layerDrawable.setLayerGravity(1, Gravity.CENTER_VERTICAL | Gravity.FILL_HORIZONTAL);
-
-        bar.setProgressDrawable(layerDrawable);
-
-        android.graphics.drawable.GradientDrawable thumb = new android.graphics.drawable.GradientDrawable();
-        thumb.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        int thumbSize = Math.round(14 * density);
-        thumb.setSize(thumbSize, thumbSize);
-        thumb.setColor(activeColor);
-        bar.setThumb(thumb);
-        bar.setSplitTrack(false);
+        M3.styleSeekBar(bar, activeColor);
     }
 
     public void styleSettingsButton(Button btn) {
-        btn.setTextColor(Color.WHITE);
-        btn.setTextSize(12.5f);
-        btn.setGravity(Gravity.CENTER);
-        btn.setMaxLines(2);
-        btn.setSingleLine(false);
-        btn.setMinHeight(dp(42));
-        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-        bg.setCornerRadius(dp(11));
-        bg.setColor(0xFF2A2B3D);
-        bg.setStroke(dp(1), 0x33FFFFFF);
-        btn.setBackground(bg);
-        btn.setPadding(dp(12), dp(8), dp(12), dp(8));
-    }
-
-    public static final class ChevronView extends View {
-        private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
-        public ChevronView(android.content.Context ctx) {
-            super(ctx);
-            mPaint.setColor(0xFFA6ADC8);
-            mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setStrokeCap(Paint.Cap.ROUND);
-            mPaint.setStrokeJoin(Paint.Join.ROUND);
-        }
-
-        @Override
-        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            float density = getResources().getDisplayMetrics().density;
-            setMeasuredDimension(Math.round(10 * density), Math.round(16 * density));
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            float density = getResources().getDisplayMetrics().density;
-            mPaint.setStrokeWidth(2.0f * density);
-            float w = getWidth();
-            float h = getHeight();
-            float left = 2f * density;
-            float right = w - 2.5f * density;
-            float top = 3f * density;
-            float midY = h * 0.5f;
-            float bot = h - 3f * density;
-
-            canvas.drawLine(left, top, right, midY, mPaint);
-            canvas.drawLine(right, midY, left, bot, mPaint);
-        }
-    }
-
-    public static final class BackArrowView extends View {
-        private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
-        public BackArrowView(android.content.Context ctx) {
-            super(ctx);
-            mPaint.setColor(0xFF80DEEA);
-            mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setStrokeCap(Paint.Cap.ROUND);
-            mPaint.setStrokeJoin(Paint.Join.ROUND);
-        }
-
-        @Override
-        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            float density = getResources().getDisplayMetrics().density;
-            setMeasuredDimension(Math.round(16 * density), Math.round(16 * density));
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
-            float density = getResources().getDisplayMetrics().density;
-            mPaint.setStrokeWidth(2.2f * density);
-            float w = getWidth();
-            float h = getHeight();
-            float midY = h * 0.5f;
-            float startX = 3f * density;
-            float endX = w - 2f * density;
-
-            canvas.drawLine(startX, midY, endX, midY, mPaint);
-            float arm = 5f * density;
-            canvas.drawLine(startX, midY, startX + arm, midY - arm, mPaint);
-            canvas.drawLine(startX, midY, startX + arm, midY + arm, mPaint);
-        }
+        M3.styleButton(btn);
     }
 }

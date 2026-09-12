@@ -1,5 +1,6 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.theme.M3;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Color;
@@ -140,21 +141,19 @@ public final class ComboBuilderView {
     private void refreshActiveSlot() {
         for (int i = 0; i < MAX_SLOTS; i++) {
             if (mSlotLabels[i] == null) continue;
-            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-            bg.setCornerRadius(dp(mSlotLabels[i].getContext(), 8));
+            Context ctx = mSlotLabels[i].getContext();
             if (i == mActiveSlot) {
-                bg.setColor(0xFF1F6FEB);
-                mSlotLabels[i].setBackground(bg);
-                mSlotLabels[i].setTextColor(Color.WHITE);
+                mSlotLabels[i].setBackground(M3.shape(ctx, M3.RADIUS_CHIP, M3.COLOR_PRIMARY, 0, 0));
+                mSlotLabels[i].setTextColor(0xFF00363D);
+                mSlotLabels[i].setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             } else if (mSlotCodes[i] != 0) {
-                bg.setColor(0xFF2A2B3D);
-                bg.setStroke(dp(mSlotLabels[i].getContext(), 1), 0xFF80DEEA);
-                mSlotLabels[i].setBackground(bg);
-                mSlotLabels[i].setTextColor(0xFF80DEEA);
+                mSlotLabels[i].setBackground(M3.shape(ctx, M3.RADIUS_CHIP, M3.COLOR_SURFACE_HIGHEST, M3.COLOR_PRIMARY, 1.0f));
+                mSlotLabels[i].setTextColor(M3.COLOR_PRIMARY);
+                mSlotLabels[i].setTypeface(android.graphics.Typeface.DEFAULT);
             } else {
-                bg.setColor(0xFF20202F);
-                mSlotLabels[i].setBackground(bg);
-                mSlotLabels[i].setTextColor(0xFF888888);
+                mSlotLabels[i].setBackground(M3.shape(ctx, M3.RADIUS_CHIP, M3.COLOR_SURFACE_HIGH, M3.COLOR_BORDER_SUBTLE, 1.0f));
+                mSlotLabels[i].setTextColor(M3.COLOR_TEXT_MUTED);
+                mSlotLabels[i].setTypeface(android.graphics.Typeface.DEFAULT);
             }
         }
     }
@@ -310,7 +309,7 @@ public final class ComboBuilderView {
                 k.setTextSize(12);
                 k.setAllCaps(false);
                 k.setTextColor(Color.WHITE);
-                k.setBackgroundColor(0xFF2A2B3D);
+                k.setBackground(M3.createRippleDrawable(ctx, M3.RADIUS_CHIP, M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
                 k.setMinHeight(dp(ctx, 40));
                 k.setPadding(dp(ctx, 2), dp(ctx, 6), dp(ctx, 2), dp(ctx, 6));
                 k.setSingleLine(true);
@@ -343,10 +342,7 @@ public final class ComboBuilderView {
         btnClear.setTextSize(12);
         btnClear.setAllCaps(true);
         btnClear.setTextColor(Color.WHITE);
-        android.graphics.drawable.GradientDrawable bgClear = new android.graphics.drawable.GradientDrawable();
-        bgClear.setCornerRadius(dp(ctx, 8));
-        bgClear.setColor(0x33FFFFFF);
-        btnClear.setBackground(bgClear);
+        btnClear.setBackground(M3.createRippleDrawable(ctx, M3.RADIUS_BUTTON, M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
         btnClear.setOnClickListener(v -> {
             clear();
             updatePreview();
@@ -358,10 +354,7 @@ public final class ComboBuilderView {
         btnApply.setTextSize(12);
         btnApply.setAllCaps(true);
         btnApply.setTextColor(Color.BLACK);
-        android.graphics.drawable.GradientDrawable bgApply = new android.graphics.drawable.GradientDrawable();
-        bgApply.setCornerRadius(dp(ctx, 8));
-        bgApply.setColor(0xFF80DEEA);
-        btnApply.setBackground(bgApply);
+        btnApply.setBackground(M3.createRippleDrawable(ctx, M3.RADIUS_BUTTON, M3.COLOR_PRIMARY, 0xAA80DEEA, 0));
         btnApply.setOnClickListener(v -> {
             commit();
             if (mDialog != null) mDialog.dismiss();

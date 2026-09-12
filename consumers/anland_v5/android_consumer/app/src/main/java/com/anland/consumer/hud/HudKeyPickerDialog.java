@@ -1,5 +1,6 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.theme.M3;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Color;
@@ -70,12 +71,12 @@ public final class HudKeyPickerDialog {
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(context, 16), dp(context, 16), dp(context, 16), dp(context, 16));
-        root.setBackgroundColor(0xFF1E1E2E);
+        root.setBackground(M3.shape(context, M3.RADIUS_CARD, M3.COLOR_SURFACE, M3.COLOR_BORDER_STRONG, 1.0f));
 
         // Header Title
         TextView title = new TextView(context);
         title.setText("SELECT KEY / ACTION");
-        title.setTextColor(Color.WHITE);
+        title.setTextColor(M3.COLOR_TEXT_PRIMARY);
         title.setTextSize(18);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setPadding(0, 0, 0, dp(context, 12));
@@ -99,16 +100,10 @@ public final class HudKeyPickerDialog {
 
         // Search filter input
         EditText searchInput = new EditText(context);
+        M3.styleInput(searchInput);
         searchInput.setHint("Search keys...");
         searchInput.setHintTextColor(0xFF888888);
-        searchInput.setTextColor(Color.WHITE);
-        searchInput.setTextSize(13);
         searchInput.setSingleLine(true);
-        android.graphics.drawable.GradientDrawable searchBg = new android.graphics.drawable.GradientDrawable();
-        searchBg.setCornerRadius(dp(context, 8));
-        searchBg.setColor(0xFF2A2B3D);
-        searchInput.setBackground(searchBg);
-        searchInput.setPadding(dp(context, 12), dp(context, 8), dp(context, 12), dp(context, 8));
         LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         searchLp.setMargins(0, 0, 0, dp(context, 8));
@@ -225,14 +220,11 @@ public final class HudKeyPickerDialog {
         for (int i = 0; i < tabRow.getChildCount(); i++) {
             Button b = (Button) tabRow.getChildAt(i);
             if (i == activeIdx) {
-                b.setTextColor(0xFF80DEEA);
+                b.setTextColor(M3.COLOR_PRIMARY);
                 b.setTypeface(Typeface.DEFAULT_BOLD);
-                android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-                bg.setCornerRadius(dp(b.getContext(), 8));
-                bg.setColor(0x3380DEEA);
-                b.setBackground(bg);
+                b.setBackground(M3.shape(b.getContext(), M3.RADIUS_CHIP, M3.COLOR_PRIMARY_CONTAINER, M3.COLOR_PRIMARY, 1.0f));
             } else {
-                b.setTextColor(0xFF888888);
+                b.setTextColor(M3.COLOR_TEXT_MUTED);
                 b.setTypeface(Typeface.DEFAULT);
                 b.setBackgroundColor(Color.TRANSPARENT);
             }
@@ -285,10 +277,7 @@ public final class HudKeyPickerDialog {
                 Button btn = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
                 btn.setText(entry.label);
                 btn.setTextColor(Color.WHITE);
-                android.graphics.drawable.GradientDrawable btnBg = new android.graphics.drawable.GradientDrawable();
-                btnBg.setCornerRadius(dp(ctx, 8));
-                btnBg.setColor(0xFF2A2B3D);
-                btn.setBackground(btnBg);
+                btn.setBackground(M3.createRippleDrawable(ctx, M3.RADIUS_CHIP, M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
                 btn.setPadding(dp(ctx, 4), dp(ctx, 6), dp(ctx, 4), dp(ctx, 6));
                 btn.setMinHeight(dp(ctx, 44));
                 btn.setMaxLines(2);

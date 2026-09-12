@@ -1,5 +1,6 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.theme.M3;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -87,11 +88,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mConfirmDeleteActive = false;
         if (mBtnDelete != null) {
             mBtnDelete.setText("DELETE");
-            android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-            bg.setCornerRadius(dp(12));
-            bg.setColor(0x33FF0000);
-            mBtnDelete.setBackground(bg);
-            mBtnDelete.setTextColor(0xFFF38BA8);
+            mBtnDelete.setBackground(M3.shape(getContext(), M3.RADIUS_BUTTON, 0x33FF0000, 0x55F38BA8, 1.0f));
+            mBtnDelete.setTextColor(M3.COLOR_ERROR);
         }
     };
     private LinearLayout mColorThemeRow;
@@ -411,22 +409,16 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mBtnDelete = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
         mBtnDelete.setText("DELETE");
         mBtnDelete.setAllCaps(true);
-        mBtnDelete.setTextColor(0xFFF38BA8);
+        mBtnDelete.setTextColor(M3.COLOR_ERROR);
         mBtnDelete.setTextSize(12);
-        android.graphics.drawable.GradientDrawable bgDel = new android.graphics.drawable.GradientDrawable();
-        bgDel.setCornerRadius(dp(12));
-        bgDel.setColor(0x33FF0000);
-        mBtnDelete.setBackground(bgDel);
+        mBtnDelete.setBackground(M3.shape(getContext(), M3.RADIUS_BUTTON, 0x33FF0000, 0x55F38BA8, 1.0f));
         mBtnDelete.setPadding(dp(16), dp(12), dp(16), dp(12));
         mBtnDelete.setLayoutParams(new LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         mBtnDelete.setOnClickListener(v -> {
             if (!mConfirmDeleteActive) {
                 mConfirmDeleteActive = true;
                 mBtnDelete.setText("CONFIRM ?");
-                android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
-                bg.setCornerRadius(dp(12));
-                bg.setColor(0xCCFF1744);
-                mBtnDelete.setBackground(bg);
+                mBtnDelete.setBackground(M3.shape(getContext(), M3.RADIUS_BUTTON, 0xCCFF1744, 0xFFFF5252, 1.0f));
                 mBtnDelete.setTextColor(Color.WHITE);
                 mDeleteHandler.postDelayed(mResetDeleteRunnable, 3000);
             } else {
@@ -444,9 +436,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         btnDuplicate.setAllCaps(true);
         btnDuplicate.setTextColor(Color.WHITE);
         btnDuplicate.setTextSize(12);
-        android.graphics.drawable.GradientDrawable bgDup = new android.graphics.drawable.GradientDrawable();
-        bgDup.setCornerRadius(dp(12));
-        bgDup.setColor(0x33FFFFFF);
+        btnDuplicate.setBackground(M3.createRippleDrawable(getContext(), M3.RADIUS_BUTTON, M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
         btnDuplicate.setBackground(bgDup);
         btnDuplicate.setPadding(dp(16), dp(12), dp(16), dp(12));
         LinearLayout.LayoutParams dupLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -614,40 +604,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
     }
 
     public static void styleSeekBar(SeekBar bar, int activeColor) {
-        float density = bar.getContext().getResources().getDisplayMetrics().density;
-        int trackHeight = Math.max(1, Math.round(3.5f * density));
-
-        android.graphics.drawable.GradientDrawable bgTrack = new android.graphics.drawable.GradientDrawable();
-        bgTrack.setCornerRadius(trackHeight * 0.5f);
-        bgTrack.setColor(0x33FFFFFF);
-
-        android.graphics.drawable.GradientDrawable progressTrack = new android.graphics.drawable.GradientDrawable();
-        progressTrack.setCornerRadius(trackHeight * 0.5f);
-        progressTrack.setColor(activeColor);
-        android.graphics.drawable.ClipDrawable clipProgress = new android.graphics.drawable.ClipDrawable(
-                progressTrack, Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL);
-
-        android.graphics.drawable.Drawable[] layers = new android.graphics.drawable.Drawable[] {
-                bgTrack, clipProgress
-        };
-        android.graphics.drawable.LayerDrawable layerDrawable = new android.graphics.drawable.LayerDrawable(layers);
-        layerDrawable.setId(0, android.R.id.background);
-        layerDrawable.setId(1, android.R.id.progress);
-
-        layerDrawable.setLayerHeight(0, trackHeight);
-        layerDrawable.setLayerGravity(0, Gravity.CENTER_VERTICAL | Gravity.FILL_HORIZONTAL);
-        layerDrawable.setLayerHeight(1, trackHeight);
-        layerDrawable.setLayerGravity(1, Gravity.CENTER_VERTICAL | Gravity.FILL_HORIZONTAL);
-
-        bar.setProgressDrawable(layerDrawable);
-
-        android.graphics.drawable.GradientDrawable thumb = new android.graphics.drawable.GradientDrawable();
-        thumb.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        int thumbSize = Math.round(14 * density);
-        thumb.setSize(thumbSize, thumbSize);
-        thumb.setColor(activeColor);
-        bar.setThumb(thumb);
-        bar.setSplitTrack(false);
+        M3.styleSeekBar(bar, activeColor);
     }
 
     private View createSliderRow(String title, SeekBar bar, EditText input, int min, int max, ValueConsumer consumer) {
