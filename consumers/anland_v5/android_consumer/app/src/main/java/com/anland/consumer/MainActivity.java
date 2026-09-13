@@ -2681,7 +2681,7 @@ public class MainActivity extends Activity
         mUserInteracted = true;
         if (mHudOverlay != null && mHudOverlay.isEditMode()) {
             if (keyCode == KeyEvent.KEYCODE_BACK) {
-                mHudOverlay.cancelEditMode();
+                mHudOverlay.requestExit();
                 return true;
             }
         }
@@ -2721,9 +2721,9 @@ public class MainActivity extends Activity
     // unexpectedly finish via gesture navigation.
     @Override
     public void onBackPressed() {
-        // 1. If the user is in HUD edit mode, cancel edit mode (discarding uncommitted edits).
+        // 1. If the user is in HUD edit mode, prompt exit confirmation dialog.
         if (mHudOverlay != null && mHudOverlay.isEditMode()) {
-            mHudOverlay.cancelEditMode();
+            mHudOverlay.requestExit();
             return;
         }
         // 2. Release an active pointer capture (Xiaomi/HyperOS back gesture).

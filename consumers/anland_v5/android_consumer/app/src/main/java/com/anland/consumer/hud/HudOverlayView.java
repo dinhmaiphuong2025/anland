@@ -176,6 +176,44 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         Toast.makeText(getContext(), "Changes Discarded", Toast.LENGTH_SHORT).show();
     }
 
+    public void requestExit() {
+        if (!mIsEditMode) return;
+        mInspectorView.setVisibility(GONE);
+
+        AlertDialog dialog = new AlertDialog.Builder(getContext(), AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("EXIT HUD EDITOR")
+                .setMessage("Save layout changes before exiting?")
+                .setPositiveButton("SAVE & EXIT", (d, w) -> {
+                    saveProfile();
+                    selectButton(null, null);
+                    setEditMode(false);
+                })
+                .setNegativeButton("DISCARD", (d, w) -> {
+                    cancelEditMode();
+                })
+                .setNeutralButton("CANCEL", (d, w) -> {
+                    d.dismiss();
+                })
+                .setOnDismissListener(d -> {
+                    if (mIsEditMode && mSelectedButton != null) {
+                        mInspectorView.setVisibility(VISIBLE);
+                    }
+                })
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(M3.shape(getContext(), M3.RADIUS_CARD, M3.COLOR_SURFACE, M3.COLOR_BORDER_STRONG, 1.0f));
+        }
+        dialog.show();
+
+        Button p = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        if (p != null) p.setTextColor(M3.COLOR_PRIMARY);
+        Button n = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+        if (n != null) n.setTextColor(M3.COLOR_ERROR);
+        Button c = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+        if (c != null) c.setTextColor(M3.COLOR_TEXT_MUTED);
+    }
+
     public void setEditMode(boolean editMode) {
         this.mIsEditMode = editMode;
         if (editMode) {
@@ -376,55 +414,48 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
         bar.setBackground(M3.shape(getContext(), M3.RADIUS_PILL, 0xF0181825, M3.COLOR_BORDER_STRONG, 1.0f));
-        bar.setPadding(dp(10), dp(6), dp(10), dp(6));
+        bar.setPadding(dp(8), dp(6), dp(8), dp(6));
         bar.setElevation(dp(8));
 
-        // Save
+        // 1. SAVE
         Button btnSave = createToolButton("SAVE");
         btnSave.setTextColor(M3.COLOR_PRIMARY);
         btnSave.setOnClickListener(v -> saveProfile());
-        bar.addView(btnSave);
+        bar.addView(btnSave, createToolButtonLayoutParams(false));
 
-        // + ADD
-        Button btnAdd = createToolButton("+ ADD");
+        // 2. ADD
+        Button btnAdd = createToolButton("ADD");
         btnAdd.setOnClickListener(v -> showAddWidgetChooser());
-        LinearLayout.LayoutParams addLp = (LinearLayout.LayoutParams) btnAdd.getLayoutParams();
-        addLp.leftMargin = dp(6);
-        btnAdd.setLayoutParams(addLp);
-        bar.addView(btnAdd);
+        bar.addView(btnAdd, createToolButtonLayoutParams(true));
 
-        // SNAP toggle
-        Button btnSnap = createToolButton(mSnapEnabled ? "SNAP: ON" : "SNAP: OFF");
-        btnSnap.setTextColor(mSnapEnabled ? 0xFF80DEEA : 0xFF888888);
+        // 3. SNAP toggle
+        Button btnSnap = createToolButton("SNAP");
+        btnSnap.setTextColor(mSnapEnabled ? M3.COLOR_PRIMARY : M3.COLOR_TEXT_MUTED);
         btnSnap.setOnClickListener(v -> {
             mSnapEnabled = !mSnapEnabled;
-            btnSnap.setText(mSnapEnabled ? "SNAP: ON" : "SNAP: OFF");
-            btnSnap.setTextColor(mSnapEnabled ? 0xFF80DEEA : 0xFF888888);
+            btnSnap.setTextColor(mSnapEnabled ? M3.COLOR_PRIMARY : M3.COLOR_TEXT_MUTED);
+            Toast.makeText(getContext(), mSnapEnabled ? "Snap to Grid: ON" : "Snap to Grid: OFF", Toast.LENGTH_SHORT).show();
         });
-        LinearLayout.LayoutParams snapLp = (LinearLayout.LayoutParams) btnSnap.getLayoutParams();
-        snapLp.leftMargin = dp(6);
-        btnSnap.setLayoutParams(snapLp);
-        bar.addView(btnSnap);
+        bar.addView(btnSnap, createToolButtonLayoutParams(true));
 
-        // LAYOUT (Copy / Presets / Clear)
+        // 4. LAYOUT
         Button btnLayout = createToolButton("LAYOUT");
         btnLayout.setOnClickListener(v -> showLayoutOptionsChooser());
-        LinearLayout.LayoutParams layoutLp = (LinearLayout.LayoutParams) btnLayout.getLayoutParams();
-        layoutLp.leftMargin = dp(6);
-        btnLayout.setLayoutParams(layoutLp);
-        bar.addView(btnLayout);
+        bar.addView(btnLayout, createToolButtonLayoutParams(true));
 
-        // Spacer pushes the cancel button to the right edge.
-        View spacer = new View(getContext());
-        bar.addView(spacer, new LinearLayout.LayoutParams(0, 1, 1f));
-
-        // Cancel / Exit Edit.
-        Button btnExit = createToolButton("CANCEL");
-        btnExit.setTextColor(0xFFF38BA8);
-        btnExit.setOnClickListener(v -> cancelEditMode());
-        bar.addView(btnExit);
+        // 5. EXIT (prompts save confirmation)
+        Button btnExit = createToolButton("EXIT");
+        btnExit.setTextColor(M3.COLOR_ERROR);
+        btnExit.setOnClickListener(v -> requestExit());
+        bar.addView(btnExit, createToolButtonLayoutParams(true));
 
         return bar;
+    }
+
+    private LinearLayout.LayoutParams createToolButtonLayoutParams(boolean hasLeftMargin) {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(34), 1f);
+        if (hasLeftMargin) lp.leftMargin = dp(4);
+        return lp;
     }
 
     private void showLayoutOptionsChooser() {
@@ -591,16 +622,15 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         Button b = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
         b.setText(label);
         b.setAllCaps(true);
-        b.setTextSize(11);
+        b.setTextSize(11f);
+        b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setTextColor(Color.WHITE);
         b.setBackground(M3.createRippleDrawable(getContext(), M3.RADIUS_CHIP, 0x22FFFFFF, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
-        b.setPadding(dp(12), dp(6), dp(12), dp(6));
+        b.setPadding(dp(4), dp(4), dp(4), dp(4));
+        b.setGravity(Gravity.CENTER);
+        b.setSingleLine(true);
         b.setMinWidth(0);
         b.setMinHeight(0);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
-        b.setLayoutParams(lp);
         return b;
     }
 

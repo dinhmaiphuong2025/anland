@@ -113,10 +113,10 @@ public final class HudPropertyInspectorView extends LinearLayout {
         panelBg.setColor(0xF0181825);
         panelBg.setStroke(dp(1), 0x33FFFFFF);
         setBackground(panelBg);
-        setPadding(dp(16), dp(8), dp(16), dp(12));
+        setPadding(0, 0, 0, dp(10));
         setElevation(dp(8));
 
-        // 1. Draggable Header Bar with vector grip icon and top-anchored DUP & DEL buttons
+        // 1. Full-width Draggable Header Bar (flush with top, left, right edges)
         LinearLayout header = new LinearLayout(getContext());
         header.setOrientation(HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -125,7 +125,10 @@ public final class HudPropertyInspectorView extends LinearLayout {
         headerBg.setCornerRadii(new float[]{hr, hr, hr, hr, 0, 0, 0, 0});
         headerBg.setColor(0x2AFFFFFF);
         header.setBackground(headerBg);
-        header.setPadding(dp(12), dp(6), dp(10), dp(6));
+        header.setPadding(dp(14), dp(8), dp(10), dp(8));
+        LinearLayout.LayoutParams headerLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        header.setLayoutParams(headerLp);
 
         M3.DragGripView grip = new M3.DragGripView(getContext());
         header.addView(grip);
@@ -223,9 +226,12 @@ public final class HudPropertyInspectorView extends LinearLayout {
         addView(header);
 
         mScrollView = new ScrollView(getContext());
+        mScrollView.setVerticalScrollBarEnabled(true);
+        mScrollView.setScrollbarFadingEnabled(true);
+        mScrollView.setScrollBarStyle(View.SCROLLBARS_INSIDE_OVERLAY);
         LinearLayout content = new LinearLayout(getContext());
         content.setOrientation(VERTICAL);
-        content.setPadding(0, dp(8), 0, dp(4));
+        content.setPadding(dp(16), dp(8), dp(16), dp(4));
 
         mTitleText = new TextView(getContext());
         mTitleText.setText("BUTTON PROPERTIES");
