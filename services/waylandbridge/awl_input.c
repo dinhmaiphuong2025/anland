@@ -74,26 +74,22 @@ static struct wl_resource* res_for(struct wl_list* list, uint64_t win_id) {
     return NULL;
 }
 
-/* Window view (Android physical pixels) → root logical coordinates (#31 zoom).
- * f = content base size / window physical size (awl_surface_content_size /
- * phys_w) — chrome-like clients' viewport dst includes shadow margins, the
- * content base = the xdg geometry rectangle (= configure size): f = 1/Z
- * exactly; also holds when fixed-size clients are stretched.
- * The xdg geometry origin is aligned with the view origin (shared with the
- * rendering dst, both in logical coordinates):
- * with geometry → logical = geom origin + view×f; without → view×f.
- * Caller holds s->ev_lock. */
+/* Window view (Android physical pixels) → root logical coordinates
+ * (#31 zoom, #34 scale_mode): the inverse of the root's view mapping
+ * (awl_surface_view_map — view = (logical − geom origin) × s + o; s = Z,
+ * o = 0 for content following the configure, scale_mode placement
+ * otherwise), logical = geom origin + (view − o)/s. Degenerate size →
+ * identity map (inside the mapping). The geometry origin is the same anchor
+ * the render dst uses (chrome-like clients' viewport dst carries shadow
+ * margins around the geometry rectangle). Caller holds s->ev_lock. */
 static void view_to_surface(struct awl_surface* s, float* x, float* y) {
-    float lw = 0, lh = 0;
-    awl_surface_content_size(s, &lw, &lh);
-    float fx = (s->phys_w > 0 && lw > 0.5f) ? lw / (float)s->phys_w : 1.0f;
-    float fy = (s->phys_h > 0 && lh > 0.5f) ? lh / (float)s->phys_h : 1.0f;
+    double sx, sy, ox, oy;
+    awl_surface_view_map(s, &sx, &sy, &ox, &oy);
+    *x = (float)(((double)*x - ox) / sx);
+    *y = (float)(((double)*y - oy) / sy);
     if (s->geom_valid) {
-        *x = (float)s->geom_x + *x * fx;
-        *y = (float)s->geom_y + *y * fy;
-    } else {
-        *x *= fx;
-        *y *= fy;
+        *x += (float)s->geom_x;
+        *y += (float)s->geom_y;
     }
 }
 
@@ -501,13 +497,11 @@ static void tr_ptr_rel(uint64_t win, double dx, double dy) {
     struct wl_resource* ptr = resolve(&g_ptrs, win, &s);
     if (ptr && s) {
         pthread_mutex_lock(&s->ev_lock);
-        float lw = 0, lh = 0;
-        awl_surface_content_size(s, &lw, &lh);
-        float fx = (s->phys_w > 0 && lw > 0.5f) ? lw / (float)s->phys_w : 1.0f;
-        float fy = (s->phys_h > 0 && lh > 0.5f) ? lh / (float)s->phys_h : 1.0f;
+        double sx, sy, ox, oy;
+        awl_surface_view_map(s, &sx, &sy, &ox, &oy);
         pthread_mutex_unlock(&s->ev_lock);
-        dx *= fx;
-        dy *= fy;
+        dx /= sx;   /* #34: same basis as view_to_surface — the translation term cancels in a delta */
+        dy /= sy;
         struct wl_client* c = wl_resource_get_client(ptr);
         uint64_t utime = (uint64_t)awl_now_ms() * 1000;
         pthread_mutex_lock(&g_rel_lock);
@@ -1064,6 +1058,7 @@ int awl_pointer_cursor_layer(uint64_t root_id, awl_layer_info_t* out) {
         awl_surface_logical_size(cs, &w, &h);   /* viewport dst | source | buffer/scale, logical px */
         float u0, v0, su, sv;
         awl_surface_layer_uv(cs, &u0, &v0, &su, &sv);
+        int32_t xform = cs->buf_transform;
         pthread_mutex_unlock(&cs->ev_lock);
         if (w > 0.5f && h > 0.5f) {   /* no buffer yet → nothing to draw (the commit re-dirties) */
             uint64_t pos = atomic_load(&g_cursor_pos);   /* one word: x and y from the same event */
@@ -1075,6 +1070,7 @@ int awl_pointer_cursor_layer(uint64_t root_id, awl_layer_info_t* out) {
             out->h = h;
             out->u0 = u0; out->v0 = v0;
             out->su = su; out->sv = sv;
+            out->transform = xform;
             ok = 1;
         }
     }
@@ -1155,7 +1151,9 @@ struct awl_constr {
 };
 
 /* Region (root-local logical) → Activity view px, the inverse of
- * view_to_surface: view = (rg − geometry origin) × phys / content-base.
+ * view_to_surface: view = (rg − geometry origin) × s + o through the root's
+ * view mapping (awl_surface_view_map: 1:1 at Z, or the scale_mode letterbox
+ * offsets for content ignoring the configure).
  * Caller holds rwl.rd + root ev_lock. No region / unknown window size →
  * the whole window (zeros are the APK's "whole window" convention). */
 static void constr_app_rect(struct awl_surface* root, int has_region,
@@ -1169,13 +1167,18 @@ static void constr_app_rect(struct awl_surface* root, int has_region,
         out[2] = root->phys_w; out[3] = root->phys_h;
         return;
     }
-    float fx = (float)root->phys_w / cw, fy = (float)root->phys_h / ch;
-    float x = (float)rx, y = (float)ry, w = (float)rw, h = (float)rh;
-    if (root->geom_valid) { x -= (float)root->geom_x; y -= (float)root->geom_y; }
-    out[0] = x < 0 ? 0 : (int32_t)(x * fx);
-    out[1] = y < 0 ? 0 : (int32_t)(y * fy);
-    out[2] = w < 0 ? 0 : (int32_t)(w * fx);
-    out[3] = h < 0 ? 0 : (int32_t)(h * fy);
+    double sx, sy, ox, oy;
+    awl_surface_view_map(root, &sx, &sy, &ox, &oy);
+    double x = rx, y = ry, w = rw, h = rh;
+    if (root->geom_valid) { x -= root->geom_x; y -= root->geom_y; }
+    x = x * sx + ox;
+    y = y * sy + oy;
+    w *= sx;
+    h *= sy;
+    out[0] = x < 0 ? 0 : (int32_t)x;
+    out[1] = y < 0 ? 0 : (int32_t)y;
+    out[2] = w < 0 ? 0 : (int32_t)w;
+    out[3] = h < 0 ? 0 : (int32_t)h;
 }
 
 static void constr_destroy(struct wl_client* client, struct wl_resource* res) {
@@ -1406,4 +1409,65 @@ uint64_t awl_input_constr_surface_gone(struct awl_surface* s) {
 void awl_input_constr_gone_notify(uint64_t win) {
     if (!win || !g_srv.cbs.pointer_lock) return;
     g_srv.cbs.pointer_lock(g_srv.cbs.user, win, AWL_CAPTURE_NONE, 0, 0, 0, 0);
+}
+
+/* Re-convert + re-push the confine rects (view px) of the live constraints
+ * (#34): the view mapping moved underneath them — a scale_mode switch
+ * (awl_viewport.c) or a window resize (awl_xdg.c tail; the letterbox offset
+ * and stretch ratio both derive from phys). Without this the APK clamp box
+ * drifts onto the black bars. root_id 0 = every root.
+ * Lock order rwl.rd → g_constr_lock → root ev_lock (same as
+ * constr_set_region); callbacks fire after every lock is released. Before
+ * each push the constraint is re-checked to still be linked (narrows the
+ * race against constr_res_destroy, which unlinks under g_constr_lock only —
+ * a residual window remains, same class as the APK's documented
+ * C_CAPTURE×input cross-node ordering). Dead constraints are skipped
+ * (surface_gone already pushed NONE); LOCK rects are ignored by the APK —
+ * re-pushing is harmless. */
+void awl_input_constr_remap(uint64_t root_id) {
+    if (!g_srv.cbs.pointer_lock) return;
+    struct remap_snap {
+        uint64_t root;
+        struct awl_constr* c;
+        int mode;
+        int32_t r[4];
+    };
+    struct remap_snap snap[16];
+    int n;
+    do {   /* full batch = maybe more entries: another idempotent pass */
+        n = 0;
+        pthread_rwlock_rdlock(&g_srv.rwl);
+        pthread_mutex_lock(&g_constr_lock);
+        struct awl_constr* c;
+        wl_list_for_each(c, &g_constrs, link) {
+            if (c->dead || (root_id && c->root_id != root_id)) continue;
+            struct awl_surface* root = awl_surface_by_id(c->root_id);
+            if (!root) continue;
+            pthread_mutex_lock(&root->ev_lock);
+            constr_app_rect(root, c->has_region,
+                            c->rg_x, c->rg_y, c->rg_w, c->rg_h, c->r);
+            pthread_mutex_unlock(&root->ev_lock);
+            if (n < (int)(sizeof(snap) / sizeof(snap[0]))) {
+                snap[n].root = c->root_id;
+                snap[n].c = c;
+                snap[n].mode = c->mode;
+                memcpy(snap[n].r, c->r, sizeof(snap[n].r));
+                n++;
+            }
+        }
+        pthread_mutex_unlock(&g_constr_lock);
+        pthread_rwlock_unlock(&g_srv.rwl);
+        for (int i = 0; i < n; i++) {
+            int alive = 0;
+            pthread_mutex_lock(&g_constr_lock);
+            struct awl_constr* it;
+            wl_list_for_each(it, &g_constrs, link)
+                if (it == snap[i].c) { alive = 1; break; }
+            pthread_mutex_unlock(&g_constr_lock);
+            if (!alive) continue;   /* destroyed while the locks were down */
+            g_srv.cbs.pointer_lock(g_srv.cbs.user, snap[i].root, snap[i].mode,
+                                   snap[i].r[0], snap[i].r[1],
+                                   snap[i].r[2], snap[i].r[3]);
+        }
+    } while (n == (int)(sizeof(snap) / sizeof(snap[0])));
 }

@@ -76,6 +76,21 @@ pid_t awl_window_client_pid(uint64_t id) {
     return pid > 0 ? pid : 0;
 }
 
+/* Window id → wayland client uid, same credential source and locking as
+ * awl_window_client_pid (binder SURFACE auth pass: the attaching app's uid
+ * must equal the uid of the client that owns the window). (uid_t)-1 =
+ * unknown/destroyed — never equals a real binder uid, so an unresolvable
+ * window denies unlisted callers by itself. */
+uid_t awl_window_client_uid(uint64_t id) {
+    pthread_rwlock_rdlock(&g_srv.rwl);
+    struct awl_surface* s = awl_surface_by_id(id);
+    struct wl_client* c = (s && s->resource) ? wl_resource_get_client(s->resource) : NULL;
+    uid_t uid = (uid_t)-1;
+    if (c) wl_client_get_credentials(c, NULL, &uid, NULL);
+    pthread_rwlock_unlock(&g_srv.rwl);
+    return uid;
+}
+
 /* Enqueue a deferred release (caller holds this surface's ev_lock).
  * Full queue = rendering stalled: release the head immediately so the
  * client does not starve (old timing, better than deadlock). */
@@ -230,6 +245,8 @@ static void surface_destroy_impl(struct wl_resource* res) {
     /* idle inhibitors on this surface / its root die with it: C_KEEPON off
      * after the lock, when the window's aggregate flipped to zero */
     uint64_t idle_win = awl_idle_surface_gone(s);
+    /* the toplevel icon (pending + applied) dies with its surface */
+    awl_icon_surface_gone(s);
 
     struct awl_frame_cb* cb;
     struct awl_frame_cb* tmp;
@@ -397,7 +414,21 @@ static void surface_set_opaque_region(struct wl_client* c, struct wl_resource* r
 static void surface_set_input_region(struct wl_client* c, struct wl_resource* r,
                                      struct wl_resource* region) {}
 static void surface_set_buffer_transform(struct wl_client* c, struct wl_resource* r,
-                                         int32_t transform) {}
+                                         int32_t transform) {
+    /* Wayland: buffer transform, one of wl_output.transform (0..7), applied on
+     * commit (double-buffered like viewport state); invalid value = protocol
+     * error. 90/270 swap the surface logical size (awl_viewport.c). */
+    if (transform < 0 || transform > 7) {
+        wl_resource_post_error(r, WL_SURFACE_ERROR_INVALID_TRANSFORM,
+                               "invalid transform %d", transform);
+        return;
+    }
+    struct awl_surface* s = wl_resource_get_user_data(r);
+    if (!s) return;
+    pthread_mutex_lock(&s->ev_lock);
+    s->pend_buf_transform = transform;
+    pthread_mutex_unlock(&s->ev_lock);
+}
 static void surface_set_buffer_scale(struct wl_client* c, struct wl_resource* r,
                                      int32_t scale) {
     /* #31: record integer buffer scale (logical size = buffer/scale; when
@@ -483,6 +514,10 @@ static void surface_commit(struct wl_client* client, struct wl_resource* res) {
         s->vp_has_src = s->vp_sw > 0 && s->vp_sh > 0;
         s->pend_vps = 0;
     }
+    if (s->pend_buf_transform >= 0) {   /* set_buffer_transform (double-buffered) */
+        s->buf_transform = s->pend_buf_transform;
+        s->pend_buf_transform = -1;
+    }
     struct wl_resource* old = s->current_buffer_res;
     int attached = s->pending_attached;
     int32_t off_x = 0, off_y = 0;   /* attach dx,dy of this cycle (cursor role: moves the hotspot) */
@@ -517,6 +552,10 @@ static void surface_commit(struct wl_client* client, struct wl_resource* res) {
         awl_surface_release_defer(s, old);
     pthread_mutex_unlock(&s->ev_lock);
 
+    /* xdg-toplevel-icon: pending icon state applies on every commit (empty
+     * included); awl_icon_commit fires its callback itself, outside ev_lock */
+    awl_icon_commit(s);
+
     /* cursor image committed with an attach offset → hotspot follows (kwin
      * SurfaceCursorSource::refresh: hotspot -= offset); outside ev_lock
      * (order g_cursor_lock → ev_lock) */
@@ -533,6 +572,8 @@ static void surface_commit(struct wl_client* client, struct wl_resource* res) {
     int children_applied = awl_subsurface_parent_applied(s);
 
     if (!s->current_buffer_res) {   /* empty commit (e.g. requesting configure / sync flush) */
+        LOGD("surface %llu empty commit (children_applied=%d)",
+             (unsigned long long)s->id, children_applied);
         /* child state changed → root window redraw (walk-up inside); a cursor
          * image detached (attach NULL) → the compositing window drops the layer */
         if (children_applied || (s->role == AWL_ROLE_CURSOR && attached))
@@ -566,6 +607,8 @@ static void surface_commit(struct wl_client* client, struct wl_resource* res) {
         }
     }
 
+    LOGD("surface %llu commit buf=%p",
+         (unsigned long long)s->id, (void*)s->current_buffer_res);
     schedule_render(s);
 }
 
@@ -595,6 +638,8 @@ static void compositor_create_surface(struct wl_client* client,
     s->id = g_srv.next_surface_id++;   /* event thread is the sole writer, no lock */
     s->role = AWL_ROLE_NONE;
     s->buf_scale = 1;   /* #31: wl_surface.set_buffer_scale defaults to 1 */
+    s->buf_transform = 0;   /* set_buffer_transform default = wl_output.transform.normal */
+    s->pend_buf_transform = -1;   /* -1 = nothing pending */
     s->pending_damage_empty = 1;   /* damage accumulator starts empty (calloc 0 = "has rect") */
     {
         pthread_mutexattr_t attr;
@@ -707,6 +752,7 @@ int awl_surface_get_buffer(uint64_t id, awl_buffer_info_t* out) {
         out->kind = AWL_BUFFER_DMABUF;
         out->token = buf_res;
         out->fd = fd;
+        out->ino = b->ino;
         out->width = b->width;
         out->height = b->height;
         out->stride = b->stride;
@@ -720,21 +766,21 @@ int awl_surface_get_buffer(uint64_t id, awl_buffer_info_t* out) {
     return -1;   /* unknown buffer type */
 }
 
-/* Root's geometry origin + content base size (shared by render/input:
- * view (0,0) ↔ geometry rectangle origin, rectangle size ↔ window size —
- * chrome dst shadow margins overflow the bounds and get clipped).
- * Any thread; rd resolution + ev_lock snapshot. */
-void awl_surface_get_origin(uint64_t id, int32_t* ox, int32_t* oy,
-                            float* cw, float* ch) {
-    *ox = *oy = 0;
-    if (cw) *cw = 0;
-    if (ch) *ch = 0;
+/* Root's view transform for the render thread: geometry origin (view (0,0)
+ * ↔ geometry rectangle origin; chrome dst shadow margins overflow the
+ * bounds and get clipped) + the logical→view mapping of awl_surface_view_map
+ * — one snapshot under ev_lock, the same numbers the input inverse reads.
+ * Unknown root → identity. Any thread; rd resolution + ev_lock snapshot. */
+void awl_surface_get_view_xform(uint64_t id, awl_view_xform_t* out) {
+    out->gox = out->goy = 0;
+    out->sx = out->sy = 1.0;
+    out->ox = out->oy = 0.0;
     pthread_rwlock_rdlock(&g_srv.rwl);
     struct awl_surface* s = awl_surface_by_id(id);
     if (s) {
         pthread_mutex_lock(&s->ev_lock);
-        if (s->geom_valid) { *ox = s->geom_x; *oy = s->geom_y; }
-        if (cw && ch) awl_surface_content_size(s, cw, ch);
+        if (s->geom_valid) { out->gox = s->geom_x; out->goy = s->geom_y; }
+        awl_surface_view_map(s, &out->sx, &out->sy, &out->ox, &out->oy);
         pthread_mutex_unlock(&s->ev_lock);
     }
     pthread_rwlock_unlock(&g_srv.rwl);

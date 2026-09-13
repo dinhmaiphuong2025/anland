@@ -130,21 +130,25 @@ static struct awl_surface* obj_surface(struct awl_ime_obj* o) {
 static void push_state_impl(struct awl_ime_obj* o, uint32_t flags) {
     struct awl_surface* s = obj_surface(o);
     if (!s || !g_srv.cbs.ime_state) return;
-    /* #31 scaling: cursor rectangle is client logical coords → Activity
-     * window physical px (×r = window/content basis; chrome dst includes
-     * shadow margins → content basis = geometry rect, r=Z exact; geometry
-     * origin not subtracted, client coord system scaled as-is).
-     * Caller holds rwl.rd — read the root surface directly (no rwl taken). */
+    /* #31/#34 scaling: cursor rectangle is client logical coords → Activity
+     * window view px through the root's view mapping (awl_surface_view_map,
+     * view = logical×s + o — 1:1 at Z for content following the configure;
+     * chrome dst includes shadow margins → content basis = geometry rect).
+     * The geometry origin IS subtracted (same anchor as the render dst and
+     * input mapping — the old code skipped it and scaled both axes by the x
+     * ratio, which sat off by the margin and mis-scaled y under anisotropic
+     * stretch). Caller holds rwl.rd — read the root surface directly. */
     struct awl_surface* root = awl_subsurface_root(s);
     pthread_mutex_lock(&root->ev_lock);
-    float lw = 0, lh = 0;
-    awl_surface_content_size(root, &lw, &lh);
-    float r = (root->phys_w > 0 && lw > 0.5f) ? (float)root->phys_w / lw : 1.0f;
+    double sx, sy, ox, oy;
+    awl_surface_view_map(root, &sx, &sy, &ox, &oy);
+    double gx = root->geom_valid ? (double)root->geom_x : 0.0;
+    double gy = root->geom_valid ? (double)root->geom_y : 0.0;
     pthread_mutex_unlock(&root->ev_lock);
-    int32_t cx = (int32_t)((float)o->cx * r);
-    int32_t cy = (int32_t)((float)o->cy * r);
-    int32_t cw = (int32_t)((float)o->cw * r);
-    int32_t ch = (int32_t)((float)o->ch * r);
+    int32_t cx = (int32_t)(((double)o->cx - gx) * sx + ox);
+    int32_t cy = (int32_t)(((double)o->cy - gy) * sy + oy);
+    int32_t cw = (int32_t)((double)o->cw * sx);
+    int32_t ch = (int32_t)((double)o->ch * sy);
     g_srv.cbs.ime_state(g_srv.cbs.user, s->id, o->text,
                         (int32_t)o->cursor, (int32_t)o->anchor,
                         o->hint, o->purpose, cx, cy, cw, ch,

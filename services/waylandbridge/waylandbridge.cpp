@@ -9,7 +9,7 @@
  *     held by the daemon)
  *   - window state table: alive (wayland window exists) / attached
  *     (Activity holds a surface)
- *   - Attach = am start WlWindowActivity(--el id) (bring-to-front if
+ *   - Attach = am start AwlWindowActivity(libawl, --el id) (bring-to-front if
  *     already present)
  *   - single-attach model (APK only reports facts; all decisions in the
  *     daemon):
@@ -28,6 +28,16 @@
  *     semantics, wayland window kept alive)
  *   - window_destroyed (client quit on its own) → ctrl/broadcast tells
  *     the Activity to finish
+ *   - window events (T_SUBSCRIBE): created/destroyed/attached/detached
+ *     pushed to subscriber apps over their own binder; unauthenticated
+ *     apps receive only their own uid's windows; a paused subscriber is
+ *     disconnected automatically (its own report, binder death, failed
+ *     send, or the oom_score_adj watchdog)
+ *   - wayland connections over binder (T_CONNECT, #36): an app sends one
+ *     end of its own socketpair and connects wl_display_connect_to_fd on
+ *     the other — no wayland-0 socket file needed (config "socket_listen"
+ *     0 disables listening entirely; the fd's SO_PEERCRED still carries
+ *     the caller's uid/pid, so per-window ownership checks are unchanged)
  */
 #include "awl.h"
 #include "awl_renderer.hpp"
@@ -75,8 +85,10 @@ static bool binder_plat_init(void) {
 #include <sys/system_properties.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -86,7 +98,7 @@ static bool binder_plat_init(void) {
 
 #define AWL_BINDER_NAME "anland.host"
 #define AWL_PKG  "com.anlandnext"
-#define AWL_WIN_ACT AWL_PKG "/.WlWindowActivity"
+#define AWL_WIN_ACT AWL_PKG "/com.anlandnext.awl.AwlWindowActivity"   /* libawl-merged (host APK ships no activity of its own) */
 
 /* binder transaction codes (agreed with the APP BinderProxy)
  * single-attach model: the APK only reports facts; detach/evict/close
@@ -113,6 +125,40 @@ enum {
                            config.json (daemon is the single source of truth; APK only reads/writes values) */
     AWL_T_CLOSE   = 14,  /* (id:i64) → ok:i32; list long-press "close": request graceful
                             client exit (xdg toplevel.close / X WM_DELETE_WINDOW) */
+    AWL_T_ICON    = 15,  /* (id:i64) → w:i32 h:i32 bytes[RGBA] — current toplevel icon
+                            (xdg-toplevel-icon-v1, best buffer, w=0 = none) */
+    AWL_T_SUBSCRIBE = 16, /* (listener binder) → ok:i32; window lifecycle events
+                            * (create/destroy/attach/detach) pushed to the listener
+                            * as anland.IEvents oneways. Normal apps receive only
+                            * the windows of their own uid (same ownership pass as
+                            * SURFACE); allowlisted callers receive everything */
+    AWL_T_UNSUBSCRIBE = 17, /* (listener binder) → ok:i32; stop the events (the
+                              * app reports its own pause; the daemon watchdog
+                              * backstops apps that never report) */
+    AWL_T_CONNECT  = 18,  /* (fd:i32) → ok:i32; wayland connection over binder
+                            * (#36, THIRD-PARTY apps — the host APK never calls
+                            * this). Client recipe: (1) create a socketpair
+                            * YOURSELF (never let the daemon do it — SO_PEERCRED
+                            * on the daemon-held end is fixed at creation to
+                            * YOUR uid/pid, which is what the daemon's
+                            * window-ownership checks read); (2) getService
+                            * "anland.host", writeInterfaceToken "anland.IHost",
+                            * writeFileDescriptor(one end), transact code 18;
+                            * (3) close your copy of the sent end (or the
+                            * daemon's death will never EOF yours); (4)
+                            * wl_display_connect_to_fd on the kept end. With
+                            * config socket_listen=0 this is the only way in. */
+};
+
+/* ---- window lifecycle events (daemon → subscriber apps, delivered over
+ *      the binder reported with SUBSCRIBE; field order matches what the
+ *      subscriber's onTransact reads) ---- */
+#define AWL_EVT_DESC "anland.IEvents"
+enum {
+    AWL_E_CREATED = 1,   /* (id:i64 title:string16) xdg map → new window */
+    AWL_E_DESTROYED = 2, /* (id:i64) client quit / T_CLOSE wrapped up */
+    AWL_E_ATTACHED = 3,  /* (id:i64) SURFACE accepted → Activity holds a surface */
+    AWL_E_DETACHED = 4,  /* (id:i64) full detach (pause / evict / app death) */
 };
 
 /* control channel (daemon → Activity, delivered over the binder object
@@ -143,6 +189,10 @@ enum {
                                  honored while the window is visible = the
                                  protocol's visible-surface semantics), 0 →
                                  clears it */
+#define AWL_C_ICON 10         /* (has:i32) xdg-toplevel-icon-v1 icon applied or
+                                 reset on this window's toplevel → the Activity
+                                 re-fetches the pixels (AWL_T_ICON) and re-applies
+                                 its task description */
 #define AWL_CTRL_DESC "anland.ICtrl"
 
 /* ---------------- window state table ---------------- */
@@ -195,6 +245,11 @@ static bool any_attached_locked(void) {
     return false;
 }
 
+/* window lifecycle events (defined with the event-subscription block below;
+ * owner = the window's wayland client uid, resolved by the caller because
+ * awl_window_client_uid must never run under g_state_lock) */
+static void evt_dispatch(uid_t owner, uint64_t id, transaction_code_t code, const char* title);
+
 /* Full detach (minimize semantics: wayland window kept alive, render
  * resources/control channel fully torn down).
  * pause / evict / process death / window destroy all take this path.
@@ -240,6 +295,9 @@ static void detach_window(uint64_t id) {
         ev.type = AWL_IN_KBD_LEAVE;
         awl_input_dispatch(&ev);
     }
+    /* lifecycle event (the window stays alive on every detach path, so its
+     * client uid still resolves; the read runs outside g_state_lock) */
+    evt_dispatch(awl_window_client_uid(id), id, AWL_E_DETACHED, nullptr);
     LOGI("window %llu detached (minimized, wayland window kept alive)", (unsigned long long)id);
 }
 
@@ -319,6 +377,153 @@ static bool ctrl_send_ints(AIBinder* ctrl, transaction_code_t code,
     return ctrl_transact(ctrl, code, &in);
 }
 
+/* ---------------- window event subscriptions (#35) ----------------
+ * Subscriber apps pass a binder ("anland.IEvents") over T_SUBSCRIBE; the
+ * daemon pushes oneway lifecycle events (AWL_E_*) to it. Scope: root(0)/
+ * self and AWL_PKG's uid (caller_allowlisted) receive every window; any
+ * other app only the windows whose wayland client runs under its own uid —
+ * the same ownership pass as SURFACE (binder-assigned uid vs the socket
+ * credentials libwayland cached at connect).
+ * Disconnect — all automatic, a subscription needs no daemon-side lifetime
+ * bookkeeping from the app:
+ *   T_UNSUBSCRIBE  the app reports its own pause (Activity onPause)
+ *   binder death   process gone (AIBinder_linkToDeath)
+ *   send failure   frozen/dead channel (ONEWAY transact failed — OEM
+ *                  freezers show up here first)
+ *   watchdog       daemon-detected pause: the subscriber's
+ *                  /proc/<pid>/oom_score_adj rose to cached level — an app
+ *                  that went background without reporting. Events are
+ *                  live-edge only (never replayed): on resume the app
+ *                  re-subscribes and re-pulls LIST. */
+
+static AIBinder_Class* k_evt_class = nullptr;
+static AIBinder_DeathRecipient* k_evt_death = nullptr;
+
+struct awl_sub {
+    AIBinder* listener;   /* subscriber's event binder (ref held for linkToDeath) */
+    uid_t uid;            /* binder-assigned uid at subscribe time (scope filter) */
+    pid_t pid;            /* binder-assigned pid at subscribe time (watchdog) */
+    bool all;             /* allowlisted caller: receives every window's events */
+};
+static std::vector<awl_sub*> g_subs;   /* guarded by g_state_lock */
+
+/* Remove one subscription. Idempotent on the pointer: a concurrent death
+ * callback / watchdog round may have removed (and freed) it already — the
+ * vector search under g_state_lock decides the sole owner of the free, the
+ * pointer value itself is only compared, never dereferenced. */
+static void evt_drop(awl_sub* s) {
+    {
+        std::lock_guard<std::mutex> lk(g_state_lock);
+        auto it = std::find(g_subs.begin(), g_subs.end(), s);
+        if (it == g_subs.end()) return;
+        g_subs.erase(it);
+    }
+    /* unlink BEFORE releasing the ref: a death callback firing after the
+     * free would deref a dead cookie (unlink fails silently once the peer
+     * is already dead, which is fine) */
+    AIBinder_unlinkToDeath(s->listener, k_evt_death, s);
+    AIBinder_decStrong(s->listener);
+    delete s;
+}
+
+static void on_evt_died(void* cookie) {
+    /* the watchdog may have dropped (and freed) this subscription already
+     * (process gone → /proc read failed first) — evt_drop only compares the
+     * pointer value under the lock, never dereferences it; no field reads
+     * here either */
+    LOGI("event subscriber died (binder death) → disconnected");
+    evt_drop((awl_sub*)cookie);
+}
+
+/* One event send (oneway; same parcel rules as ctrl_send_ints). title is
+ * appended when non-null (AWL_E_CREATED carries the first title). */
+static bool evt_send(awl_sub* s, transaction_code_t code, uint64_t id, const char* title) {
+    if (!AIBinder_associateClass(s->listener, k_evt_class)) {
+        ctrl_fail(code, "associateClass", STATUS_INVALID_OPERATION);
+        return false;
+    }
+    AParcel* in = nullptr;
+    binder_status_t st = AIBinder_prepareTransaction(s->listener, &in);
+    if (st != STATUS_OK || !in) { ctrl_fail(code, "prepareTransaction", st); return false; }
+    if (AParcel_writeInt64(in, (int64_t)id) != STATUS_OK ||
+        (title && AParcel_writeString(in, title, (int32_t)strlen(title)) != STATUS_OK)) {
+        AParcel_delete(in);
+        return false;
+    }
+    return ctrl_transact(s->listener, code, &in);
+}
+
+/* Push one event to every matching subscriber. owner = the window's wayland
+ * client uid, resolved by the CALLER (awl_window_client_uid takes the logic
+ * layer's rwl and must never run under g_state_lock); (uid_t)-1 reaches
+ * allowlisted subscribers only (never equals a real binder uid). Snapshot +
+ * incStrong under the lock, sends outside it; a failed send (frozen/dead
+ * app) drops the subscription — self-healing. */
+static void evt_dispatch(uid_t owner, uint64_t id, transaction_code_t code, const char* title) {
+    struct target { awl_sub* s; AIBinder* l; uid_t u; };   /* copies: s may be freed mid-loop */
+    std::vector<target> targets;
+    {
+        std::lock_guard<std::mutex> lk(g_state_lock);
+        targets.reserve(g_subs.size());
+        for (awl_sub* s : g_subs)
+            if (s->all || s->uid == owner) {
+                AIBinder_incStrong(s->listener);   /* pinned across the out-of-lock send */
+                targets.push_back({s, s->listener, s->uid});
+            }
+    }
+    for (target& t : targets) {
+        if (evt_send(t.s, code, id, title)) {
+            AIBinder_decStrong(t.l);   /* the pinned reference */
+            continue;
+        }
+        LOGE("event uid=%u: send failed (paused/frozen?) → disconnected", t.u);
+        evt_drop(t.s);          /* drops the subscription's own ref; ours below is last */
+        AIBinder_decStrong(t.l);
+    }
+}
+
+/* Paused-subscriber watchdog (own thread, started in main): every 2s read
+ * each subscriber's /proc/<pid>/oom_score_adj — an app whose activities are
+ * all paused and whose process fell to background sits at previous-app/
+ * cached level (700/900+; foreground 0, foreground-service ~300, visible
+ * ~100-200). ≥600 → treat as paused → disconnect; the app re-subscribes on
+ * resume. A vanished pid (process gone) drops too — the death callback
+ * covers it, this is the belt to those braces; other read failures (procfs
+ * hiccup) leave the subscription alone. */
+static void evt_watchdog_fn(void) {
+    struct item { awl_sub* s; pid_t pid; };   /* pid copied: s may be freed mid-scan */
+    for (;;) {
+        sleep(2);
+        std::vector<item> snap;
+        {
+            std::lock_guard<std::mutex> lk(g_state_lock);
+            snap.reserve(g_subs.size());
+            for (awl_sub* s : g_subs) snap.push_back({s, s->pid});
+        }
+        for (const item& it : snap) {
+            if (it.pid <= 0) continue;
+            char path[48];
+            snprintf(path, sizeof(path), "/proc/%d/oom_score_adj", it.pid);
+            FILE* f = fopen(path, "re");
+            if (!f) {
+                if (errno == ESRCH || errno == ENOENT) {
+                    LOGI("event subscriber pid=%d gone → disconnected", it.pid);
+                    evt_drop(it.s);
+                }
+                continue;
+            }
+            int adj = 0;
+            int n = fscanf(f, "%d", &adj);
+            fclose(f);
+            if (n == 1 && adj >= 600) {
+                LOGI("event subscriber pid=%d paused (oom_score_adj=%d) → disconnected",
+                     it.pid, adj);
+                evt_drop(it.s);
+            }
+        }
+    }
+}
+
 static void on_token_died(void* cookie) {
     death_link* dl = (death_link*)cookie;
     std::vector<uint64_t> ids;
@@ -390,7 +595,7 @@ static void attach_activity(uint64_t id, const char* title) {
     run_am("am start -n %s -d 'anland://win/%llu' --el id %llu --es title %s "
            "-f 0x90000000 >/dev/null 2>&1",
            AWL_WIN_ACT, (unsigned long long)id, (unsigned long long)id, q);
-    LOGI("Attach: am start WlWindowActivity id=%llu", (unsigned long long)id);
+    LOGI("Attach: am start AwlWindowActivity id=%llu", (unsigned long long)id);
 }
 
 /* ---------------- wayland logic-layer callbacks (wayland event thread) ---------------- */
@@ -444,6 +649,13 @@ static void xwm_close_window(uint64_t id) {
     xwm_send_cmd(cmd, (size_t)n);
 }
 
+/* config.json "auto_attach" (default false; see the daemon config section):
+ * launch the host Activity on window creation. false = the window waits for a
+ * binder SURFACE — the uid pass lets the wayland client app attach its own
+ * windows. Defined here (used by cb_window_created), owned by the config
+ * block below (g_cfg_lock guards it). */
+static bool g_cfg_auto_attach = false;
+
 static void cb_window_created(void* user, uint64_t id, int32_t pref_w, int32_t pref_h,
                               const char* title, int is_popup) {
     LOGI("window %llu created %dx%d popup=%d '%s'",
@@ -454,6 +666,18 @@ static void cb_window_created(void* user, uint64_t id, int32_t pref_w, int32_t p
         snprintf(ws.title, sizeof(ws.title), "%s", title ? title : "");
         ws.attached = false;
     }
+    /* lifecycle event: subscribers learn the window immediately (own-uid
+     * scope for normal apps; the title rides along so a list UI can render
+     * the row without a follow-up LIST) */
+    evt_dispatch(awl_window_client_uid(id), id, AWL_E_CREATED, title ? title : "");
+    /* auto-attach (config.json "auto_attach", default false): off = the window
+     * waits for a binder SURFACE — the uid pass lets the wayland client app
+     * itself attach its own windows */
+    if (!g_cfg_auto_attach) {
+        LOGI("window %llu: auto_attach off — waiting for binder SURFACE",
+             (unsigned long long)id);
+        return;
+    }
     /* am start = fork+waitpid (hundreds of ms) — run on a detached thread
      * so the event thread doesn't stall for it; if the window dies right
      * after, SURFACE will be rejected (Activity kills itself) */
@@ -463,6 +687,10 @@ static void cb_window_created(void* user, uint64_t id, int32_t pref_w, int32_t p
 
 static void cb_window_destroyed(void* user, uint64_t id) {
     LOGI("window %llu destroyed", (unsigned long long)id);
+    /* the window still resolves here (callback fires before the logic layer
+     * unlinks the surface) — snapshot the owner for the destroy event; a
+     * lookup after the erase below would read (uid_t)-1 */
+    uid_t owner = awl_window_client_uid(id);
     awl_renderer_attach(id, nullptr);
     AIBinder* ctrl = nullptr;
     bool sched_drop = false;      /* was attached → restore the client's cgroups */
@@ -501,6 +729,10 @@ static void cb_window_destroyed(void* user, uint64_t id) {
                AWL_PKG, (unsigned long long)id);
     else
         LOGI("window %llu: CLOSE sent via ctrl channel", (unsigned long long)id);
+    /* lifecycle event: subscribed list UIs (e.g. the APK's MainActivity)
+     * drop the row — the Activity side is finished by the ctrl/broadcast
+     * paths above, events never target AwlWindowActivity itself */
+    evt_dispatch(owner, id, AWL_E_DESTROYED, nullptr);
 }
 
 static void cb_window_title(void* user, uint64_t id, const char* title) {
@@ -520,6 +752,20 @@ static void cb_window_title(void* user, uint64_t id, const char* title) {
         ctrl_send(ctrl, AWL_C_TITLE, title);
         AIBinder_decStrong(ctrl);
     }
+}
+
+/* window ctrl snapshot (definition below; used here before its block) */
+static AIBinder* ctrl_of(uint64_t id);
+
+/* toplevel icon applied/reset (xdg-toplevel-icon-v1, awl_icon.c): the Recents
+ * icon follows; pixels are pulled per change over AWL_T_ICON */
+static void cb_window_icon(void* user, uint64_t id) {
+    AIBinder* ctrl = ctrl_of(id);
+    if (!ctrl) return;   /* no Activity attached: the fresh instance re-fetches at attach */
+    int32_t args[1] = { 1 };
+    ctrl_send_ints(ctrl, AWL_C_ICON, args, 1);
+    AIBinder_decStrong(ctrl);
+    LOGI("window %llu: toplevel icon changed", (unsigned long long)id);
 }
 
 /* ---------------- IME bridge (text-input protocol ↔ Android IME, passthrough model) ---- */
@@ -766,6 +1012,7 @@ static awl_window_callbacks_t k_cbs = {
     .window_created = cb_window_created,
     .window_destroyed = cb_window_destroyed,
     .window_title = cb_window_title,
+    .window_icon = cb_window_icon,
     .pointer_lock = cb_pointer_lock,
     .window_dirty = cb_window_dirty,
     .ime_show = cb_ime_show,
@@ -781,11 +1028,19 @@ static awl_window_callbacks_t k_cbs = {
  * read and applied at startup; on set, applied + atomically persisted
  * (tmp+rename). The APK stores nothing itself — it only reads/writes values
  * over binder.
- * MANUAL-ONLY key: "runtime_dir" (wayland socket dir, default
- * /data/local/tmp/awl). Never exposed over binder (cfg_set rejects it) —
+ * MANUAL-ONLY keys (never exposed over binder — cfg_set rejects them;
  * hand-edited in config.json, read at daemon startup before the socket is
- * bound; a change needs a daemon restart. Daemon-driven saves preserve its
- * file value verbatim (re-read at save time). */
+ * bound; a change needs a daemon restart; daemon-driven saves preserve the
+ * file values verbatim — re-read at save time):
+ *   "runtime_dir"   wayland socket dir (default /data/local/tmp/awl)
+ *   "socket_listen" 1 (default/absent) = bind+listen the wayland-0 unix
+ *                   socket; 0 = pure binder-fd mode (#36) — no socket file
+ *                   at all, wayland clients connect only by sending their
+ *                   own socketpair end over T_CONNECT
+ * "auto_attach" (default false): launch the host Activity automatically when
+ * a wayland window is created. false = the window waits for a binder SURFACE
+ * from the wayland client app itself (SURFACE uid pass); toggled over
+ * CFG_GET/SET as 0/1 or by hand in config.json (new windows only). */
 
 #define AWL_CFG_PATH "/data/adb/modules/anland-awl/config.json"
 
@@ -793,13 +1048,17 @@ static std::mutex g_cfg_lock;
 static int g_cfg_zoom = 100;       /* persisted mirror (real state lives in the logic layer's g_srv.zoom_pct) */
 static int g_cfg_init_w = 800;     /* initial-configure placeholder (#33; mirror of g_srv.init_conf_*) */
 static int g_cfg_init_h = 600;
+static int g_cfg_scale_mode = 0;   /* view mapping mode (#34; mirror of g_srv.scale_mode, AWL_SCALE_*) */
 static char g_sock_dir[256] = "/data/local/tmp/awl";   /* runtime_dir (startup-loaded; see above) */
+static bool g_sock_listen = true;                      /* socket_listen (same) */
 
 /* known config keys → valid domain (under g_cfg_lock); unknown keys rejected */
 static bool cfg_domain(const std::string& key, int* lo, int* hi) {
     if (key == "zoom") { *lo = 50; *hi = 300; return true; }
     if (key == "init_w") { *lo = 100; *hi = 7680; return true; }
     if (key == "init_h") { *lo = 100; *hi = 4320; return true; }
+    if (key == "scale_mode") { *lo = 0; *hi = 2; return true; }
+    if (key == "auto_attach") { *lo = 0; *hi = 1; return true; }
     return false;
 }
 
@@ -835,11 +1094,12 @@ static int cfg_parse_str(const char* buf, const char* key, char* out, size_t n) 
 }
 
 static void cfg_save_locked(void) {
-    /* runtime_dir is manual-only: carry the FILE's current value over verbatim
-     * (a hand edit made while the daemon runs survives this rewrite), falling
-     * back to the effective startup value when absent/unreadable */
+    /* manual-only keys: carry the FILE's current values over verbatim (a
+     * hand edit made while the daemon runs survives this rewrite), falling
+     * back to the effective startup values when absent/unreadable */
     char rt[256];
     memcpy(rt, g_sock_dir, sizeof(rt));
+    int sl = g_sock_listen ? 1 : 0;
     {
         FILE* f = fopen(AWL_CFG_PATH, "r");
         if (f) {
@@ -849,24 +1109,30 @@ static void cfg_save_locked(void) {
             char got[256];
             if (cfg_parse_str(buf, "runtime_dir", got, sizeof(got)) == 0 && got[0] == '/')
                 memcpy(rt, got, sizeof(rt));
+            int v = cfg_parse_int(buf, "socket_listen");
+            if (v == 0 || v == 1) sl = v;
         }
     }
     char tmp[128];
     snprintf(tmp, sizeof(tmp), "%s.tmp", AWL_CFG_PATH);
     FILE* f = fopen(tmp, "w");
     if (!f) { LOGE("config save open %s: %s", tmp, strerror(errno)); return; }
-    fprintf(f, "{\n  \"zoom\": %d,\n  \"init_w\": %d,\n  \"init_h\": %d,\n  \"runtime_dir\": \"%s\"\n}\n",
-            g_cfg_zoom, g_cfg_init_w, g_cfg_init_h, rt);
+    fprintf(f, "{\n  \"zoom\": %d,\n  \"init_w\": %d,\n  \"init_h\": %d,\n"
+               "  \"scale_mode\": %d,\n  \"auto_attach\": %d,\n"
+               "  \"runtime_dir\": \"%s\",\n  \"socket_listen\": %d\n}\n",
+            g_cfg_zoom, g_cfg_init_w, g_cfg_init_h, g_cfg_scale_mode,
+            g_cfg_auto_attach ? 1 : 0, rt, sl);
     if (fclose(f) != 0)
         LOGE("config save flush: %s", strerror(errno));
     if (rename(tmp, AWL_CFG_PATH) != 0)
         LOGE("config rename %s: %s", AWL_CFG_PATH, strerror(errno));
 }
 
-/* Startup socket-dir load (main, before mkdir/listen — runs once, no binder):
- * manual-only key "runtime_dir"; absolute path, parent must exist (single
- * mkdir, same as before). Invalid/absent → default. */
-static void cfg_load_sock_dir(void) {
+/* Startup socket-config load (main, before mkdir/listen — runs once, no
+ * binder). Manual-only keys: "runtime_dir" (absolute path, parent must
+ * exist — single mkdir, same as before) and "socket_listen" (0/1).
+ * Invalid/absent → defaults. */
+static void cfg_load_sock_cfg(void) {
     FILE* f = fopen(AWL_CFG_PATH, "r");
     if (!f) return;
     char buf[512] = "";
@@ -874,14 +1140,21 @@ static void cfg_load_sock_dir(void) {
     fclose(f);
     char dir[256];
     if (cfg_parse_str(buf, "runtime_dir", dir, sizeof(dir)) != 0)
-        return;   /* key absent → default */
-    if (dir[0] != '/' || strlen(dir) + 16 >= sizeof(g_sock_dir)) {
+        ;   /* key absent → default */
+    else if (dir[0] != '/' || strlen(dir) + 16 >= sizeof(g_sock_dir))
         LOGE("config: runtime_dir '%s' invalid (need absolute, short) — using default %s",
              dir, g_sock_dir);
-        return;
+    else {
+        memcpy(g_sock_dir, dir, sizeof(g_sock_dir));
+        LOGI("config: runtime_dir=%s", g_sock_dir);
     }
-    memcpy(g_sock_dir, dir, sizeof(g_sock_dir));
-    LOGI("config: runtime_dir=%s", g_sock_dir);
+    int sl = cfg_parse_int(buf, "socket_listen");
+    if (sl == 0) {
+        g_sock_listen = false;
+        LOGI("config: socket_listen=0 — pure binder-fd mode (no wayland-0 socket)");
+    } else if (sl != -1) {
+        LOGE("config: socket_listen=%d invalid (0 or 1), ignored", sl);
+    }
 }
 
 /* startup load + apply (after awl_server_start; no windows at startup →
@@ -918,6 +1191,25 @@ static void cfg_load_and_apply(void) {
     } else if (iw != -1 || ih != -1) {
         LOGE("config: init size %dx%d out of range, ignored", iw, ih);
     }
+    int sm = cfg_parse_int(buf, "scale_mode");
+    if (sm >= AWL_SCALE_STRETCH && sm <= AWL_SCALE_CENTER) {
+        awl_display_set_scale_mode(sm);   /* no windows at startup: remap is a no-op */
+        {
+            std::lock_guard<std::mutex> lk(g_cfg_lock);
+            g_cfg_scale_mode = sm;
+        }
+        LOGI("config: scale_mode=%d (applied at startup)", sm);
+    } else if (sm != -1) {
+        LOGE("config: scale_mode=%d out of range (0..2), ignored", sm);
+    }
+    int aa = cfg_parse_int(buf, "auto_attach");
+    if (aa == 0 || aa == 1) {
+        std::lock_guard<std::mutex> lk(g_cfg_lock);
+        g_cfg_auto_attach = aa != 0;
+        LOGI("config: auto_attach=%s (applied at startup)", aa ? "true" : "false");
+    } else if (aa != -1) {
+        LOGE("config: auto_attach=%d out of range (0..1), ignored", aa);
+    }
 }
 
 /* set: apply → persist (apply first, write second; a write failure only warns — the live value stays in effect) */
@@ -943,6 +1235,32 @@ static int cfg_set(const std::string& key, int32_t val) {
         cfg_save_locked();
         LOGI("config set init size %dx%d (applied to new windows + persisted)",
              g_cfg_init_w, g_cfg_init_h);
+    } else if (key == "scale_mode") {
+        /* zoom shape: apply OUTSIDE g_cfg_lock (the remap chain fires
+         * C_CAPTURE callbacks → binder transacts under g_state_lock); lock
+         * only wraps the mirror + persist */
+        awl_display_set_scale_mode(val);   /* re-pushes confine rects itself */
+        {
+            std::lock_guard<std::mutex> lk(g_cfg_lock);
+            g_cfg_scale_mode = val;
+            cfg_save_locked();
+        }
+        /* every attached window renders one fresh frame under the new dst
+         * mapping (unattached ones draw with it on the next attach) */
+        std::vector<uint64_t> ids;
+        {
+            std::lock_guard<std::mutex> lk(g_state_lock);
+            for (auto& [id, ws] : g_wins)
+                if (ws.attached) ids.push_back(id);
+        }
+        for (uint64_t id : ids) awl_renderer_request_render(id);
+        LOGI("config set scale_mode=%d (applied + persisted)", val);
+    } else if (key == "auto_attach") {
+        /* effective for windows created from now on — nothing live to apply */
+        std::lock_guard<std::mutex> lk(g_cfg_lock);
+        g_cfg_auto_attach = val != 0;
+        cfg_save_locked();
+        LOGI("config set auto_attach=%d (applied + persisted)", val ? 1 : 0);
     }
     return 0;
 }
@@ -969,8 +1287,119 @@ static bool wl_str_alloc(void* data, int32_t length, char** buffer) {
 static void* host_on_create(void* args) { return args; }
 static void host_on_destroy(void* userData) {}
 
+/* ---------------- Caller verification (uid allowlist) ----------------
+ * The service is reachable by every app on the device (sepolicy grants
+ * find/call to all untrusted domains — SELinux cannot split packages within
+ * one domain) while the transactions are powerful: input injection, clipboard
+ * push, config writes, root `am start`, and a caller-chosen death/ctrl
+ * binder in SURFACE. uid is the only reliable identity visible to the NDK:
+ * assigned by the binder driver (not spoofable), valid for oneway calls too
+ * (getCallingPid returns 0 there; no getCallingSid in libbinder_ndk).
+ * Allow: root(0)/self + AWL_PKG's uid. SURFACE carries one extra auth pass
+ * for everyone else: per-window uid ownership — the attach passes only when
+ * the window's wayland client runs under the caller's own uid (see
+ * caller_ok / the SURFACE handler). The uid is looked up FRESH on every
+ * call from /data/system/packages.list (plain text, "pkg uid flag dataDir
+ * …", ~70KB — PackageManager's own dump; packages.xml is ABX binary since
+ * Android 16): no cache means a reinstall with a new uid is picked up by
+ * the very next call, and the scan is µs-scale (safe on the input hot path).
+ * Same appId in ANY user passes (uid % 100000 — the same installed package
+ * under another user/work profile). */
+static int lookup_app_uid(void) {
+    static bool open_failed_logged = false;
+    FILE* f = fopen("/data/system/packages.list", "re");
+    if (!f) {
+        if (!open_failed_logged) {   /* one line: this fires per call otherwise */
+            LOGE("binder auth: open packages.list: %s", strerror(errno));
+            open_failed_logged = true;
+        }
+        return 0;
+    }
+    char line[1024];
+    int uid = 0;
+    while (fgets(line, sizeof line, f)) {
+        char pkg[256];
+        int u;
+        if (sscanf(line, "%255s %d", pkg, &u) == 2 && strcmp(pkg, AWL_PKG) == 0) {
+            uid = u;
+            break;
+        }
+    }
+    fclose(f);
+    return uid;
+}
+
+/* Standing allowlist: root(0) / self / AWL_PKG's uid (any user). SURFACE
+ * callers on this list host windows of wayland clients they did not spawn
+ * (root container clients) — the per-window uid pass in the SURFACE handler
+ * does not apply to them. */
+static bool caller_allowlisted(void) {
+    uid_t u = AIBinder_getCallingUid();
+    if (u == 0 || u == (uid_t)getuid()) return true;   /* root / self */
+
+    int app_uid = lookup_app_uid();
+    return app_uid > 10000 &&
+        (u == (uid_t)app_uid || u % 100000 == (uid_t)(app_uid % 100000));
+}
+
+/* Per-window ownership pass (the same rule as the SURFACE auth): a
+ * non-allowlisted caller may only act on a window whose wayland client runs
+ * under its own uid — binder-assigned uid vs the socket/socketpair
+ * credentials libwayland cached at connect. Allowlisted callers (root /
+ * self / host APK) skip it. Must run OUTSIDE g_state_lock (takes the logic
+ * layer's rwl). Denials log one line per uid (input is a hot path). */
+static bool window_ok(uint64_t id) {
+    if (caller_allowlisted()) return true;
+    uid_t u = AIBinder_getCallingUid();
+    if (awl_window_client_uid(id) == u) return true;
+    static std::mutex rej_lock;
+    static std::vector<uid_t> rej_seen;
+    {
+        std::lock_guard<std::mutex> lk(rej_lock);
+        if (std::find(rej_seen.begin(), rej_seen.end(), u) == rej_seen.end()) {
+            if (rej_seen.size() >= 16) rej_seen.clear();
+            rej_seen.push_back(u);
+            LOGE("window auth: uid=%u rejected (not the wayland client's uid), call dropped", u);
+        }
+    }
+    return false;
+}
+
+/* Entry gate for host_on_transact. Denials log one line per uid (an abusive
+ * caller must not flood the log). The scoping transactions are NOT dropped
+ * here — the handlers decide per window / per uid: SURFACE + the hosting
+ * chain it reports facts for (PAUSE/RESIZE/FOCUS/INPUT/IME/CLIPBOARD/ICON/
+ * CLOSE — window_ok: the wayland client's uid must equal the caller's), the
+ * events + list pair (a normal app only ever sees its own windows), CONNECT
+ * (as open as the unix socket always was — ownership is enforced per
+ * window, not per connection). Everything else stays allowlist-only. */
+static bool caller_ok(transaction_code_t code) {
+    if (caller_allowlisted()) return true;
+    if (code == AWL_T_SURFACE || code == AWL_T_LIST ||
+        code == AWL_T_SUBSCRIBE || code == AWL_T_UNSUBSCRIBE ||
+        code == AWL_T_CONNECT ||
+        code == AWL_T_PAUSE || code == AWL_T_RESIZE || code == AWL_T_FOCUS ||
+        code == AWL_T_INPUT || code == AWL_T_IME || code == AWL_T_CLIPBOARD ||
+        code == AWL_T_ICON || code == AWL_T_CLOSE)
+        return true;
+
+    uid_t u = AIBinder_getCallingUid();
+    static std::mutex rej_lock;
+    static std::vector<uid_t> rej_seen;
+    {
+        std::lock_guard<std::mutex> lk(rej_lock);
+        if (std::find(rej_seen.begin(), rej_seen.end(), u) == rej_seen.end()) {
+            if (rej_seen.size() >= 16) rej_seen.clear();   /* bounded, uids repeat anyway */
+            rej_seen.push_back(u);
+            LOGE("binder auth: uid=%u rejected (not %s), call dropped", u, AWL_PKG);
+        }
+    }
+    return false;
+}
+
 static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t code,
                                         const AParcel* in, AParcel* out) {
+    if (!caller_ok(code)) return STATUS_PERMISSION_DENIED;
     switch (code) {
     case AWL_T_SURFACE: {
         int64_t id64; int32_t w, h;
@@ -988,6 +1417,21 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
                 AParcel_writeInt32(out, -1);
                 return STATUS_OK;
             }
+        }
+
+        /* Auth pass (SURFACE only, per window): a caller outside the
+         * allowlist may attach only the window of a wayland client running
+         * under its own uid — the binder-assigned caller uid (not spoofable)
+         * vs the credentials libwayland cached from the wayland socket at
+         * connect. Deny → rc -1: the caller kills itself, same contract as
+         * a missing window. Allowlisted callers skip this (see
+         * caller_allowlisted). */
+        if (!caller_allowlisted() &&
+            awl_window_client_uid(id) != AIBinder_getCallingUid()) {
+            LOGE("SURFACE %llu: uid=%u rejected (not the wayland client's uid)",
+                 (unsigned long long)id, AIBinder_getCallingUid());
+            AParcel_writeInt32(out, -1);
+            return STATUS_OK;
         }
 
         ANativeWindow* anw = nullptr;
@@ -1078,6 +1522,9 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
                  (long long)host);
             ctrl_send(evicted, AWL_C_CLOSE);   /* old Activity kills itself (finish) */
             AIBinder_decStrong(evicted);
+            /* lifecycle event: the attach below flips it right back — a
+             * subscriber sees the detach/attach pair as one holder change */
+            evt_dispatch(awl_window_client_uid(id), id, AWL_E_DETACHED, nullptr);
         }
         if (gone) {
             awl_renderer_attach(id, nullptr);   /* rollback (outside the lock; join holds no lock) */
@@ -1102,8 +1549,113 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
         awl_window_resize(id, w, h);         /* Android fully owns sizing (initial + subsequent) */
         xwm_resize_window(id, w, h);         /* Xwayland window: sync initial size to the X side */
         awl_renderer_request_render(id);     /* render a first frame */
+        evt_dispatch(awl_window_client_uid(id), id, AWL_E_ATTACHED, nullptr);
         LOGI("SURFACE %llu %dx%d → attached (host=%lld)",
              (unsigned long long)id, w, h, (long long)host);
+        AParcel_writeInt32(out, 0);
+        return STATUS_OK;
+    }
+    case AWL_T_ICON: {   /* current toplevel icon → RGBA bytes (Recents icon, xdg-toplevel-icon-v1) */
+        int64_t id64;
+        AParcel_readInt64(in, &id64);
+        if (!window_ok((uint64_t)id64)) { AParcel_writeInt32(out, -1); return STATUS_OK; }
+        void* px = nullptr;
+        int32_t w = 0, h = 0;
+        awl_window_get_icon((uint64_t)id64, &px, &w, &h);
+        AParcel_writeInt32(out, w);
+        AParcel_writeInt32(out, h);
+        if (px) {
+            AParcel_writeByteArray(out, (const int8_t*)px, w * h * 4);
+            free(px);
+        }
+        return STATUS_OK;
+    }
+    case AWL_T_SUBSCRIBE: {   /* window lifecycle events (caller_ok already let normal apps
+                                * through — scope is decided per event by the uid filter) */
+        AIBinder* l = nullptr;
+        if (AParcel_readStrongBinder(in, &l) != STATUS_OK || !l)
+            return STATUS_BAD_VALUE;
+        if (!AIBinder_associateClass(l, k_evt_class)) {   /* descriptor check (same lesson as ICtrl) */
+            LOGE("SUBSCRIBE: listener is not %s", AWL_EVT_DESC);
+            AIBinder_decStrong(l);
+            AParcel_writeInt32(out, -1);
+            return STATUS_OK;
+        }
+        /* same listener re-subscribed (app re-acquiring after a daemon
+         * restart, or a double acquire): keep the existing registration —
+         * the freshly read reference is dropped, the stored one survives */
+        awl_sub* s = new awl_sub();
+        s->listener = l;   /* tentative: takes the read reference if stored */
+        s->uid = AIBinder_getCallingUid();
+        s->pid = AIBinder_getCallingPid();   /* valid: SUBSCRIBE is two-way */
+        s->all = caller_allowlisted();
+        bool dup = false;
+        {
+            std::lock_guard<std::mutex> lk(g_state_lock);
+            for (awl_sub* e : g_subs)
+                if (e->listener == l) { dup = true; break; }
+            if (!dup) g_subs.push_back(s);
+        }
+        if (dup) {
+            AIBinder_decStrong(l);
+            delete s;
+        } else {
+            /* log BEFORE the link: on an already-dead peer the death callback
+             * can free s inside AIBinder_linkToDeath */
+            LOGI("event subscriber uid=%u pid=%d scope=%s",
+                 s->uid, s->pid, s->all ? "all windows" : "own uid");
+            AIBinder_linkToDeath(l, k_evt_death, s);
+        }
+        AParcel_writeInt32(out, 0);
+        return STATUS_OK;
+    }
+    case AWL_T_UNSUBSCRIBE: {   /* the app reports its own pause (Activity onPause); the watchdog backstops */
+        AIBinder* l = nullptr;
+        if (AParcel_readStrongBinder(in, &l) != STATUS_OK || !l)
+            return STATUS_BAD_VALUE;
+        awl_sub* found = nullptr;
+        {
+            std::lock_guard<std::mutex> lk(g_state_lock);
+            for (auto it = g_subs.begin(); it != g_subs.end(); ++it)
+                if ((*it)->listener == l) { found = *it; g_subs.erase(it); break; }
+        }
+        if (found) {
+            AIBinder_unlinkToDeath(found->listener, k_evt_death, found);
+            AIBinder_decStrong(found->listener);   /* the subscription's reference */
+            delete found;
+            LOGI("event subscriber unsubscribed (pause reported)");
+        }
+        AIBinder_decStrong(l);   /* the read reference */
+        AParcel_writeInt32(out, 0);
+        return STATUS_OK;
+    }
+    case AWL_T_CONNECT: {   /* wayland connection over binder (#36; see the transaction table) */
+        int cfd = -1;
+        /* reads a ParcelFileDescriptor parcelable (not-null int32 + fd) — the
+         * client side must use ParcelFileDescriptor.writeToParcel; a raw
+         * Parcel.writeFileDescriptor (bare flat fd) fails here with
+         * STATUS_BAD_VALUE (-22), surfacing client-side as
+         * IllegalArgumentException (any transaction error is logged by AMS's
+         * generic binder-error callback — do not be misled by its "frozen"
+         * wording) */
+        binder_status_t rst = AParcel_readParcelFileDescriptor(in, &cfd);
+        if (rst != STATUS_OK || cfd < 0) {
+            LOGE("CONNECT uid=%u: fd read failed (st=%d cfd=%d) — the client must write "
+                 "int32(1) + Parcel.writeFileDescriptor(fd) (NOT PFD.writeToParcel: its "
+                 "leading int is the commFd flag, which reads as null here)",
+                 AIBinder_getCallingUid(), (int)rst, cfd);
+            return STATUS_BAD_VALUE;
+        }
+        if (awl_server_add_client(cfd) != 0) {
+            close(cfd);
+            LOGE("CONNECT uid=%u: refused (server down?)", AIBinder_getCallingUid());
+            AParcel_writeInt32(out, -1);
+            return STATUS_OK;
+        }
+        /* creds the event loop will read off the fd = the caller's (fixed at
+         * socketpair creation in the caller's process) */
+        LOGI("wayland client over binder: uid=%u pid=%d",
+             AIBinder_getCallingUid(), AIBinder_getCallingPid());
         AParcel_writeInt32(out, 0);
         return STATUS_OK;
     }
@@ -1112,6 +1664,7 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
         if (AParcel_readInt64(in, &id64) != STATUS_OK)
             return STATUS_BAD_VALUE;
         uint64_t id = (uint64_t)id64;
+        if (!window_ok(id)) { AParcel_writeInt32(out, -1); return STATUS_OK; }
         xwm_close_window(id);   /* Xwayland: WM_DELETE_WINDOW on the X side (XKillClient otherwise) */
         awl_window_close(id);   /* xdg: toplevel.close → client closes the window → C_CLOSE wraps up */
         AParcel_writeInt32(out, 0);
@@ -1122,6 +1675,7 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
         AParcel_readInt64(in, &id64);
         AParcel_readInt32(in, &w);
         AParcel_readInt32(in, &h);
+        if (!window_ok((uint64_t)id64)) { AParcel_writeInt32(out, -1); return STATUS_OK; }
         awl_window_resize((uint64_t)id64, w, h);
         xwm_resize_window((uint64_t)id64, w, h);
         awl_renderer_request_render((uint64_t)id64);
@@ -1129,12 +1683,34 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
         return STATUS_OK;
     }
     case AWL_T_LIST: {
-        std::lock_guard<std::mutex> lk(g_state_lock);
-        AParcel_writeInt32(out, (int32_t)g_wins.size());
-        for (auto& [id, ws] : g_wins) {
-            AParcel_writeInt64(out, (int64_t)id);
-            AParcel_writeInt32(out, ws.attached ? 1 : 0);
-            AParcel_writeString(out, ws.title, strlen(ws.title));
+        /* snapshot (id, attached, title) under the lock — entries can die the
+         * moment it drops; the uid filter runs outside it because
+         * awl_window_client_uid takes the logic layer's rwl, which must not
+         * nest inside g_state_lock */
+        struct Row { uint64_t id; bool attached; std::string title; };
+        std::vector<Row> rows;
+        {
+            std::lock_guard<std::mutex> lk(g_state_lock);
+            rows.reserve(g_wins.size());
+            for (auto& [id, ws] : g_wins)
+                rows.push_back({id, ws.attached, ws.title});
+        }
+        /* normal (non-allowlisted) app: only its own windows — the same uid
+         * ownership rule as the SURFACE auth pass (the window's wayland
+         * client must run under the caller's uid; allowlisted callers keep
+         * the full table) */
+        if (!caller_allowlisted()) {
+            uid_t cu = AIBinder_getCallingUid();
+            std::vector<Row> own;
+            for (Row& r : rows)
+                if (awl_window_client_uid(r.id) == cu) own.push_back(std::move(r));
+            rows = std::move(own);
+        }
+        AParcel_writeInt32(out, (int32_t)rows.size());
+        for (Row& r : rows) {
+            AParcel_writeInt64(out, (int64_t)r.id);
+            AParcel_writeInt32(out, r.attached ? 1 : 0);
+            AParcel_writeString(out, r.title.data(), r.title.size());
         }
         return STATUS_OK;
     }
@@ -1160,6 +1736,10 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
         AParcel_readInt64(in, &id64);
         int64_t host = 0;
         (void)AParcel_readInt64(in, &host);   /* trailing optional (same as SURFACE) */
+        /* ownership pass before the lock (window_ok takes the logic layer's
+         * rwl; a rejected pause is simply dropped — the oneway caller reads
+         * no reply) */
+        if (!window_ok((uint64_t)id64)) { AParcel_writeInt32(out, 0); return STATUS_OK; }
         {
             std::lock_guard<std::mutex> lk(g_state_lock);
             auto it = g_wins.find((uint64_t)id64);
@@ -1181,6 +1761,7 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
         int64_t id64; int32_t has;
         AParcel_readInt64(in, &id64);
         AParcel_readInt32(in, &has);
+        if (!window_ok((uint64_t)id64)) { AParcel_writeInt32(out, -1); return STATUS_OK; }
         {
             std::lock_guard<std::mutex> lk(g_state_lock);
             auto it = g_wins.find((uint64_t)id64);
@@ -1212,6 +1793,7 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
             AParcel_readInt32(in, (int32_t*)&ev.flags) != STATUS_OK)
             return STATUS_BAD_VALUE;
         ev.id = (uint64_t)id64;
+        if (!window_ok(ev.id)) return STATUS_PERMISSION_DENIED;   /* oneway: no reply to read anyway */
         awl_input_dispatch(&ev);
         return STATUS_OK;   /* oneway, no reply */
     }
@@ -1225,6 +1807,7 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
         std::string text;
         if (AParcel_readString(in, &text, wl_str_alloc) != STATUS_OK)
             return STATUS_BAD_VALUE;
+        if (!window_ok((uint64_t)id64)) return STATUS_PERMISSION_DENIED;
         awl_ime_text((uint64_t)id64, (uint32_t)op, text.c_str(), a, b);
         return STATUS_OK;   /* oneway, no reply */
     }
@@ -1235,6 +1818,9 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
         std::string text;
         if (AParcel_readString(in, &text, wl_str_alloc) != STATUS_OK)
             return STATUS_BAD_VALUE;
+        /* the id is not consumed by the push itself, but gating on it proves
+         * the caller hosts that window (selection spoofing stays out) */
+        if (!window_ok((uint64_t)id64)) return STATUS_PERMISSION_DENIED;
         awl_datadev_android_clip(text.c_str());
         return STATUS_OK;
     }
@@ -1248,6 +1834,11 @@ static binder_status_t host_on_transact(AIBinder* binder, transaction_code_t cod
             int32_t iw = 0, ih = 0;
             awl_display_init_size(&iw, &ih);
             v = key == "init_w" ? iw : ih;
+        }
+        else if (key == "scale_mode") v = awl_display_scale_mode();
+        else if (key == "auto_attach") {
+            std::lock_guard<std::mutex> lk(g_cfg_lock);
+            v = g_cfg_auto_attach ? 1 : 0;
         }
         else LOGE("config get: unknown key '%s'", key.c_str());
         AParcel_writeInt32(out, v);
@@ -1335,18 +1926,25 @@ int main(int argc, char** argv) {
 
     LOGI("awl-daemon starting (pid=%d uid=%d)", getpid(), getuid());
 
-    cfg_load_sock_dir();   /* runtime_dir before mkdir/bind (manual-only key) */
+    cfg_load_sock_cfg();   /* runtime_dir / socket_listen before mkdir/bind (manual-only keys) */
     mkdir(g_sock_dir, 0777);
     chmod(g_sock_dir, 0777);
 
     awl_display_info_t info;
     query_display(&info);
 
-    char sock_path[288];
-    snprintf(sock_path, sizeof(sock_path), "%s/wayland-0", g_sock_dir);
-    int fd = create_listen_socket(sock_path);
-    if (fd < 0) { LOGE("listen socket failed"); return 1; }
-    LOGI("wayland socket: %s", sock_path);
+    /* socket_listen=0 (#36): no unix socket at all — clients connect only by
+     * sending their own socketpair end over binder T_CONNECT */
+    int fd = -1;
+    if (g_sock_listen) {
+        char sock_path[288];
+        snprintf(sock_path, sizeof(sock_path), "%s/wayland-0", g_sock_dir);
+        fd = create_listen_socket(sock_path);
+        if (fd < 0) { LOGE("listen socket failed"); return 1; }
+        LOGI("wayland socket: %s", sock_path);
+    } else {
+        LOGI("socket listening disabled (socket_listen=0) — binder T_CONNECT only");
+    }
 
     if (awl_server_start(fd, &info, &k_cbs) != 0) {
         LOGE("awl_server_start failed");
@@ -1367,6 +1965,13 @@ int main(int argc, char** argv) {
                                          ctrl_on_create, ctrl_on_destroy,
                                          ctrl_on_transact);
     if (!k_ctrl_class) { LOGE("AIBinder_Class_define(ctrl) failed"); return 1; }
+    k_evt_death = AIBinder_DeathRecipient_new(on_evt_died);
+    if (!k_evt_death) { LOGE("DeathRecipient(events) alloc failed"); return 1; }
+    k_evt_class = AIBinder_Class_define(AWL_EVT_DESC,
+                                        ctrl_on_create, ctrl_on_destroy,
+                                        ctrl_on_transact);   /* inert endpoint shape: the daemon accepts no subscriber-direction commands, the class exists for associateClass */
+    if (!k_evt_class) { LOGE("AIBinder_Class_define(events) failed"); return 1; }
+    std::thread(evt_watchdog_fn).detach();   /* paused-subscriber auto-disconnect */
     AIBinder* svc = AIBinder_new(k_binder_class, nullptr);
     binder_status_t st = g_addService(svc, AWL_BINDER_NAME);
     if (st != STATUS_OK) {

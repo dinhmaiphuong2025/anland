@@ -1,5 +1,5 @@
 /* awl_renderer.cpp — per-window GPU rendering (v3 multi-layer, no CPU
- * per-pixel compositing)
+ * per-pixel compositing) + dmabuf→AHB wrap machinery
  *
  * wayland buffer → window:
  *   dmabuf : eglCreateImageKHR(EGL_EXT_image_dma_buf_import) → zero-copy texture
@@ -10,6 +10,8 @@
  * present.
  * Per-layer texture state cached by surface id (wl_tex); reclaimed when the
  * layer disappears.
+ * wl_surface.set_buffer_transform is applied per layer via the u_xform
+ * sample matrix.
  * blend = premultiplied alpha (ONE, ONE_MINUS_SRC_ALPHA); first layer (root)
  * blend off.
  *
@@ -25,11 +27,14 @@
 #include <android/hardware_buffer.h>
 #include <android/log.h>
 #include <android/native_window.h>
+#include <math.h>                 /* round: pixel-grid snap of the root dst */
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>               /* dup / getpid */
 #include <sys/socket.h>           /* socketpair / sendmsg / SCM_RIGHTS */
 #include <sys/mman.h>             /* donor blob patching */
+#include <poll.h>                 /* first-paint probe fence wait (debug) */
+#include <sys/stat.h>             /* fstat: dma-buf inode identity */
 #include <fcntl.h>
 #include <errno.h>
 #include <wayland-server-core.h>   /* wl_shm_buffer_* */
@@ -58,13 +63,15 @@ static const char* k_vert_src =
     "uniform vec2 u_view;   /* window px */\n"
     "uniform vec4 u_dst;    /* dst rect px: x,y=top-left w,h=size (Y down) */\n"
     "uniform vec4 u_uv;     /* sample region transform: uv = u_uv.xy + uv*u_uv.zw (#31 source) */\n"
+    "uniform mat3 u_xform;  /* display uv q -> buffer uv (wl_surface.set_buffer_transform) */\n"
     "out vec2 uv;\n"
     "void main() {\n"
     "  vec2 px = vec2(u_dst.x + (pos.x * 0.5 + 0.5) * u_dst.z,\n"
     "                 u_dst.y + (0.5 - pos.y * 0.5) * u_dst.w);\n"
     "  gl_Position = vec4(px.x / u_view.x * 2.0 - 1.0,\n"
     "                     1.0 - px.y / u_view.y * 2.0, 0.0, 1.0);\n"  /* flip Y */
-    "  uv = u_uv.xy + vec2(pos.x * 0.5 + 0.5, 0.5 - pos.y * 0.5) * u_uv.zw;\n"
+    "  vec2 q = vec2(pos.x * 0.5 + 0.5, 0.5 - pos.y * 0.5);\n"
+    "  uv = u_uv.xy + (u_xform * vec3(q, 1.0)).xy * u_uv.zw;\n"
     "}\n";
 
 static const char* k_frag_src =
@@ -73,21 +80,50 @@ static const char* k_frag_src =
     "in vec2 uv;\n"
     "out vec4 color;\n"
     "uniform sampler2D tex;\n"
-    "uniform bool u_swap_rb;\n"
     "void main() {\n"
-    "  vec4 c = texture(tex, uv);\n"
-    "  color = u_swap_rb ? c.bgra : c;\n"   /* dmabuf sampled in DRM fourcc byte order */
+    "  color = texture(tex, uv);\n"   /* channel order comes from the texture format (dmabuf = BGRA_8888) */
     "}\n";
 
-/* Per-layer texture state (one per root / each wl_subsurface child layer, keyed by surface id) */
+/* wl buffer transform (wl_output.transform 0..7) → sample-uv affine for a
+ * layer quad: rows u = a·qx + b·qy + c, v = d·qx + e·qy + f (q = top-down
+ * display uv; the buffer holds the content rotated by T, we sample the
+ * inverse). Uploaded row-major with transpose=GL_TRUE. On-device check:
+ * weston-transformed (a direction error = swap the 90/270 pair). */
+static const float k_root_xform[8][9] = {
+    /* 0 normal      */ { 1, 0, 0,   0, 1, 0,   0, 0, 1 },
+    /* 1 90          */ { 0, 1, 0,  -1, 0, 1,   0, 0, 1 },
+    /* 2 180         */ { -1, 0, 1,  0, -1, 1,  0, 0, 1 },
+    /* 3 270         */ { 0, -1, 1,  1, 0, 0,   0, 0, 1 },
+    /* 4 flipped     */ { -1, 0, 1,  0, 1, 0,   0, 0, 1 },
+    /* 5 flipped_90  */ { 0, 1, 0,   1, 0, 0,   0, 0, 1 },
+    /* 6 flipped_180 */ { 1, 0, 0,   0, -1, 1,  0, 0, 1 },
+    /* 7 flipped_270 */ { 0, -1, 1, -1, 0, 1,   0, 0, 1 },
+};
+
+/* Per-surface dmabuf slot: ONE AHardwareBuffer per surface, swapped per
+ * arriving buffer (snapalloc donor scheme, see wrap_dmabuf_ahb). When the
+ * dmabuf changes the AHB is re-forged with a fresh identity (kgsl binds the
+ * memory at import — an in-place fd swap would leave the GPU sampling the
+ * old dmabuf); the re-forge uses the OLD AHB itself as the donor (its
+ * metadata blob already carries this geometry — no allocation), and the old
+ * AHB's release closes the swapped-out dmabuf fd. The blob stays alive
+ * through the relay: each forged AHB's handle holds its own fd dup. After a
+ * swap the consumer MUST re-import: a new EGLImage for the texture.
+ * Render-thread only per surface. */
+struct awl_ahb_slot {
+    AHardwareBuffer* ahb = NULL;   /* wraps the current dmabuf */
+    uint64_t ino = 0;              /* dma-buf identity (fstat inode) */
+    uint32_t w = 0, h = 0, stride = 0;
+};
+
+/* Per-layer texture state. dmabuf: the surface's awl_ahb_slot (one AHB,
+ * swapped per arriving buffer) + the EGLImage currently importing it. */
 struct wl_tex {
     GLuint texture = 0;
     uint32_t tex_w = 0, tex_h = 0;
     bool tex_is_image = false;     /* external-memory texture (dmabuf) */
     EGLImageKHR image = EGL_NO_IMAGE_KHR;
-    AHardwareBuffer* ahb = NULL;   /* registered AHB (wraps container dmabuf, released on destroy) */
-    AHardwareBuffer* donor = NULL; /* blob donor (stays resident until ahb release, see below) */
-    void* buf_token = NULL;        /* imported buffer identity (wayland resource value) */
+    awl_ahb_slot slot;
 };
 
 struct wl_window {
@@ -97,6 +133,16 @@ struct wl_window {
     EGLContext context = EGL_NO_CONTEXT;
     GLuint program = 0;
     GLuint vbo = 0;
+    /* attribute/uniform locations — fixed at link time, resolved once in
+     * window_setup_gl (glGet*ALocation is a driver string lookup per call) */
+    GLint a_pos = -1, u_view = -1, u_dst = -1, u_uv = -1, u_xform = -1,
+          u_tex = -1;
+    int cur_vw = 0, cur_vh = 0;    /* ANativeWindow size cache — valid until
+                                    * the logic layer reports a resize
+                                    * (awl_window_resize → size_dirty;
+                                    * small-window ↔ fullscreen resizes the
+                                    * surface in place, no SURFACE re-attach) */
+    std::atomic<bool> size_dirty{true};   /* render_frame re-queries once */
     bool logged_frame = false;     /* first-frame log (diagnostics) */
     bool logged_dmg = false;       /* first partial-damage upload log (diagnostics) */
     std::map<uint64_t, wl_tex> layers;   /* layer id → texture (includes root's own id) */
@@ -230,6 +276,12 @@ static bool window_setup_gl(wl_window* w) {
         LOGE("program link failed");
         return false;
     }
+    w->a_pos = glGetAttribLocation(w->program, "pos");
+    w->u_view = glGetUniformLocation(w->program, "u_view");
+    w->u_dst = glGetUniformLocation(w->program, "u_dst");
+    w->u_uv = glGetUniformLocation(w->program, "u_uv");
+    w->u_xform = glGetUniformLocation(w->program, "u_xform");
+    w->u_tex = glGetUniformLocation(w->program, "tex");
 
     static const float quad[] = {
         -1, -1,  1, -1,  -1, 1,
@@ -330,6 +382,8 @@ int awl_renderer_attach(uint64_t id, ANativeWindow* nw) {
             delete w;
             return -1;
         }
+        w->cur_vw = ANativeWindow_getWidth(nw);
+        w->cur_vh = ANativeWindow_getHeight(nw);
         w->th = std::thread(render_thread_loop, w);   /* dedicated render thread */
         std::lock_guard<std::mutex> lk(g_map_lock);
         g_windows[id] = w;
@@ -382,11 +436,10 @@ struct ahb_calib {
     int idx_size = -1;
     int idx_stride_b = -1;
 };
-/* One slot per HAL format (concurrent multi-window mixed formats must not evict
- * and force recalibration): with a single cache not keyed by fmt, chrome
- * (AR24→RGBA_8888) and Xwayland (XR24→RGBX_8888) render threads importing
- * alternately → full recalibration every frame (logs measured alternating
- * calib ok every 50-100ms). Each format calibrated once, no mutual eviction. */
+/* One slot per HAL format (keyed lookup — concurrent windows never evict each
+ * other's calibration). Since the BGRA_8888 switch all dmabufs (AR24/XR24) map
+ * to a single HAL format, in practice one slot covers everything; the table
+ * stays generic for future formats. */
 static struct ahb_calib k_calibs[8];
 static int k_n_calibs = 0;
 static struct ahb_calib* calib_slot(uint32_t fmt) {
@@ -587,9 +640,8 @@ static bool donor_patch_blob(const struct ahb_calib* kc, int blob_fd,
     return true;
 }
 
-static AHardwareBuffer* ahb_wrap_dmabuf(const awl_buffer_info_t* b,
-                                        uint32_t hal, uint64_t usage,
-                                        AHardwareBuffer** donor_out) {
+static AHardwareBuffer* wrap_dmabuf_ahb(const awl_buffer_info_t* b,
+                                        uint64_t usage, AHardwareBuffer* tmpl) {
     /* k_calibs global table shared by multiple render threads (first import per
      * format triggers one calibration) — hold the lock throughout: calibration
      * + patching read consistently. import includes gralloc calls (ms-scale)
@@ -597,51 +649,79 @@ static AHardwareBuffer* ahb_wrap_dmabuf(const awl_buffer_info_t* b,
     static std::mutex wrap_lock;
     std::lock_guard<std::mutex> wlk(wrap_lock);
 
+    /* All supported dmabuf formats map to a single HAL format (see
+     * import_dmabuf_texture); the caller may not carry the constant. */
+    uint32_t hal = AWL_HAL_BGRA_8888;
     struct ahb_calib* kc = ahb_calibrate(hal);
     if (!kc) {
         LOGE("blob offsets not calibrated — dmabuf import refused (no fallback)");
         return NULL;
     }
 
-    /* Small 4x4 donor: with all blob fields patched it serves any geometry
-     * (EXP-B verified on device). Format matches the target → fmt fields
-     * inside handle/blob are automatically correct, no patching needed */
-    AHardwareBuffer_Desc dd = {};
-    dd.width = 4; dd.height = 4;
-    dd.format = hal; dd.layers = 1;
-    dd.usage = AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE;
-    AHardwareBuffer* donor = NULL;
-    if (AHardwareBuffer_allocate(&dd, &donor) != 0) {
-        LOGE("donor allocation failed");
-        return NULL;
+    /* donor: the surface's CURRENT AHB when its geometry matches (steady
+     * state — blob already patched for this geometry, only the pixel fd
+     * changes, no allocation). Otherwise a transient 4x4 donor patched to the
+     * target geometry (first buffer / resize; EXP-B verified on device),
+     * released before returning — the forged AHB's own fd[1] dup keeps the
+     * blob alive. A live tmpl blob is never re-patched: SF/kgsl may still hold
+     * the era's AHBs. */
+    const native_handle* nd = NULL;
+    AHardwareBuffer* donor = NULL;   /* non-NULL = transient cold-path donor */
+    if (tmpl) {
+        AHardwareBuffer_Desc td = {};
+        AHardwareBuffer_describe(tmpl, &td);
+        const native_handle* tnh = AHardwareBuffer_getNativeHandle(tmpl);
+        if (tnh && tnh->numFds == 2 && tnh->numInts == kc->num_ints &&
+            td.width == b->width && td.height == b->height &&
+            td.stride == b->stride / 4 && td.format == hal)
+            nd = tnh;
     }
-    const native_handle* nd = AHardwareBuffer_getNativeHandle(donor);
-    if (!nd || nd->numFds != 2 || nd->numInts != kc->num_ints) {
-        LOGE("donor layout drift (numFds=%d numInts=%d/%d)",
-             nd ? nd->numFds : -1, nd ? nd->numInts : -1, kc->num_ints);
-        AHardwareBuffer_release(donor);
-        return NULL;
-    }
-    if (!donor_patch_blob(kc, nd->data[1], b->stride / 4, b->height,
-                          (long)b->stride * b->height)) {
-        AHardwareBuffer_release(donor);
-        return NULL;
+    if (!nd) {
+        AHardwareBuffer_Desc dd = {};
+        dd.width = 4; dd.height = 4;
+        dd.format = hal; dd.layers = 1;
+        dd.usage = AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE;
+        if (AHardwareBuffer_allocate(&dd, &donor) != 0) {
+            LOGE("donor allocation failed");
+            return NULL;
+        }
+        nd = AHardwareBuffer_getNativeHandle(donor);
+        if (!nd || nd->numFds != 2 || nd->numInts != kc->num_ints) {
+            LOGE("donor layout drift (numFds=%d numInts=%d/%d)",
+                 nd ? nd->numFds : -1, nd ? nd->numInts : -1, kc->num_ints);
+            AHardwareBuffer_release(donor);
+            return NULL;
+        }
+        if (!donor_patch_blob(kc, nd->data[1], b->stride / 4, b->height,
+                              (long)b->stride * b->height)) {
+            AHardwareBuffer_release(donor);
+            return NULL;
+        }
     }
 
-    /* handle ints: donor template + target geometry */
+    /* handle ints: donor template + target geometry. tmpl path: the template
+     * already carries exactly this geometry — verbatim copy. Cold path: the
+     * fresh 4x4 donor's ints still describe 4x4 — patch to the target. */
     int ints[64];
     memcpy(ints, &nd->data[2], (size_t)kc->num_ints * 4);
-    ints[kc->idx_stride_px] = (int)(b->stride / 4);
-    for (int i = 0; i < kc->n_idx_height; i++)
-        ints[kc->idx_height[i]] = (int)b->height;
-    ints[kc->idx_width] = (int)b->width;
-    ints[kc->idx_size] = (int)((long)b->stride * b->height);
-    ints[kc->idx_stride_b] = (int)b->stride;
+    if (donor) {
+        ints[kc->idx_stride_px] = (int)(b->stride / 4);
+        for (int i = 0; i < kc->n_idx_height; i++)
+            ints[kc->idx_height[i]] = (int)b->height;
+        ints[kc->idx_width] = (int)b->width;
+        ints[kc->idx_size] = (int)((long)b->stride * b->height);
+        ints[kc->idx_stride_b] = (int)b->stride;
+    }
 
     /* GraphicBuffer::flatten wire (libs/ui/GraphicBuffer.cpp):
-     * 13-int header + handle ints in the stream, numFds fds via SCM_RIGHTS */
+     * 13-int header + handle ints in the stream, numFds fds via SCM_RIGHTS.
+     * Independent high-bit id namespace (bit 63): AOSP-allocated GraphicBuffer
+     * ids occupy (pid << 32) | seq in this process — a same-format forged id
+     * colliding with a real one made SF's buffer cache hit different layers'
+     * buffers as one entry (HWC era). Bit 63 keeps the spaces disjoint. */
     static std::atomic<uint32_t> counter{0};
-    uint64_t id = ((uint64_t)getpid() << 32) | (counter++ & 0xffffffffu);
+    uint64_t id = ((uint64_t)getpid() << 32) | (counter++ & 0xffffffffu)
+                | (1ull << 63);
     int32_t head[13];
     head[0] = 0x47423031;                 /* 'GB01' */
     head[1] = (int32_t)b->width;
@@ -708,11 +788,97 @@ static AHardwareBuffer* ahb_wrap_dmabuf(const awl_buffer_info_t* b,
         LOGE("recvHandleFromUnixSocket rc=%d — importBuffer refused "
              "(%ux%u stride=%u hal=%u)", rc, b->width, b->height, b->stride, hal);
         if (out) AHardwareBuffer_release(out);
-        AHardwareBuffer_release(donor);
+        if (donor) AHardwareBuffer_release(donor);
         return NULL;
     }
-    *donor_out = donor;                   /* blob referenced by out; stays alive until out is released */
+    /* transient cold-path donor: released now — the blob survives through the
+     * relay (out's handle holds its own fd dup) */
+    if (donor) AHardwareBuffer_release(donor);
     return out;
+}
+
+/* ---------------- per-surface dmabuf slot (public API) ---------------- */
+
+static int awl_renderer_ahb_swap(awl_ahb_slot* s, const awl_buffer_info_t* b) {
+    /* identity = the dmabuf inode, fstat'ed once at buffer creation
+     * (awl_buffer_info_t.ino) instead of per frame here; 0 = unknown there
+     * (broken fd at creation) → per-call fstat fallback */
+    uint64_t ino = b->ino;
+    if (!ino) {
+        struct stat st;
+        if (fstat(b->fd, &st) != 0) return -1;
+        ino = (uint64_t)st.st_ino;
+    }
+
+#ifdef AWL_LOG_DEBUG
+    /* First-paint probe telemetry (kept from the resize-black-screen hunt):
+     * freshly allocated client buffers read as zeros at commit and are
+     * painted milliseconds later — the fence wait below is the fix, this
+     * just records what it accomplished. */
+    int nz_before = -1;
+    {
+        size_t off = (size_t)b->stride * (b->height / 2) & ~0xfffu;
+        void* m = mmap(NULL, 0x1000, PROT_READ, MAP_SHARED, b->fd, off);
+        if (m != MAP_FAILED) {
+            uint32_t* p = (uint32_t*)m;
+            nz_before = 0;
+            for (int i = 0; i < 1024; i++) nz_before += (p[i] != 0);
+            munmap(m, 0x1000);
+        }
+    }
+#endif
+    /* Write-fence gate before ANY sample of this memory — the GL texture
+     * import below samples it right after. The client's GPU paint can still
+     * be in flight at commit:
+     * resize ack frames commit ~µs after buffer creation (verified: the
+     * pages read zero at import, painted ms later — the resize black screen
+     * latched the zero pages as a static client's final frame), and
+     * in-place repaints of a recycled buffer race the same way. Wait for
+     * the dma-buf's exclusive (write) fence: poll(POLLIN) is event-driven —
+     * returns the instant the writer's kernel fence signals (an already-idle
+     * buffer returns immediately, so this is one syscall on the steady
+     * path); unfenced writers return immediately, bounded by the timeout. */
+    {
+        struct pollfd pfd = { b->fd, POLLIN, 0 };
+        int pr = poll(&pfd, 1, 100);
+        if (pr == 0)   /* safety net actually hit — the writer's fence never
+                        * signalled: not fatal (we present whatever is in
+                        * memory) but it means the write-race is back */
+            LOGE("dmabuf fence wait timed out: %ux%u ino=%llu "
+                 "(client write fence did not signal in 100ms)",
+                 b->width, b->height, (unsigned long long)ino);
+#ifdef AWL_LOG_DEBUG
+        if (nz_before == 0)
+            LOGD("firstpaint: %ux%u ino=%llu was zero at commit, poll=%d",
+                 b->width, b->height, (unsigned long long)ino, pr);
+#endif
+    }
+
+    if (s->ahb && s->ino == ino &&
+        s->w == b->width && s->h == b->height && s->stride == b->stride)
+        return 0;   /* same dma-buf: the AHB already wraps this memory */
+
+    /* dmabuf changed → re-forge (the old AHB itself is the donor when its
+     * geometry matches — one gralloc import, zero allocations), then release
+     * it: the release closes the swapped-out dmabuf fd, and the new AHB's own
+     * blob-fd dup keeps the metadata alive. Consumers still displaying the
+     * old buffer hold their own refs (SF) / their own image ref (EGL) — valid
+     * until they re-import. */
+    AHardwareBuffer* ahb = wrap_dmabuf_ahb(
+        b, AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE, s->ahb);
+    if (!ahb) return -1;   /* old AHB kept — retry next frame */
+    if (s->ahb) AHardwareBuffer_release(s->ahb);
+    s->ahb = ahb;
+    s->ino = ino;
+    s->w = b->width;
+    s->h = b->height;
+    s->stride = b->stride;
+    return 1;
+}
+
+static void awl_renderer_ahb_slot_destroy(awl_ahb_slot* s) {
+    if (s->ahb) AHardwareBuffer_release(s->ahb);
+    memset(s, 0, sizeof(*s));
 }
 
 static void destroy_dmabuf_texture(wl_tex* t) {
@@ -720,16 +886,10 @@ static void destroy_dmabuf_texture(wl_tex* t) {
         g.eglDestroyImageKHR(g.display, t->image);
         t->image = EGL_NO_IMAGE_KHR;
     }
-    if (t->ahb) {
-        AHardwareBuffer_release(t->ahb);   /* releases the reference on the donor blob fd */
-        t->ahb = NULL;
-    }
-    if (t->donor) {
-        AHardwareBuffer_release(t->donor); /* blob reclaimable only after ahb release */
-        t->donor = NULL;
-    }
-    t->buf_token = NULL;
+    awl_renderer_ahb_slot_destroy(&t->slot);
 }
+
+/* HAL BGRA_8888 constant lives in awl_renderer.hpp */
 
 static void tex_params_default(void) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -739,29 +899,26 @@ static void tex_params_default(void) {
 }
 
 static bool import_dmabuf_texture(wl_tex* t, const awl_buffer_info_t* b) {
-    /* Same buffer already imported (token = wayland resource identity; fd
-     * numbers get recycled, unusable as a key) — the texture IS that memory;
-     * client writes update it in place */
-    if (t->tex_is_image && t->buf_token == b->token &&
-        t->tex_w == b->width && t->tex_h == b->height)
-        return true;
+    /* HAL format: DRM AR24/XR24 memory order B,G,R,(A|X) → HAL BGRA_8888 — the
+     * GPU samples the buffer's true channel order, the R/B fix lives in the
+     * texture descriptor instead of the shader (no u_swap_rb). XR24 alpha = the
+     * X byte: harmless for blend-off layer 0 (Xwayland root); XR24 as a blended
+     * child layer is not a real client pattern (chrome subsurfaces are AR24).
+     * Sampled-only usage (texture) — GPU_FRAMEBUFFER not declared */
+    int r = awl_renderer_ahb_swap(&t->slot, b);
+    if (r <= 0) return r == 0;   /* same dma-buf: the texture IS that memory */
 
-    destroy_dmabuf_texture(t);      /* destroy the EGLImage before releasing the AHB */
-
-    /* HAL format: DRM ARGB8888→RGBA_8888(1), XR24→RGBX_8888(2);
-     * sampled-only usage (texture) — GPU_FRAMEBUFFER not declared */
-    uint32_t hal = b->drm_format == AWL_FOURCC_ARGB8888 ? 1 : 2;
-    uint64_t usage = AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE;
-
-    AHardwareBuffer* donor = NULL;
-    AHardwareBuffer* ahb = ahb_wrap_dmabuf(b, hal, usage, &donor);
-    if (!ahb) return false;
+    /* dmabuf swapped → re-import: the old EGLImage pinned the old memory
+     * through the swap via its own ref; drop it and build on the new AHB */
+    if (t->image != EGL_NO_IMAGE_KHR) {
+        g.eglDestroyImageKHR(g.display, t->image);
+        t->image = EGL_NO_IMAGE_KHR;
+    }
 
     /* eglGetNativeClientBufferANDROID: AHB → EGLClientBuffer (the sanctioned path) */
-    EGLClientBuffer cb = g.eglGetNativeClientBuffer(ahb);
+    EGLClientBuffer cb = g.eglGetNativeClientBuffer(t->slot.ahb);
     if (!cb) {
         LOGE("eglGetNativeClientBuffer == NULL");
-        AHardwareBuffer_release(ahb);
         return false;
     }
     EGLImageKHR img = g.eglCreateImageKHR(g.display, EGL_NO_CONTEXT,
@@ -769,12 +926,8 @@ static bool import_dmabuf_texture(wl_tex* t, const awl_buffer_info_t* b) {
     if (img == EGL_NO_IMAGE_KHR) {
         LOGE("eglCreateImageKHR(native buffer): 0x%x (%ux%u stride=%u)",
              eglGetError(), b->width, b->height, b->stride);
-        AHardwareBuffer_release(ahb);
         return false;
     }
-    t->ahb = ahb;
-    t->donor = donor;
-    t->buf_token = b->token;
     LOGD("AHB import ok %ux%u stride=%u fd=%d",
          b->width, b->height, b->stride, b->fd);
 
@@ -895,10 +1048,12 @@ static bool upload_shm_texture(wl_window* win, uint64_t sid, wl_tex* t,
 static void render_frame(wl_window* w) {
     /* Layer snapshot (root first, child layers in render stack order bottom→top);
      * layers that fail to fetch / have no buffer are skipped.
-     * #31 zoom: coordinates/sizes are root logical pixels — dst×rs (rs = window
-     * physical / root logical). After scaling, the view still aligns to the
-     * geometry origin (chrome buffer carries 16/10px shadow margins, sharing
-     * the same origin as input mapping). */
+     * #31 zoom: coordinates/sizes are root logical pixels; dst = (logical −
+     * geometry origin) × s + o with the root's view transform (1:1 at Z for
+     * content following the configure, scale_mode placement otherwise),
+     * snapped to the pixel grid (kwin snapToPixelGrid). The geometry-origin
+     * alignment (chrome buffer carries 16/10px shadow margins) is shared
+     * with the input mapping. */
     awl_layer_info_t lay[AWL_MAX_LAYERS + 1];   /* +1: client cursor image appended on top */
     int n = awl_surface_get_layers(w->id, lay, AWL_MAX_LAYERS);
     if (n <= 0) return;
@@ -908,34 +1063,45 @@ static void render_frame(wl_window* w) {
      * Drawn/presented like any layer → the cursor surface gets frame_done
      * (animated cursors) and deferred buffer release. */
     if (awl_pointer_cursor_layer(w->id, &lay[n])) n++;
-    int32_t gox = 0, goy = 0;
-    float gw = 0, gh = 0;
-    awl_surface_get_origin(w->id, &gox, &goy, &gw, &gh);
+    /* Root view transform (logic layer, the same snapshot the input inverse
+     * uses): geometry origin + logical→view scale/offset. A root whose
+     * content has the configured size maps 1:1 at Z with no offset; only
+     * content that ignores the configure gets the scale_mode placement (its
+     * letterbox bars stay the clear color below). Degenerate → identity. */
+    awl_view_xform_t xf;
+    awl_surface_get_view_xform(w->id, &xf);
 
-    int vw = ANativeWindow_getWidth(w->nw);
-    int vh = ANativeWindow_getHeight(w->nw);
+    /* size cache — dropped when the logic layer reports a resize
+     * (awl_window_resize → awl_renderer_window_resized); re-query renders the
+     * frame at the fresh viewport/u_view = the original full-screen flush */
+    if (w->size_dirty.load(std::memory_order_relaxed) || w->cur_vw <= 0 ||
+        w->cur_vh <= 0) {
+        w->cur_vw = ANativeWindow_getWidth(w->nw);
+        w->cur_vh = ANativeWindow_getHeight(w->nw);
+        w->size_dirty.store(false, std::memory_order_relaxed);
+    }
+    int vw = w->cur_vw;
+    int vh = w->cur_vh;
+    LOGD("win %llu render: view=%dx%d n=%d root=%llu xf(s=%.3f,%.3f o=%.1f,%.1f go=%d,%d)",
+         (unsigned long long)w->id, vw, vh, n,
+         (unsigned long long)lay[0].surface_id,
+         xf.sx, xf.sy, xf.ox, xf.oy, xf.gox, xf.goy);
+
     glViewport(0, 0, vw, vh);
-    glClearColor(0, 0, 0, 1);
+    glClearColor(0, 0, 0, 1);   /* letterbox bars for fit/center modes */
     glClear(GL_COLOR_BUFFER_BIT);
 
-    /* Content basis (geometry rectangle; chrome dst includes shadow margins →
-     * out-of-bounds clipped) → window physical ratio (Z; fixed-size clients
-     * have no valid geometry → root logical size = stretch ratio) */
-    float rsx = gw > 0.5f ? (float)vw / gw
-              : (lay[0].w > 0.5f ? (float)vw / lay[0].w : 1.0f);
-    float rsy = gh > 0.5f ? (float)vh / gh
-              : (lay[0].h > 0.5f ? (float)vh / lay[0].h : 1.0f);
-
     glUseProgram(w->program);
-    GLint loc = glGetAttribLocation(w->program, "pos");
     glBindBuffer(GL_ARRAY_BUFFER, w->vbo);
-    glEnableVertexAttribArray((GLuint)loc);
-    glVertexAttribPointer((GLuint)loc, 2, GL_FLOAT, GL_FALSE, 0, 0);
-    glUniform2f(glGetUniformLocation(w->program, "u_view"), (float)vw, (float)vh);
-    GLint dst_loc = glGetUniformLocation(w->program, "u_dst");
-    GLint uv_loc = glGetUniformLocation(w->program, "u_uv");
-    glUniform1i(glGetUniformLocation(w->program, "tex"), 0);
-    GLint swap_loc = glGetUniformLocation(w->program, "u_swap_rb");
+    glEnableVertexAttribArray((GLuint)w->a_pos);
+    glVertexAttribPointer((GLuint)w->a_pos, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    glUniform2f(w->u_view, (float)vw, (float)vh);
+    /* dmabuf textures are imported as their true channel order (HAL
+     * BGRA_8888, see import_dmabuf_texture) and shm uploads convert on
+     * GL_BGRA_EXT upload — both sample correct as-is, no swizzle. The
+     * transform matrix maps the display quad uv through the wl buffer
+     * transform (set_buffer_transform, whole-buffer inverse rotation). */
+    glUniform1i(w->u_tex, 0);
     glActiveTexture(GL_TEXTURE0);
 
     uint64_t seen[AWL_MAX_LAYERS + 1];
@@ -973,32 +1139,36 @@ static void render_frame(wl_window* w) {
             glEnable(GL_BLEND);
             glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
         }
-        /* dmabuf byte-order fix: DRM AR24/XR24 memory order B,G,R,(A|X) (fourcc
-         * naming refers to the 32-bit little-endian word), but the AHB is sampled
-         * as HAL RGBA_8888/RGBX_8888 (R,G,B,X memory order) → R/B swapped;
-         * swizzle back after sampling. shm path: GL already converts to RGBA on
-         * GL_BGRA_EXT upload, no swap (chrome+Xwayland showed inverted colors
-         * on device, 2026-09-09) */
-        glUniform1i(swap_loc, is_dmabuf ? 1 : 0);
-        glUniform4f(dst_loc, ((float)lay[i].x - (float)gox) * rsx,
-                    ((float)lay[i].y - (float)goy) * rsy,
-                    lay[i].w * rsx, lay[i].h * rsy);
-        glUniform4f(uv_loc, lay[i].u0, lay[i].v0, lay[i].su, lay[i].sv);
+        /* Pixel-grid snap (awl_snap_extent, awl_renderer.hpp): integer origin,
+         * size = the buffer's own pixel count when it is the Z-scaled rendition
+         * of the logical size — GL_LINEAR then samples texel centers: lossless.
+         * A fractional origin/size would resample the whole buffer (half-pixel
+         * blur) even at scale 1. */
+        double rsw, rsh;
+        awl_layer_sampled(&lay[i], b.width, b.height, &rsw, &rsh);
+        glUniform4f(w->u_dst,
+                    (float)round(((double)lay[i].x - (double)xf.gox) * xf.sx + xf.ox),
+                    (float)round(((double)lay[i].y - (double)xf.goy) * xf.sy + xf.oy),
+                    (float)awl_snap_extent(lay[i].w, xf.sx, rsw),
+                    (float)awl_snap_extent(lay[i].h, xf.sy, rsh));
+        glUniform4f(w->u_uv, lay[i].u0, lay[i].v0, lay[i].su, lay[i].sv);
+        glUniformMatrix3fv(w->u_xform, 1, GL_TRUE,
+                           k_root_xform[lay[i].transform & 7]);
         glBindTexture(GL_TEXTURE_2D, t.texture);
         glDrawArrays(GL_TRIANGLES, 0, 6);
         drew = true;
 
         if (!w->logged_frame) {
             w->logged_frame = true;
-            LOGI("window %llu frame: layers=%d [0]=%llu kind=%s %ux%u stride=%u "
-                 "fmt=%c%c%c%c (glerr=0x%x)",
-                 (unsigned long long)w->id, n,
+            LOGI("window %llu frame: layers=%d [%d]=%llu kind=%s %ux%u stride=%u "
+                 "fmt=%c%c%c%c xform=%d (glerr=0x%x)",
+                 (unsigned long long)w->id, n, i,
                  (unsigned long long)lay[i].surface_id,
                  is_dmabuf ? "dmabuf" : "shm",
                  b.width, b.height, b.stride,
                  (char)(b.drm_format & 0xff), (char)((b.drm_format >> 8) & 0xff),
                  (char)((b.drm_format >> 16) & 0xff), (char)((b.drm_format >> 24) & 0xff),
-                 glGetError());
+                 lay[i].transform, glGetError());
         }
     }
     if (!drew) return;   /* not even root has a usable buffer — don't spin on a swap */
@@ -1017,14 +1187,26 @@ static void render_frame(wl_window* w) {
         }
     }
 
-    /* ensure sampling finished before releasing the client buffer (correctness first; switch to a fence later) */
-    glFinish();
+    /* no glFinish: eglSwapBuffers submits with a native fence the driver attaches
+     * (EGL_ANDROID_native_fence_sync, SF waits GPU-side before scanout), and the
+     * client-buffer reuse below is ordered by kernel dma-buf resv implicit sync
+     * (container Mesa write ↔ host kgsl read, same model v5 runs on). CPU stays
+     * free — frame_done goes out at submit time so the client's next frame
+     * overlaps this one's GPU composite. */
     glDisable(GL_BLEND);
-
     if (!eglSwapBuffers(g.display, w->surface)) {
         LOGE("eglSwapBuffers: 0x%x", eglGetError());
         return;
     }
+#ifdef AWL_LOG_DEBUG   /* two driver queries per swap — debug builds only (LOGD args alone would not evaluate them) */
+    {
+        EGLint sw = 0, sh = 0;
+        eglQuerySurface(g.display, w->surface, EGL_WIDTH, &sw);
+        eglQuerySurface(g.display, w->surface, EGL_HEIGHT, &sh);
+        LOGD("win %llu swapped: egl surface %dx%d (view %dx%d)",
+             (unsigned long long)w->id, sw, sh, vw, vh);
+    }
+#endif
 
     /* frame_done for each layer (child layers piggyback on the parent window's presentation) */
     for (int k = 0; k < nseen; k++)
@@ -1059,6 +1241,21 @@ void awl_renderer_request_render(uint64_t id) {
     auto it = g_windows.find(id);
     if (it == g_windows.end()) return;   /* Activity not ready yet; request re-issued after attach */
     wl_window* w = it->second;
+    std::lock_guard<std::mutex> lw(w->m);
+    w->render_req = true;
+    w->cv.notify_all();
+}
+
+/* Logic layer (awl_window_resize, any thread): the Android window resized in
+ * place — the cached ANativeWindow size is stale. Drop it and wake the render
+ * thread: the next frame re-queries and presents at the new size (the
+ * original full-screen resize path). Coalesced like a render request. */
+void awl_renderer_window_resized(uint64_t id) {
+    std::lock_guard<std::mutex> lk(g_map_lock);
+    auto it = g_windows.find(id);
+    if (it == g_windows.end()) return;
+    wl_window* w = it->second;
+    w->size_dirty.store(true, std::memory_order_relaxed);
     std::lock_guard<std::mutex> lw(w->m);
     w->render_req = true;
     w->cv.notify_all();

@@ -644,17 +644,28 @@ void awl_display_init_size(int32_t* w, int32_t* h) {
  * per fractional_scale). When the client does not respond (fixed-size buffer),
  * the render side scales the display by the window/root logical ratio. */
 
-/* phys → logical (round to nearest; integer zoom_pct avoids float drift) */
+/* phys → logical at the EFFECTIVE zoom Z = preferred_scale/120 (round to
+ * nearest, integer math). The client renders at exactly that quantized Z
+ * (kwin fractionalscale_v1: round(z×120)), so the buffer it commits is
+ * round(logical×Z) px; dividing by zoom_pct/100 instead (133% vs the
+ * client's 160/120) would make that buffer miss phys by a few px and the
+ * 1:1 view mapping (awl_surface_view_map) would have to resample it. */
 static int32_t phys_to_logical(int32_t v) {
-    int pct = g_srv.zoom_pct;
-    return (int32_t)(((int64_t)v * 100 + pct / 2) / pct);
+    int64_t pref = awl_zoom_preferred_scale();
+    return (int32_t)(((int64_t)v * 120 + pref / 2) / pref);
 }
 
 void awl_window_resize(uint64_t id, int32_t w, int32_t h) {
+    int hit = 0, changed = 0;
     pthread_rwlock_rdlock(&g_srv.rwl);
     struct awl_surface* s = awl_surface_by_id(id);
     if (s && (s->role == AWL_ROLE_TOPLEVEL || s->role == AWL_ROLE_XWAYLAND)) {
+        hit = 1;
         pthread_mutex_lock(&s->ev_lock);
+        changed = s->phys_w != w || s->phys_h != h;
+        LOGD("window %llu resize %dx%d (was %dx%d conf=%dx%d mapped=%d changed=%d)",
+             (unsigned long long)s->id, w, h, s->phys_w, s->phys_h,
+             s->conf_w, s->conf_h, s->mapped, changed);
         s->phys_w = w;   /* Android window size (for view→logical conversion / render ratio) */
         s->phys_h = h;
         if (s->role == AWL_ROLE_XWAYLAND) {
@@ -665,27 +676,36 @@ void awl_window_resize(uint64_t id, int32_t w, int32_t h) {
              * record the size. */
             LOGD("xwayland window %llu phys=%dx%d", (unsigned long long)s->id,
                     w, h);
-            pthread_mutex_unlock(&s->ev_lock);
-            pthread_rwlock_unlock(&g_srv.rwl);
-            return;
+        } else {
+            int32_t lw = phys_to_logical(w);
+            int32_t lh = phys_to_logical(h);
+            if (!s->xdg_role_res || !s->mapped) {
+                /* Window not ready (first buffer not committed / role not built):
+                 * cache it; awl_xdg_flush_pending forces the send after map — the
+                 * initial size signal is not lost */
+                s->pend_w = w;
+                s->pend_h = h;
+                s->has_pending = 1;
+            } else if (lw != s->conf_w || lh != s->conf_h) {
+                s->has_pending = 0;   /* exact value arrived, invalidate the cache */
+                send_configure_locked(s, lw, lh, NULL, 0);
+                wl_client_flush(wl_resource_get_client(s->xdg_role_res));
+            }   /* same size: prevent loops, no resend */
         }
-        int32_t lw = phys_to_logical(w);
-        int32_t lh = phys_to_logical(h);
-        if (!s->xdg_role_res || !s->mapped) {
-            /* Window not ready (first buffer not committed / role not built):
-             * cache it; awl_xdg_flush_pending forces the send after map — the
-             * initial size signal is not lost */
-            s->pend_w = w;
-            s->pend_h = h;
-            s->has_pending = 1;
-        } else if (lw != s->conf_w || lh != s->conf_h) {
-            s->has_pending = 0;   /* exact value arrived, invalidate the cache */
-            send_configure_locked(s, lw, lh, NULL, 0);
-            wl_client_flush(wl_resource_get_client(s->xdg_role_res));
-        }   /* same size: prevent loops, no resend */
         pthread_mutex_unlock(&s->ev_lock);
     }
     pthread_rwlock_unlock(&g_srv.rwl);
+    /* #34: phys moved → the view mapping moved (letterbox offset / stretch
+     * ratio) → this root's cached confine rects (view px) are stale. Remap
+     * takes rwl itself, so it must run after the release above; skipped on a
+     * no-op resize to keep duplicate SURFACE/RESIZE traffic quiet. */
+    if (hit && changed) {
+        awl_input_constr_remap(id);
+        /* the surface resized in place — the renderer's cached ANativeWindow
+         * size is stale; drop it (next frame = full-screen flush at the new
+         * size, the original resize path) */
+        awl_renderer_window_resized(id);
+    }
 }
 
 /* Android foreground/focus change → xdg_toplevel ACTIVATED state (configure

@@ -59,6 +59,10 @@ struct awl_buffer {
     struct wl_resource* resource;    /* wl_buffer (created by us) */
     struct wl_list link;             /* server.buffers */
     int dmabuf_fd;                   /* owned after dup */
+    uint64_t ino;                    /* dma-buf inode at creation — render-side
+                                      * identity without a per-frame fstat
+                                      * (0 = fstat failed here, consumers
+                                      * fall back to their own) */
     uint32_t width, height, stride;  /* stride: bytes */
     uint32_t drm_format;
     uint64_t modifier;
@@ -116,6 +120,10 @@ struct awl_surface {
      * as the buffer (kwin pending→current). */
     int32_t phys_w, phys_h;          /* Android window size (recorded by awl_window_resize; 0=unknown) */
     int32_t buf_scale;               /* wl_surface.set_buffer_scale (default 1; bookkeeping only) */
+    int32_t buf_transform;           /* wl_surface.set_buffer_transform, current (wl_output.transform
+                                      * 0..7; 90/270 swap the logical size). Applied on commit like
+                                      * viewport state — the render side reads it per frame. */
+    int32_t pend_buf_transform;      /* -1 = nothing pending */
     struct wl_resource* viewport_res;/* wp_viewport (at most 1 per surface; NULL=none) */
     struct wl_resource* frac_res;    /* zwp_fractional_scale_v1 (at most 1 per surface) */
     int32_t vp_dst_w, vp_dst_h;      /* viewport dst logical size (0=unset) */
@@ -290,6 +298,13 @@ struct awl_server {
      * zoom_pct×120/100 via wp_fractional_scale_v1 (kwin round(z×120)). */
     atomic_int zoom_pct;   /* binder thread set_zoom ↔ protocol dispatch threads read, atomic */
 
+    /* View mapping mode (#34, daemon config scale_mode — AWL_SCALE_* in awl.h):
+     * how the content-base rectangle maps into the Android window. Pure
+     * presentation-layer state: render dst / input / confine / IME-rect all
+     * convert through awl_view_map(); no configure size changes. Binder config
+     * thread writes, dispatch/render threads read — atomic, no lock. */
+    atomic_int scale_mode;
+
     /* Initial-configure placeholder size (#33, daemon config init_w/init_h):
      * sent before the Android window exists (get_toplevel initial configure +
      * set_maximized/fullscreen placeholders). Set from the binder config
@@ -359,6 +374,14 @@ void awl_input_cursor_commit(struct awl_surface* s, int32_t off_x, int32_t off_y
  *    lock). */
 uint64_t awl_input_constr_surface_gone(struct awl_surface* s);
 void awl_input_constr_gone_notify(uint64_t win);
+/* Re-convert + re-push the confine rects (view px) of this root's live
+ * constraints — the view mapping changed underneath them (scale_mode switch
+ * or a window resize that moved the letterbox offset / stretch ratio; without
+ * this the APK clamp box sits over the black bars). root_id 0 = every root.
+ * Takes rwl.rd itself: call with no logic-layer lock held; callbacks fire
+ * after release (awl_xdg.c awl_window_resize tail / awl_viewport.c
+ * set_scale_mode + set_zoom). */
+void awl_input_constr_remap(uint64_t root_id);
 
 /* awl_idle.c — zwp_idle_inhibit_manager_v1 (inhibitor state under
  * g_inhib_lock — pure state sync like the constraints above; the Activity
@@ -373,6 +396,19 @@ void awl_input_constr_gone_notify(uint64_t win);
 void awl_idle_setup(void);
 uint64_t awl_idle_surface_gone(struct awl_surface* s);
 void awl_idle_gone_notify(uint64_t win);
+
+/* awl_icon.c — xdg_toplevel_icon_v1 (per-window Recents icons; pixels are
+ * copied at add_buffer, so the applied icon survives icon-object and buffer
+ * destruction like the spec's lifetime rules; entries under g_icon_lock,
+ * keyed by the toplevel's surface id):
+ *  - commit: called from surface_commit (no logic lock held; that surface's
+ *    ev_lock may be held — the C_ICON callback fires from awl_icon_commit
+ *    itself, outside ev_lock).
+ *  - surface_gone: caller holds rwl.wr (awl_surface.c destroy path); drops
+ *    the window's pending + applied icon with the surface. */
+void awl_icon_setup(void);
+void awl_icon_commit(struct awl_surface* s);
+void awl_icon_surface_gone(struct awl_surface* s);
 
 /* awl_data_device.c — wl_data_device_manager v3 (full selection + DnD state
  * machine, semantics aligned with kwin-6.6.5; see the file-header lock note).
@@ -453,10 +489,25 @@ void awl_viewport_setup(void);
  * no buffer). viewport dst | source | buffer/buf_scale — shared by the render
  * dst and input hit-testing. */
 void awl_surface_logical_size(struct awl_surface* s, float* w, float* h);
-/* Window view scale (logical px → window physical px; used to convert the
- * IME cursor rectangle). Takes rwl.rd + root ev_lock internally; returns 1
- * when there is no window size. */
+/* Content base size of a root (logical px; caller holds its ev_lock): the
+ * xdg geometry rectangle when valid (chrome-like clients' viewport dst
+ * carries shadow margins around it), else the surface logical size. Shared
+ * by the view mapping, render dst and input inverse. */
 void awl_surface_content_size(struct awl_surface* s, float* w, float* h);
+/* Root → window view mapping, view = (logical − geometry origin) × s + o —
+ * THE conversion shared by render dst / input inverse / relative deltas /
+ * confine rects / IME cursor rect. Content following the
+ * configured size → exactly s = Z, o = 0 (kwin: scene at the output scale;
+ * the client's logical×Z buffer lands 1:1, nothing resampled, whatever
+ * scale_mode says). Otherwise → scale_mode placement (awl_view_map). Caller
+ * holds root ev_lock. */
+void awl_surface_view_map(struct awl_surface* root,
+                          double* sx, double* sy, double* ox, double* oy);
+/* zoom: preferred_scale (1/120 units, kwin round(z×120)) and the effective
+ * scale Z = preferred_scale/120 the client renders at — the only Z the
+ * compositor side may use (configure size, 1:1 mapping). Any thread. */
+uint32_t awl_zoom_preferred_scale(void);
+double awl_zoom_scale(void);
 /* Sample-region uv transform of the current buffer (viewport source →
  * normalized; whole buffer when unset/no buffer). Caller holds ev_lock. */
 void awl_surface_layer_uv(struct awl_surface* s, float* u0, float* v0,

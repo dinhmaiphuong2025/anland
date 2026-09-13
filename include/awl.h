@@ -36,6 +36,14 @@ typedef struct awl_window_callbacks {
     void (*window_destroyed)(void* user, uint64_t id);
     void (*window_title)(void* user, uint64_t id, const char* title);
 
+    /* Toplevel icon applied/reset (xdg-toplevel-icon-v1, awl_icon.c): the
+     * double-buffered set_icon state took effect at the toplevel's surface
+     * commit (a reset notifies too — the fetch then returns "none"). Pure
+     * state sync on the client's dispatch thread → the adaptation layer
+     * tells the Activity over C_ICON; the pixels are pulled per change with
+     * awl_window_get_icon. */
+    void (*window_icon)(void* user, uint64_t id);
+
     /* Pointer constraint state change (zwp_pointer_constraints_v1
      * lock/confine request, set_region on a live constraint, or object /
      * surface destruction — pure state sync, always on the client's
@@ -124,12 +132,24 @@ typedef struct awl_display_info {
 } awl_display_info_t;
 
 /*
- * Start the server (listen_fd already bound+listening). Returns 0 on
- * success. The event loop owns a dedicated thread.
+ * Start the server (listen_fd already bound+listening; -1 = no accept
+ * source — pure binder-fd mode, clients arrive via awl_server_add_client
+ * only). Returns 0 on success. The event loop owns a dedicated thread.
  */
 int  awl_server_start(int listen_fd,
                       const awl_display_info_t* info,
                       const awl_window_callbacks_t* cbs);
+/* Binder-injected client (#36): hand one end of a caller-created socketpair
+ * to the server (called on a binder thread; the fd is marshalled onto the
+ * main event thread, which alone may run wl_client_create). SO_PEERCRED on
+ * that end is fixed at creation time to the CREATOR's credentials — the
+ * socketpair must be created by the wayland client app itself, never by
+ * this process (a daemon-created pair would stamp every client with the
+ * daemon's uid and collapse the window-ownership model). The app side uses
+ * wl_display_connect_to_fd on the other end. Returns 0 = handed off (the
+ * server owns the fd from here, whatever the outcome), <0 = refused (the
+ * caller keeps the fd and closes it). Any thread. */
+int  awl_server_add_client(int fd);
 void awl_server_stop(void);
 int  awl_server_is_running(void);
 
@@ -138,6 +158,11 @@ int  awl_server_is_running(void);
  * connection mutex + atomic serial): resolve→protocol send→flush all happen
  * inside the binder thread, bypassing the event thread. */
 void awl_window_resize(uint64_t id, int32_t w, int32_t h);   /* xdg configure */
+/* Android window resized → the renderer's cached ANativeWindow size for this
+ * window is stale: drop it, the next frame re-queries and renders at the new
+ * size (the original full-screen path). Called from awl_window_resize; any
+ * thread; unknown window = no-op. */
+void awl_renderer_window_resized(uint64_t id);
 void awl_window_close(uint64_t id);                          /* xdg close */
 int  awl_xwayland_window_serial(uint64_t id, uint64_t* serial);  /* Xwayland
     * window association serial (WL_SURFACE_SERIAL; 1 = an Xwayland window
@@ -146,6 +171,14 @@ int  awl_xwayland_window_serial(uint64_t id, uint64_t* serial);  /* Xwayland
 void awl_window_set_activated(uint64_t id, int activated);   /* ACTIVATED state */
 pid_t awl_window_client_pid(uint64_t id);   /* window id → client host pid, read
     * fresh from the connect-time cached credentials (0 = unknown/destroyed) */
+uid_t awl_window_client_uid(uint64_t id);   /* window id → wayland client uid
+    * ((uid_t)-1 = unknown/destroyed) — binder SURFACE auth pass compares it
+    * against the attaching app's binder uid */
+
+/* window id → current toplevel icon (xdg-toplevel-icon-v1, awl_icon.c):
+ * best available buffer (largest width×scale), swizzled to RGBA bytes
+ * (malloc'd, caller frees). w/h = pixel dims. 0 = the window has no icon. */
+int awl_window_get_icon(uint64_t id, void** pixels, int32_t* w, int32_t* h);
 /* Foreground scheduling (awl_sched.c): on = move pid's whole /proc subtree
  * into Android's top-app cgroups, off = back to the root groups. Stateless
  * and synchronous — the adapter calls it on window attach/detach and with
@@ -153,6 +186,37 @@ pid_t awl_window_client_pid(uint64_t id);   /* window id → client host pid, re
 void awl_sched_set(pid_t pid, int on);
 void awl_display_set_zoom(int pct);   /* zoom = 100×Z (50..300; dynamic, #31) */
 int awl_display_zoom(void);           /* current zoom pct (daemon config reads) */
+
+/* View mapping mode (#34, daemon config scale_mode): how the content-base
+ * rectangle is placed inside the Android window. Presentation-layer only —
+ * configure sizes are unaffected (a client that fills the window's aspect
+ * renders 1:1 in every mode; one that keeps a fixed size gets letterboxed
+ * instead of stretched). */
+enum {
+    AWL_SCALE_STRETCH = 0,   /* fill each axis independently (legacy behavior) */
+    AWL_SCALE_FIT = 1,       /* uniform scale to fit inside, centered, letterbox */
+    AWL_SCALE_CENTER = 2,    /* 1:1, centered (content larger than the window is cropped) */
+};
+
+/* scale_mode placement math, view = logical × s + o, for a root whose
+ * content does NOT follow the configured size (fixed-size client ignoring
+ * resize, X window the X side did not resize, the frames between a
+ * configure and its ack). pw/ph = window view px, cw/ch = content base
+ * (logical px), rx/ry = buffer px per logical px of the root's buffer:
+ *   STRETCH  fill each axis
+ *   FIT      uniform scale to fit inside, centered
+ *   CENTER   original size: 1 buffer px = 1 view px (s = rx/ry), centered,
+ *            never resampled
+ * Content that follows the configure never comes here — it is drawn at
+ * exactly view = logical × Z (awl_surface_view_map, the per-root decision).
+ * Degenerate input (pw/ph ≤ 0 — no resize recorded yet — or cw/ch ≤ 0.5)
+ * yields the identity map; an unknown mode falls back to stretch. Pure math,
+ * any thread, no locks. */
+void awl_view_map(int mode, double pw, double ph, double cw, double ch,
+                  double rx, double ry,
+                  double* sx, double* sy, double* ox, double* oy);
+void awl_display_set_scale_mode(int mode);   /* dynamic; invalid → ignored + LOGE */
+int awl_display_scale_mode(void);            /* current mode (daemon config reads) */
 /* Initial-configure placeholder size (#33, daemon config init_w/init_h — the
  * size sent before the Android window exists; the real size follows via
  * awl_window_resize once the Activity surface is ready). Applies to new
@@ -258,6 +322,9 @@ typedef struct awl_buffer_info {
     /* DMABUF (fd is dup'ed by this call — stays valid even if the buffer is
      * destroyed meanwhile; the caller must close it when done) */
     int      fd;
+    uint64_t ino;            /* dma-buf identity, fstat'ed once at buffer
+                              * creation (no per-frame fstat on the render
+                              * path); 0 = unknown (caller fstat fallback) */
     uint64_t modifier;
     /* common */
     uint32_t width, height, stride;
@@ -306,6 +373,8 @@ typedef struct awl_layer_info {
     float x, y;            /* root logical coordinates (Y down; root=(0,0)) */
     float w, h;            /* layer logical size (input hit-testing; 0 = no buffer on this layer) */
     float u0, v0, su, sv;  /* normalized uv transform of the sample region (viewport source; default = whole image) */
+    int32_t transform;     /* wl_surface.set_buffer_transform (wl_output.transform 0..7,
+                            * applied on commit; 90/270 swap the logical size) */
 } awl_layer_info_t;
 
 /* Returns the layer count (root first, sublayers in stack order bottom→top;
@@ -323,11 +392,24 @@ int  awl_surface_get_layers(uint64_t root_id, awl_layer_info_t* out, int max);
  * pointer, or the pointer is in another window). */
 int  awl_pointer_cursor_layer(uint64_t root_id, awl_layer_info_t* out);
 
-/* Root's xdg window geometry origin (buffer pixels; never set = 0,0).
- * Shared by the render dst and the input view→buffer mapping: view(0,0) ↔
- * geometry rectangle origin. */
-void awl_surface_get_origin(uint64_t root_id, int32_t* ox, int32_t* oy,
-                            float* cw, float* ch);   /* geometry origin + content base size */
+/* Root view transform snapshot for the render thread: xdg geometry origin
+ * (logical px; never set = 0,0) + the logical→view mapping
+ * view = (logical − origin) × s + o, decided per root (1:1 at the zoom for
+ * content following the configure, scale_mode placement otherwise) — the
+ * same numbers the input inverse uses, so render and hit-test cannot drift.
+ * Consumers snap the resulting rects to the pixel grid (integer origin, size
+ * = round(logical × s)) so a buffer of round(logical × Z) px covers exactly
+ * its own pixel count. double like kwin's qreal: at an exact half-pixel tie
+ * (logical × preferred_scale ≡ 60 mod 120, e.g. 2265 × 124/120 = 2340.5) a
+ * float32 product lands just below .5 and rounds the other way than the
+ * client's arithmetic — a 1 px stretch on that axis. Unknown root →
+ * identity. Any thread. */
+typedef struct awl_view_xform {
+    int32_t gox, goy;      /* geometry origin (logical px) */
+    double sx, sy;         /* logical → view scale */
+    double ox, oy;         /* view offset (letterbox centering; 0 when 1:1) */
+} awl_view_xform_t;
+void awl_surface_get_view_xform(uint64_t root_id, awl_view_xform_t* out);
 
 /* This frame has been presented (rendering done; the render thread sends
  * the frame callbacks directly) */
