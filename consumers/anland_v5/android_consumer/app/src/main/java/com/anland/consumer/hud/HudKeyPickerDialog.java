@@ -88,16 +88,25 @@ public final class HudKeyPickerDialog {
             dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
         }
 
-        Button btnBack = new Button(context, null, android.R.attr.buttonBarButtonStyle);
-        btnBack.setText("< BACK");
-        btnBack.setTextColor(M3.COLOR_PRIMARY);
-        btnBack.setTextSize(11.5f);
-        btnBack.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout btnBack = new LinearLayout(context);
+        btnBack.setOrientation(LinearLayout.HORIZONTAL);
+        btnBack.setGravity(Gravity.CENTER_VERTICAL);
         btnBack.setBackground(M3.createRippleDrawable(context, M3.RADIUS_CHIP, M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
-        btnBack.setPadding(dp(context, 10), dp(context, 4), dp(context, 10), dp(context, 4));
-        btnBack.setMinHeight(dp(context, 32));
-        btnBack.setMinWidth(0);
+        btnBack.setPadding(dp(context, 8), dp(context, 4), dp(context, 10), dp(context, 4));
+        btnBack.setClickable(true);
         btnBack.setOnClickListener(v -> dialog.dismiss());
+
+        M3.BackArrowView backArrow = new M3.BackArrowView(context);
+        btnBack.addView(backArrow);
+
+        TextView backText = new TextView(context);
+        backText.setText("BACK");
+        backText.setTextSize(11.5f);
+        backText.setTypeface(Typeface.DEFAULT_BOLD);
+        backText.setTextColor(M3.COLOR_PRIMARY);
+        backText.setPadding(dp(context, 6), 0, 0, 0);
+        btnBack.addView(backText);
+
         headerRow.addView(btnBack);
 
         TextView title = new TextView(context);
@@ -140,10 +149,17 @@ public final class HudKeyPickerDialog {
         boolean isLandscape = context.getResources().getConfiguration().orientation
                 == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
 
+        int screenW = context.getResources().getDisplayMetrics().widthPixels;
+        int screenH = context.getResources().getDisplayMetrics().heightPixels;
+        final int dialogW = isLandscape ? Math.min(dp(context, 540), screenW - dp(context, 32))
+                                        : Math.min(dp(context, 360), screenW - dp(context, 20));
+        final int dialogH = isLandscape ? Math.min(dp(context, 330), screenH - dp(context, 24))
+                                        : Math.min(dp(context, 520), screenH - dp(context, 64));
+        root.setLayoutParams(new ViewGroup.LayoutParams(dialogW, dialogH));
+
         // Content Container
         LinearLayout contentContainer = new LinearLayout(context);
         contentContainer.setOrientation(LinearLayout.VERTICAL);
-        contentContainer.setMinimumHeight(dp(context, isLandscape ? 180 : 360));
         root.addView(contentContainer, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
@@ -219,6 +235,9 @@ public final class HudKeyPickerDialog {
 
         selectTab[0].run();
         dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(dialogW, dialogH);
+        }
     }
 
     // COMBO tab body: build a ComboBuilderView and place its content inside

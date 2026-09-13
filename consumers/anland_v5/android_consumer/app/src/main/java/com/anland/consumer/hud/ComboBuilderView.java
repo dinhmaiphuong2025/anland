@@ -52,44 +52,39 @@ public final class ComboBuilderView {
     private final List<String> mKeyLabels = new ArrayList<>();
 
     public ComboBuilderView() {
-        // 1. Modifiers (evdev scancodes)
-        for (int i = 0; i < MODIFIER_CODES.length; i++) {
-            mKeycodes.add(MODIFIER_CODES[i]);
-            mKeyLabels.add(MODIFIER_LABELS[i]);
-        }
-        // 2. Navigation & Arrow keys (evdev scancodes)
+        // 1. Navigation & Arrow keys (evdev scancodes)
         int[] navCodes = {103, 108, 105, 106, 102, 107, 104, 109};
         String[] navLabels = {"UP", "DOWN", "LEFT", "RIGHT", "HOME", "END", "PGUP", "PGDN"};
         for (int i = 0; i < navCodes.length; i++) {
             mKeycodes.add(navCodes[i]);
             mKeyLabels.add(navLabels[i]);
         }
-        // 3. Common editing keys (evdev scancodes)
+        // 2. Common editing keys (evdev scancodes)
         int[] editCodes = {1, 15, 28, 57, 14, 111};
         String[] editLabels = {"ESC", "TAB", "ENTER", "SPACE", "BKSP", "DEL"};
         for (int i = 0; i < editCodes.length; i++) {
             mKeycodes.add(editCodes[i]);
             mKeyLabels.add(editLabels[i]);
         }
-        // 4. Letters A-Z (evdev scancodes: 30=A, 48=B, etc.)
+        // 3. Letters A-Z (evdev scancodes: 30=A, 48=B, etc.)
         int[] letterCodes = {30, 48, 46, 32, 18, 33, 34, 35, 23, 36, 37, 38, 50, 49, 24, 25, 16, 19, 31, 20, 22, 47, 17, 45, 21, 44};
         for (int i = 0; i < 26; i++) {
             mKeycodes.add(letterCodes[i]);
             mKeyLabels.add(String.valueOf((char) ('A' + i)));
         }
-        // 5. Numbers 0-9 (evdev scancodes: 11=0, 2=1..10=9)
+        // 4. Numbers 0-9 (evdev scancodes: 11=0, 2=1..10=9)
         int[] numCodes = {11, 2, 3, 4, 5, 6, 7, 8, 9, 10};
         for (int d = 0; d <= 9; d++) {
             mKeycodes.add(numCodes[d]);
             mKeyLabels.add(String.valueOf(d));
         }
-        // 6. F1-F12 (evdev scancodes: 59-68, 87, 88)
+        // 5. F1-F12 (evdev scancodes: 59-68, 87, 88)
         int[] fCodes = {59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 87, 88};
         for (int i = 0; i < fCodes.length; i++) {
             mKeycodes.add(fCodes[i]);
             mKeyLabels.add("F" + (i + 1));
         }
-        // 7. Symbols (evdev scancodes)
+        // 6. Symbols (evdev scancodes)
         int[] symCodes = {12, 13, 26, 27, 43, 39, 40, 51, 52, 53, 41};
         String[] symLabels = {"-", "=", "[", "]", "\\", ";", "'", ",", ".", "/", "`"};
         for (int i = 0; i < symCodes.length; i++) {
@@ -271,6 +266,34 @@ public final class ComboBuilderView {
             });
         }
         root.addView(slotRow);
+
+        // Pinned Modifiers Quick-Bar (Always visible without scrolling)
+        LinearLayout modRow = new LinearLayout(ctx);
+        modRow.setOrientation(LinearLayout.HORIZONTAL);
+        modRow.setGravity(Gravity.CENTER_VERTICAL);
+        modRow.setPadding(0, 0, 0, dp(ctx, 8));
+        for (int m = 0; m < MODIFIER_CODES.length; m++) {
+            final int code = MODIFIER_CODES[m];
+            final String lbl = MODIFIER_LABELS[m];
+            Button b = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
+            b.setText(lbl);
+            b.setTextSize(11.5f);
+            b.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            b.setTextColor(M3.COLOR_PRIMARY);
+            b.setBackground(M3.createRippleDrawable(ctx, M3.RADIUS_CHIP, M3.COLOR_PRIMARY_CONTAINER, 0x5580DEEA, M3.COLOR_BORDER_SUBTLE));
+            b.setMinHeight(dp(ctx, 36));
+            b.setPadding(dp(ctx, 2), dp(ctx, 4), dp(ctx, 2), dp(ctx, 4));
+            b.setSingleLine(true);
+            LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            if (m > 0) mlp.leftMargin = dp(ctx, 6);
+            b.setLayoutParams(mlp);
+            b.setOnClickListener(v -> {
+                setSlot(mActiveSlot, code);
+                updatePreview();
+            });
+            modRow.addView(b);
+        }
+        root.addView(modRow);
 
         // Key picker grid inside flex ScrollView (weight = 1f)
         ScrollView keyScroll = new ScrollView(ctx);

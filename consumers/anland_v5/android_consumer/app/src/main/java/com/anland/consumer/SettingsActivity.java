@@ -169,13 +169,33 @@ public class SettingsActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
 
+        LinearLayout backRow = new LinearLayout(this);
+        backRow.setOrientation(LinearLayout.HORIZONTAL);
+        backRow.setGravity(Gravity.CENTER_VERTICAL);
+        backRow.setPadding(0, 0, 0, dp(16));
+        backRow.setClickable(true);
+        backRow.setOnClickListener(v -> finish());
+
+        M3.BackArrowView backArrow = new M3.BackArrowView(this);
+        backRow.addView(backArrow);
+
+        TextView backText = new TextView(this);
+        backText.setText("Desktop");
+        backText.setTextSize(14);
+        backText.setTypeface(null, Typeface.BOLD);
+        backText.setTextColor(M3.COLOR_PRIMARY);
+        backText.setPadding(dp(8), 0, 0, 0);
+        backRow.addView(backText);
+
+        root.addView(backRow);
+
         TextView title = new TextView(this);
         title.setText(R.string.settings_title);
         title.setTextSize(24);
         title.setTextColor(Color.WHITE);
         title.setTypeface(null, Typeface.BOLD);
         title.setGravity(Gravity.START);
-        title.setPadding(0, 0, 0, dp(24));
+        title.setPadding(0, 0, 0, dp(20));
         root.addView(title);
 
         addCategoryRow(root, R.string.cat_keyboard_title,

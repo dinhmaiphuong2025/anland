@@ -61,6 +61,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private HudLayoutProfile mProfile;
 
     private boolean mIsEditMode = false;
+    private boolean mHasUnsavedChanges = false;
     private HudButton mSelectedButton = null;
     private View mSelectedView = null;
 
@@ -157,6 +158,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     public void saveProfile() {
         try {
             mPrefs.edit().putString(PREF_KEY_PROFILE, mProfile.toJSON().toString()).apply();
+            mHasUnsavedChanges = false;
             if (mHost != null) mHost.onLayoutSaved();
             Toast.makeText(getContext(), "Layout Saved", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
@@ -170,6 +172,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     public void cancelEditMode() {
         if (!mIsEditMode) return;
+        mHasUnsavedChanges = false;
         // Reload saved profile from disk to discard all uncommitted in-memory edits
         loadProfile();
         selectButton(null, null);
@@ -179,6 +182,11 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     public void requestExit() {
         if (!mIsEditMode) return;
+        if (!mHasUnsavedChanges) {
+            selectButton(null, null);
+            setEditMode(false);
+            return;
+        }
         mInspectorView.setVisibility(GONE);
 
         AlertDialog dialog = new AlertDialog.Builder(getContext(), AlertDialog.THEME_DEVICE_DEFAULT_DARK)
@@ -218,6 +226,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     public void setEditMode(boolean editMode) {
         this.mIsEditMode = editMode;
         if (editMode) {
+            mHasUnsavedChanges = false;
             setVisibility(VISIBLE);
             updateToolbarMargins();
         }
@@ -332,16 +341,19 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mInspectorView = new HudPropertyInspectorView(getContext(), new HudPropertyInspectorView.InspectorCallback() {
             @Override
             public void onModelChanged(HudButton button) {
+                mHasUnsavedChanges = true;
                 rebuildActiveLayout();
             }
             @Override
             public void onDeleteRequested(HudButton button) {
+                mHasUnsavedChanges = true;
                 getActiveLayout().floatingButtons.remove(button);
                 selectButton(null, null);
                 rebuildActiveLayout();
             }
             @Override
             public void onDuplicateRequested(HudButton button) {
+                mHasUnsavedChanges = true;
                 HudButton dup = button.duplicate();
                 getActiveLayout().floatingButtons.add(dup);
                 rebuildActiveLayout();
@@ -353,6 +365,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 // while the modal picker is open to eliminate background clutter.
                 mInspectorView.setVisibility(GONE);
                 HudKeyPickerDialog.show(getContext(), (action, displayLabel) -> {
+                    mHasUnsavedChanges = true;
                     switch (targetSlot) {
                         case 0:
                             button.action = action;
@@ -414,7 +427,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         LinearLayout bar = new LinearLayout(getContext());
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setGravity(Gravity.CENTER_VERTICAL);
-        bar.setBackground(M3.shape(getContext(), M3.RADIUS_PILL, 0xF0181825, M3.COLOR_BORDER_STRONG, 1.0f));
+        bar.setBackground(M3.shape(getContext(), M3.RADIUS_PANEL, 0xF0181825, M3.COLOR_BORDER_STRONG, 1.0f));
         bar.setPadding(dp(8), dp(6), dp(8), dp(6));
         bar.setElevation(dp(8));
 
@@ -474,6 +487,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 .setTitle("Layout Options")
                 .setItems(options, (d, which) -> {
                     if (!mIsEditMode) return;
+                    mHasUnsavedChanges = true;
                     if (which == 0) {
                         // Copy from opposite layout
                         HudLayout src = isLandscape ? mProfile.portraitLayout : mProfile.landscapeLayout;
@@ -611,6 +625,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 break;
         }
         getActiveLayout().floatingButtons.add(b);
+        mHasUnsavedChanges = true;
         rebuildActiveLayout();
         selectButton(b, null);
     }
@@ -894,6 +909,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     return true;
 
                 case MotionEvent.ACTION_MOVE:
+                    mHasUnsavedChanges = true;
                     float targetX = mInitialBtnLeft + (rawX - mTouchDownX);
                     float targetY = mInitialBtnTop + (rawY - mTouchDownY);
 

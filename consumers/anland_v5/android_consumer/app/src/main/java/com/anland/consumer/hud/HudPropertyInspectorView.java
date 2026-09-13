@@ -242,7 +242,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         // Label input
         content.addView(createLabelValueRow("Display Label",
-                createLeftAlignedEditText(), mLabelInput = createLabelEditText()));
+                null, mLabelInput = createLabelEditText()));
         mLabelInput.setTextColor(Color.WHITE);
         mLabelInput.setTextSize(13);
         mLabelInput.setBackgroundColor(0x22FFFFFF);
@@ -761,16 +761,13 @@ public final class HudPropertyInspectorView extends LinearLayout {
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(0, dp(4), 0, dp(4));
 
-        // Fixed 110dp label column: every "Main Action", "Left", "Right",
-        // "Up", "Down", "Mode" and "Display Label" row lines up exactly
-        // with its neighbours, so the value column can have the same
-        // starting X position and width across rows.
+        // Fixed 92dp label column so the right-hand value / edit text has ample width
         TextView l = new TextView(getContext());
         l.setText(label);
         l.setTextColor(0xFFCCCCCC);
         l.setTextSize(12);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                dp(110), LinearLayout.LayoutParams.WRAP_CONTENT);
+                dp(92), LinearLayout.LayoutParams.WRAP_CONTENT);
         l.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         row.addView(l, lp);
 
