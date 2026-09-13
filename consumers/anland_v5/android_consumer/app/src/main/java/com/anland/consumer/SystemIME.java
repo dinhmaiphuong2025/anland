@@ -273,7 +273,11 @@ public final class SystemIME {
         public boolean deleteSurroundingText(int beforeLength, int afterLength) {
             for (int i = 0; i < beforeLength; i++) {
                 if (mMirror.length() > 0) {
-                    mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
+                    try {
+                        mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
+                    } catch (IndexOutOfBoundsException ignored) {
+                        mMirror.setLength(0);
+                    }
                 }
                 tapKey(EVDEV_BACKSPACE);
             }
@@ -287,13 +291,25 @@ public final class SystemIME {
         public boolean deleteSurroundingTextInCodePoints(int beforeLength, int afterLength) {
             for (int i = 0; i < beforeLength; i++) {
                 if (mMirror.length() > 0) {
-                    mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
+                    try {
+                        mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
+                    } catch (IndexOutOfBoundsException ignored) {
+                        mMirror.setLength(0);
+                    }
                 }
                 tapKey(EVDEV_BACKSPACE);
             }
             for (int i = 0; i < afterLength; i++) {
                 tapKey(EVDEV_DELETE);
             }
+            return true;
+        }
+
+        @Override
+        public boolean commitCorrection(android.view.inputmethod.CorrectionInfo correctionInfo) {
+            // Advisory only: the IME already delivered the corrected text via commitText
+            // (LatinIME/Gboard sends both on autocorrect/auto-capitalize).
+            // Re-applying it here would duplicate the word.
             return true;
         }
 
@@ -309,6 +325,28 @@ public final class SystemIME {
                 // Character key: commitText forwards it.  Swallow here.
                 return true;
             }
+
+            // Backspace while IME is open: deliver as an instant press+release tap.
+            // Some IMEs (e.g. LatinIME/Gboard) act on DEL ACTION_UP and consume it,
+            // so a forwarded down would never see its up, leaving Wayland thinking
+            // Backspace is permanently held down.
+            if (event.getKeyCode() == KeyEvent.KEYCODE_DEL) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                    if (mNative != null) {
+                        mNative.sendKey(0, EVDEV_BACKSPACE);
+                        mNative.sendKey(1, EVDEV_BACKSPACE);
+                    }
+                    if (mMirror.length() > 0) {
+                        try {
+                            mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
+                        } catch (IndexOutOfBoundsException ignored) {
+                            mMirror.setLength(0);
+                        }
+                    }
+                }
+                return true; // ACTION_UP swallowed because release was already sent
+            }
+
             if (mNative != null) {
                 if (event.getAction() == KeyEvent.ACTION_DOWN) {
                     mNative.sendKey(0, evdev);
@@ -318,7 +356,11 @@ public final class SystemIME {
             }
             if (event.getAction() == KeyEvent.ACTION_UP) {
                 if (evdev == EVDEV_BACKSPACE && mMirror.length() > 0) {
-                    mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
+                    try {
+                        mMirror.setLength(mMirror.offsetByCodePoints(mMirror.length(), -1));
+                    } catch (IndexOutOfBoundsException ignored) {
+                        mMirror.setLength(0);
+                    }
                 } else {
                     mMirror.setLength(0);
                 }
