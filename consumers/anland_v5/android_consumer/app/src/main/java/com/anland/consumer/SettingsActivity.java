@@ -463,6 +463,74 @@ public class SettingsActivity extends Activity {
         raiseDesktopHint.setTextColor(M3.COLOR_TEXT_MUTED);
         raiseDesktopHint.setPadding(0, dp(4), 0, dp(8));
         root.addView(raiseDesktopHint);
+
+        // Portrait IME Lock
+        Switch portraitImeLockSwitch = new Switch(this);
+        M3.styleSwitch(portraitImeLockSwitch);
+        portraitImeLockSwitch.setText("Lock Soft Keyboard in Portrait");
+        portraitImeLockSwitch.setPadding(0, dp(12), 0, 0);
+        portraitImeLockSwitch.setChecked(prefs.getBoolean("portrait_ime_lock", false));
+        portraitImeLockSwitch.setOnCheckedChangeListener((v, checked) ->
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putBoolean("portrait_ime_lock", checked).apply());
+        root.addView(portraitImeLockSwitch);
+
+        TextView portraitImeLockHint = new TextView(this);
+        portraitImeLockHint.setText("Keeps soft keyboard open in portrait mode across app switches. Automatically scales desktop back to full screen if manually dismissed.");
+        portraitImeLockHint.setTextSize(12);
+        portraitImeLockHint.setTextColor(M3.COLOR_TEXT_MUTED);
+        portraitImeLockHint.setPadding(0, dp(4), 0, dp(8));
+        root.addView(portraitImeLockHint);
+
+        // Landscape Split Arc Keyboard
+        Switch splitArcSwitch = new Switch(this);
+        M3.styleSwitch(splitArcSwitch);
+        splitArcSwitch.setText("Landscape Split Arc Keyboard");
+        splitArcSwitch.setPadding(0, dp(12), 0, 0);
+        splitArcSwitch.setChecked(prefs.getBoolean("landscape_split_arc", true));
+        splitArcSwitch.setOnCheckedChangeListener((v, checked) ->
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putBoolean("landscape_split_arc", checked).apply());
+        root.addView(splitArcSwitch);
+
+        TextView splitArcHint = new TextView(this);
+        splitArcHint.setText("Ergonomic dual-thumb radial keyboard with customizable beveled top wings, leaving the center desktop unobstructed.");
+        splitArcHint.setTextSize(12);
+        splitArcHint.setTextColor(M3.COLOR_TEXT_MUTED);
+        splitArcHint.setPadding(0, dp(4), 0, dp(8));
+        root.addView(splitArcHint);
+
+        TextView animLabel = new TextView(this);
+        animLabel.setText("Arc Keyboard Animation Style");
+        animLabel.setTextSize(14);
+        animLabel.setTextColor(Color.WHITE);
+        animLabel.setPadding(0, dp(8), 0, dp(4));
+        root.addView(animLabel);
+
+        LinearLayout animCard = new LinearLayout(this);
+        animCard.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable aBg = new android.graphics.drawable.GradientDrawable();
+        aBg.setCornerRadius(dp(8));
+        aBg.setColor(0xFF181825);
+        aBg.setStroke(dp(1), 0x22FFFFFF);
+        animCard.setBackground(aBg);
+        animCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+
+        Spinner animSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
+        String[] animOptions = {"Fan Open (Quạt mở - Default)", "Corner Zoom (Phóng từ góc)"};
+        setupDarkSpinner(animSpinner, animOptions);
+        animSpinner.setSelection(prefs.getInt("split_arc_anim", 0));
+        animSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putInt("split_arc_anim", pos).apply();
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        animCard.addView(animSpinner);
+        root.addView(animCard);
     }
 
     /**
@@ -1418,6 +1486,22 @@ public class SettingsActivity extends Activity {
     autoStretchHint.setTextColor(M3.COLOR_TEXT_MUTED);
     autoStretchHint.setPadding(0, dp(4), 0, 0);
     root.addView(autoStretchHint);
+
+    Switch letterbox169Switch = new Switch(this);
+    M3.styleSwitch(letterbox169Switch);
+    letterbox169Switch.setText("Landscape 16:9 Letterbox (1920x1080)");
+    letterbox169Switch.setPadding(0, dp(16), 0, 0);
+    letterbox169Switch.setChecked(prefs.getBoolean("landscape_16_9_letterbox", false));
+    letterbox169Switch.setOnCheckedChangeListener((v, checked) ->
+        prefs.edit().putBoolean("landscape_16_9_letterbox", checked).apply());
+    root.addView(letterbox169Switch);
+
+    TextView letterbox169Hint = new TextView(this);
+    letterbox169Hint.setText("Locks desktop to 16:9 1080p center stage on wide screens (1080x2400+), reserving side margins for Switch controller HUD buttons and Split Arc keyboard.");
+    letterbox169Hint.setTextSize(12);
+    letterbox169Hint.setTextColor(M3.COLOR_TEXT_MUTED);
+    letterbox169Hint.setPadding(0, dp(4), 0, 0);
+    root.addView(letterbox169Hint);
     }
 
     // Maps a res_preset_labels index to {width, height}, or null for the index-0

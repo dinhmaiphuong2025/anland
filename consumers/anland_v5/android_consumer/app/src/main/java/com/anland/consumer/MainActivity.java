@@ -154,6 +154,11 @@ public class MainActivity extends Activity
     // ADDED: VirtualKeyboardView instance
     private VirtualKeyboardView virtualKeyboardView;
 
+    public static final String KEY_PORTRAIT_IME_LOCK = "portrait_ime_lock";
+    public static final String KEY_LANDSCAPE_16_9 = "landscape_16_9_letterbox";
+    public static final String KEY_LANDSCAPE_SPLIT_ARC = "landscape_split_arc";
+    private boolean mUserDismissedImeInForeground = false;
+
     // ==================== 触摸板相关设置 ====================
     public static final String KEY_TOUCHPAD_MODE = "touchpad_mode";
     public static final String KEY_MOUSE_ACCEL = "mouse_speed"; // 名称仍为 speed，实际控制加速度强度
@@ -333,9 +338,11 @@ public class MainActivity extends Activity
         // of restarting the daemon, and a spurious finish would be hostile to
         // edit mode. Only verify on focus regains.
         if (!hasFocus) {
+            mUserDismissedImeInForeground = false;
             if (immersive != null) immersive.stop();
             return;
         }
+        checkPortraitImeLock();
         if (!isSocketFile(resolveSocketPath()) && !mNativeReady) {
             // The socket is gone and we never had a working pipeline. No point
             // scheduling a deferred finish: scheduleDeferredFinish will
@@ -394,11 +401,20 @@ public class MainActivity extends Activity
         String helperPath = getApplicationInfo().nativeLibraryDir + "/libfdhelper.so";
         String bridgePath = getCacheDir().getAbsolutePath() + "/anland_fdbridge.sock";
         mNative.configure(sock, useRoot, helperPath, bridgePath);
-        int customW = prefs.getInt("custom_width", 0);
-        int customH = prefs.getInt("custom_height", 0);
-        customScreenWidth = prefs.getInt("custom_width", 0);
-        customScreenHeight = prefs.getInt("custom_height", 0);
-        mNative.setCustomResolution(customW, customH);
+        int orientation = getResources().getConfiguration().orientation;
+        boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        boolean landscape169 = prefs.getBoolean(KEY_LANDSCAPE_16_9, false);
+        if (isLandscape && landscape169) {
+            customScreenWidth = 1920;
+            customScreenHeight = 1080;
+            mNative.setCustomResolution(1920, 1080);
+        } else {
+            int customW = prefs.getInt("custom_width", 0);
+            int customH = prefs.getInt("custom_height", 0);
+            customScreenWidth = customW;
+            customScreenHeight = customH;
+            mNative.setCustomResolution(customW, customH);
+        }
     }
 
     // The daemon socket this window targets: the launch-Intent override if any,
@@ -701,7 +717,7 @@ public class MainActivity extends Activity
             }
             @Override
             public void toggleSystemKeyboard() {
-                if (systemIme != null) systemIme.toggleSystemKeyboard();
+                MainActivity.this.handleKeyboardToggle();
             }
             @Override
             public void toggleVirtualKeyboard() {
@@ -875,20 +891,39 @@ public class MainActivity extends Activity
     // ADDED: Helper to position virtual keyboard at bottom-center
     private void positionVirtualKeyboard() {
         if (virtualKeyboardView == null) return;
+        int orientation = getResources().getConfiguration().orientation;
+        boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        boolean useSplitArc = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getBoolean(KEY_LANDSCAPE_SPLIT_ARC, true);
+
+        if (isLandscape && useSplitArc) {
+            FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) virtualKeyboardView.getLayoutParams();
+            if (lp.width != FrameLayout.LayoutParams.MATCH_PARENT || lp.height != FrameLayout.LayoutParams.MATCH_PARENT) {
+                lp.width = FrameLayout.LayoutParams.MATCH_PARENT;
+                lp.height = FrameLayout.LayoutParams.MATCH_PARENT;
+                virtualKeyboardView.setLayoutParams(lp);
+            }
+            virtualKeyboardView.setTranslationX(0);
+            virtualKeyboardView.setTranslationY(0);
+            return;
+        }
+
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) virtualKeyboardView.getLayoutParams();
+        if (lp.width != FrameLayout.LayoutParams.WRAP_CONTENT || lp.height != FrameLayout.LayoutParams.WRAP_CONTENT) {
+            lp.width = FrameLayout.LayoutParams.WRAP_CONTENT;
+            lp.height = FrameLayout.LayoutParams.WRAP_CONTENT;
+            virtualKeyboardView.setLayoutParams(lp);
+        }
+
         int w = virtualKeyboardView.getMeasuredWidth();
         int h = virtualKeyboardView.getMeasuredHeight();
         if (w <= 0 || h <= 0) {
-            // Only retry while the keyboard is actually visible. A GONE view is
-            // never measured (width/height stay 0), so reposting unconditionally
-            // would re-queue this Runnable on the main thread every frame forever
-            // and cause global jank/卡顿 even while the keyboard is hidden.
+            // Only retry while the keyboard is actually visible.
             if (virtualKeyboardView.getVisibility() == View.VISIBLE) {
                 virtualKeyboardView.post(this::positionVirtualKeyboard);
             }
             return;
         }
-        // Use the root layout's dimensions instead of DisplayMetrics so that
-        // positioning is correct in freeform / small-window mode.
         int parentW = mRoot.getWidth();
         int parentH = mRoot.getHeight();
         if (parentW <= 0 || parentH <= 0) {
@@ -903,10 +938,8 @@ public class MainActivity extends Activity
         // Clamp to visible area.
         x = Math.max(0, Math.min(x, parentW - w));
         y = Math.max(0, Math.min(y, parentH - h));
-        virtualKeyboardView.setX(x);
-        virtualKeyboardView.setY(y);
-        Log.d("VirtualKeyboard", "positionVirtualKeyboard: x=" + x + ", y=" + y
-                + " parent=" + parentW + "x" + parentH + " view=" + w + "x" + h);
+        virtualKeyboardView.setTranslationX(x);
+        virtualKeyboardView.setTranslationY(y);
     }
 
     private int dpToPx(int dp) {
@@ -1823,11 +1856,13 @@ public class MainActivity extends Activity
 
         // The socket pref may have been edited in Settings; keep our dedup key current.
         registerWindow();
+        checkPortraitImeLock();
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        mUserDismissedImeInForeground = false;
         // Socket-missing bounce: no pipeline exists, so skip teardown (mNative is
         // null) and don't let the jump to Settings trigger any of it.
         if (mForceSettings) return;
@@ -2115,6 +2150,13 @@ public class MainActivity extends Activity
         boolean imeVisible = newImeBottom > 0;
         boolean wasImeVisible = mImeBottom > 0;
 
+        if (wasImeVisible && !imeVisible) {
+            // User or system dismissed the IME while foreground
+            mUserDismissedImeInForeground = true;
+        } else if (!wasImeVisible && imeVisible) {
+            mUserDismissedImeInForeground = false;
+        }
+
         mImeBottom = newImeBottom;
 
         // Only "with_keyboard" mode tracks the IME; "always"/"never"
@@ -2127,6 +2169,40 @@ public class MainActivity extends Activity
             setExtraKeysBarVisible(imeVisible);
 
         relayout();
+    }
+
+    private void checkPortraitImeLock() {
+        if (isFinishing() || isDestroyed()) return;
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean lockIme = prefs.getBoolean(KEY_PORTRAIT_IME_LOCK, false);
+        int orientation = getResources().getConfiguration().orientation;
+        boolean isPortrait = (orientation == Configuration.ORIENTATION_PORTRAIT);
+        if (lockIme && isPortrait && !mUserDismissedImeInForeground) {
+            if (systemIme != null && !systemIme.isImeVisible()) {
+                if (mRoot != null) {
+                    mRoot.postDelayed(() -> {
+                        if (!isFinishing() && !isDestroyed() && systemIme != null && !systemIme.isImeVisible()) {
+                            systemIme.toggleSystemKeyboard();
+                        }
+                    }, 250);
+                }
+            }
+        }
+    }
+
+    public void handleKeyboardToggle() {
+        int orientation = getResources().getConfiguration().orientation;
+        boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        boolean useSplitArc = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getBoolean(KEY_LANDSCAPE_SPLIT_ARC, true);
+        if (isLandscape && useSplitArc) {
+            toggleVirtualKeyboard();
+        } else {
+            if (systemIme != null) {
+                mUserDismissedImeInForeground = false;
+                systemIme.toggleSystemKeyboard();
+            }
+        }
     }
 
     // Desired extra-keys bar visibility for the current keyboard state. The
@@ -2163,8 +2239,16 @@ public class MainActivity extends Activity
 
         FrameLayout.LayoutParams lp =
             (FrameLayout.LayoutParams) surfaceView.getLayoutParams();
-        
-        if (autoStretch) {
+
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean landscape169 = prefs.getBoolean(KEY_LANDSCAPE_16_9, false);
+        int orientation = getResources().getConfiguration().orientation;
+        boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+
+        if (isLandscape && landscape169) {
+            lp.bottomMargin = target;
+            adjustSurfaceViewLayout16_9(lp);
+        } else if (autoStretch) {
             lp.width = FrameLayout.LayoutParams.MATCH_PARENT;
             lp.height = FrameLayout.LayoutParams.MATCH_PARENT;
             lp.gravity = Gravity.NO_GRAVITY;
@@ -2174,6 +2258,9 @@ public class MainActivity extends Activity
                 lp.bottomMargin = target;
                 surfaceView.setLayoutParams(lp);
             }
+            surfaceOffsetX = 0f;
+            surfaceOffsetY = 0f;
+            surfaceScale = 1f;
         } else {
             lp.bottomMargin = target;
             adjustSurfaceViewLayout(lp);
@@ -2227,6 +2314,33 @@ public class MainActivity extends Activity
         surfaceScale = (float) surfaceW / customScreenWidth;
     }
 
+    private void adjustSurfaceViewLayout16_9(FrameLayout.LayoutParams lp) {
+        if (mRoot == null) return;
+        int parentW = mRoot.getWidth();
+        int parentH = mRoot.getHeight();
+        if (parentW <= 0 || parentH <= 0) return;
+
+        int availH = Math.max(100, parentH - lp.bottomMargin);
+        float targetRatio = 16f / 9f;
+        int surfaceW = Math.round(availH * targetRatio);
+        int surfaceH = availH;
+        if (surfaceW > parentW) {
+            surfaceW = parentW;
+            surfaceH = Math.round(parentW / targetRatio);
+        }
+
+        lp.width = surfaceW;
+        lp.height = surfaceH;
+        lp.gravity = (lp.bottomMargin > 0) ? (Gravity.TOP | Gravity.CENTER_HORIZONTAL) : Gravity.CENTER;
+        lp.leftMargin = 0;
+        lp.topMargin = 0;
+        surfaceView.setLayoutParams(lp);
+
+        surfaceOffsetX = (parentW - surfaceW) / 2f;
+        surfaceOffsetY = (lp.bottomMargin > 0) ? 0f : ((parentH - surfaceH) / 2f);
+        surfaceScale = (float) surfaceW / 1920f;
+    }
+
     // Show/hide the extra-keys bar and re-apply the layout so the display area
     // is compressed (shown) or restored (hidden). The HUD editor is a peer
     // feature and does NOT force the bar off here.
@@ -2242,14 +2356,13 @@ public class MainActivity extends Activity
     // Construct the extra-keys bar from the user's saved JSON layout and add it to
     // the content root (hidden). The bar height mirrors Termux at 37.5dp/row and
     private void toggleVirtualKeyboard() {
+        if (virtualKeyboardView == null) return;
         if (virtualKeyboardView.getVisibility() == View.VISIBLE) {
-            virtualKeyboardView.setVisibility(View.GONE);
+            virtualKeyboardView.hideWithAnimation(null);
         } else {
-            Log.d("VirtualKeyboard", "toggle: showing keyboard, mRoot="
-                    + mRoot.getWidth() + "x" + mRoot.getHeight());
-            virtualKeyboardView.setVisibility(View.VISIBLE);
             virtualKeyboardView.bringToFront();
             positionVirtualKeyboard();
+            virtualKeyboardView.showWithAnimation();
             InputMethodManager imm = getSystemService(InputMethodManager.class);
             if (imm != null && getCurrentFocus() != null) {
                 imm.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
@@ -2266,8 +2379,8 @@ public class MainActivity extends Activity
             @Override public void text(String s) {
                 if (mNative != null && !s.isEmpty()) mNative.sendTextInput(s.getBytes(StandardCharsets.UTF_8));
             }
-            // Tapping the ⌨ key keeps the original behaviour: toggle the system IME.
-            @Override public void toggleKeyboard() { systemIme.toggleSystemKeyboard(); }
+            // Tapping the KB key keeps the original behaviour: toggle keyboard.
+            @Override public void toggleKeyboard() { MainActivity.this.handleKeyboardToggle(); }
             // Pulling up on the ⌨ key toggles the floating virtual keyboard.
             @Override public void toggleVirtualKeyboard() {
                 MainActivity.this.toggleVirtualKeyboard();

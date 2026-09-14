@@ -479,6 +479,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
         final String[] options = new String[] {
                 copyOption,
+                "Load Switch Controller Preset (16:9 Gutters)",
                 "Load Niri Default Preset",
                 "Clear Active Layout"
         };
@@ -500,6 +501,107 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         rebuildActiveLayout();
                         Toast.makeText(getContext(), "Layout Copied", Toast.LENGTH_SHORT).show();
                     } else if (which == 1) {
+                        // Load Switch Controller Preset (16:9 Gutters)
+                        HudLayout dst = getActiveLayout();
+                        dst.floatingButtons.clear();
+
+                        // Left Gutter (x < 0.10)
+                        HudButton dpadNub = new HudButton();
+                        dpadNub.widgetType = HudButton.WIDGET_SUPER_GESTURE;
+                        dpadNub.label = "D-PAD";
+                        dpadNub.widthDp = 64;
+                        dpadNub.heightDp = 64;
+                        dpadNub.cornerRadiusDp = 32;
+                        dpadNub.posXPercent = isLandscape ? 0.05f : 0.20f;
+                        dpadNub.posYPercent = 0.68f;
+                        dst.floatingButtons.add(dpadNub);
+
+                        HudButton btnSelect = new HudButton();
+                        btnSelect.label = "-";
+                        btnSelect.action = HudAction.key(1); // ESC
+                        btnSelect.widthDp = 44;
+                        btnSelect.heightDp = 34;
+                        btnSelect.cornerRadiusDp = 8;
+                        btnSelect.posXPercent = isLandscape ? 0.05f : 0.20f;
+                        btnSelect.posYPercent = 0.38f;
+                        dst.floatingButtons.add(btnSelect);
+
+                        HudButton btnHome = new HudButton();
+                        btnHome.label = "HOME";
+                        btnHome.action = HudAction.modifier(125); // SUPER
+                        btnHome.widthDp = 46;
+                        btnHome.heightDp = 34;
+                        btnHome.cornerRadiusDp = 8;
+                        btnHome.posXPercent = isLandscape ? 0.05f : 0.20f;
+                        btnHome.posYPercent = 0.22f;
+                        dst.floatingButtons.add(btnHome);
+
+                        // Right Gutter (x > 0.90)
+                        // ABXY Cluster
+                        HudButton btnX = new HudButton();
+                        btnX.label = "X";
+                        btnX.action = HudAction.combo(125, 57); // Super + Space (Launcher)
+                        btnX.widthDp = 38;
+                        btnX.heightDp = 38;
+                        btnX.cornerRadiusDp = 19;
+                        btnX.posXPercent = isLandscape ? 0.95f : 0.80f;
+                        btnX.posYPercent = 0.33f;
+                        dst.floatingButtons.add(btnX);
+
+                        HudButton btnY = new HudButton();
+                        btnY.label = "Y";
+                        btnY.action = HudAction.combo(125, 24); // Super + O (Overview)
+                        btnY.widthDp = 38;
+                        btnY.heightDp = 38;
+                        btnY.cornerRadiusDp = 19;
+                        btnY.posXPercent = isLandscape ? 0.91f : 0.72f;
+                        btnY.posYPercent = 0.41f;
+                        dst.floatingButtons.add(btnY);
+
+                        HudButton btnA = new HudButton();
+                        btnA.label = "A";
+                        btnA.action = HudAction.key(28); // ENTER
+                        btnA.widthDp = 38;
+                        btnA.heightDp = 38;
+                        btnA.cornerRadiusDp = 19;
+                        btnA.posXPercent = isLandscape ? 0.99f : 0.88f;
+                        btnA.posYPercent = 0.41f;
+                        dst.floatingButtons.add(btnA);
+
+                        HudButton btnB = new HudButton();
+                        btnB.label = "B";
+                        btnB.action = HudAction.key(1); // ESC
+                        btnB.widthDp = 38;
+                        btnB.heightDp = 38;
+                        btnB.cornerRadiusDp = 19;
+                        btnB.posXPercent = isLandscape ? 0.95f : 0.80f;
+                        btnB.posYPercent = 0.49f;
+                        dst.floatingButtons.add(btnB);
+
+                        HudButton btnStart = new HudButton();
+                        btnStart.label = "+";
+                        btnStart.action = HudAction.combo(125, 28); // Super + Enter (Terminal)
+                        btnStart.widthDp = 44;
+                        btnStart.heightDp = 34;
+                        btnStart.cornerRadiusDp = 8;
+                        btnStart.posXPercent = isLandscape ? 0.95f : 0.80f;
+                        btnStart.posYPercent = 0.20f;
+                        dst.floatingButtons.add(btnStart);
+
+                        HudButton rightStick = new HudButton();
+                        rightStick.widgetType = HudButton.WIDGET_TRACKPOINT;
+                        rightStick.label = "MOUSE";
+                        rightStick.widthDp = 60;
+                        rightStick.heightDp = 60;
+                        rightStick.cornerRadiusDp = 30;
+                        rightStick.posXPercent = isLandscape ? 0.95f : 0.80f;
+                        rightStick.posYPercent = 0.70f;
+                        dst.floatingButtons.add(rightStick);
+
+                        selectButton(null, null);
+                        rebuildActiveLayout();
+                        Toast.makeText(getContext(), "Switch Controller Preset Loaded", Toast.LENGTH_SHORT).show();
+                    } else if (which == 2) {
                         // Load Niri Default Preset
                         HudLayout dst = getActiveLayout();
                         dst.floatingButtons.clear();
@@ -545,7 +647,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         selectButton(null, null);
                         rebuildActiveLayout();
                         Toast.makeText(getContext(), "Niri Preset Loaded", Toast.LENGTH_SHORT).show();
-                    } else if (which == 2) {
+                    } else if (which == 3) {
                         // Clear
                         getActiveLayout().floatingButtons.clear();
                         selectButton(null, null);
