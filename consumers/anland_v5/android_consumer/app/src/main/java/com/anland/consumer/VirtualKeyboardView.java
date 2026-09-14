@@ -390,7 +390,6 @@ public class VirtualKeyboardView extends View {
         subTextPaint.setColor(M3.COLOR_TEXT_MUTED);
 
         keyBgPaint.setAntiAlias(true);
-        pressedPaint.setAntiAlias(true);
         modActivePaint.setAntiAlias(true);
         modActivePaint.setColor(modActiveColor);
 
