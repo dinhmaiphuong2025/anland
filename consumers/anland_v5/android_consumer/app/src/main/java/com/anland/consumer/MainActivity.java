@@ -147,7 +147,6 @@ public class MainActivity extends Activity
     private ExtraKeysBar extraKeysBar;
     // Bo cuc nut tu an khi mo ban phim: nho trang thai cu de khoi phuc.
     private boolean mHudAutoHidden = false;
-    private boolean mBarAutoHidden = false;
     private FrameLayout mRoot;    // content root, host of the extra-keys bar
     private float mDensity = 1f;
     // Layout JSON the current bar was built from; used to detect edits on resume.
@@ -2195,7 +2194,7 @@ public class MainActivity extends Activity
         // Ban phim he thong mo: an HUD de khoi che cho go; dong: khoi phuc.
         if (imeVisible != wasImeVisible) {
             if (imeVisible) hideFloatingForKeyboard();
-            else restoreFloatingAfterKeyboard();
+            else restoreHudAfterKeyboard();
         }
 
         relayout();
@@ -2405,8 +2404,8 @@ public class MainActivity extends Activity
         if (virtualKeyboardView == null) return;
         if (virtualKeyboardView.getVisibility() == View.VISIBLE) {
             virtualKeyboardView.hideWithAnimation(() -> {
-                restoreFloatingAfterKeyboard();
-                setExtraKeysBarVisible(shouldShowBar(systemIme.isImeVisible()));
+                // Tat ban phim: chi hien lai HUD, bo qua ExtraKeys.
+                restoreHudAfterKeyboard();
             });
         } else {
             hideFloatingForKeyboard();
@@ -2423,33 +2422,32 @@ public class MainActivity extends Activity
         }
     }
 
-    // Mo ban phim ao / ban phim he thong: tu an bo cuc nut (HUD + ExtraKeys).
+    // Mo ban phim: an ca HUD + ExtraKeys. Tat ban phim: chi hien lai HUD.
     private void hideFloatingForKeyboard() {
         if (mHudOverlay != null && mHudOverlay.getVisibility() == View.VISIBLE
                 && !mHudOverlay.isEditMode() && !mHudAutoHidden) {
             mHudAutoHidden = true;
             mHudOverlay.setVisibility(View.GONE);
         }
-        if (extraKeysBar != null && extraKeysBar.getVisibility() == View.VISIBLE
-                && !mBarAutoHidden) {
-            mBarAutoHidden = true;
+        if (extraKeysBar != null && extraKeysBar.getVisibility() == View.VISIBLE) {
+            extraKeysBar.setVisibility(View.GONE);
+            extraKeysBar.reset();
+            relayout();
         }
     }
 
-    // Dong ban phim: khoi phuc bo cuc nut theo dung preference hien tai.
-    private void restoreFloatingAfterKeyboard() {
-        if (mHudAutoHidden) {
-            mHudAutoHidden = false;
-            boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                .getBoolean("use_hud_overlay", false);
-            if (useHud && mHudOverlay != null && !mHudOverlay.isEditMode()
-                    && mImeBottom <= 0
-                    && (virtualKeyboardView == null
-                        || virtualKeyboardView.getVisibility() != View.VISIBLE)) {
-                mHudOverlay.setVisibility(View.VISIBLE);
-            }
+    // Dong ban phim: hien lai HUD neu truoc do bi tu an. Bo qua ExtraKeys.
+    private void restoreHudAfterKeyboard() {
+        if (!mHudAutoHidden) return;
+        mHudAutoHidden = false;
+        boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getBoolean("use_hud_overlay", false);
+        if (useHud && mHudOverlay != null && !mHudOverlay.isEditMode()
+                && mImeBottom <= 0
+                && (virtualKeyboardView == null
+                    || virtualKeyboardView.getVisibility() != View.VISIBLE)) {
+            mHudOverlay.setVisibility(View.VISIBLE);
         }
-        mBarAutoHidden = false;
     }
 
     // scales with the parsed row count. Records the layout JSON it was built from.
