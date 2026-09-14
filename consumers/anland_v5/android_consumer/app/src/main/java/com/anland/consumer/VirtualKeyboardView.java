@@ -4,7 +4,6 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.content.res.Resources;
@@ -43,9 +42,13 @@ import java.util.Map;
 /**
  * Virtual Keyboard supporting:
  *   1. Portrait Floating QWERTY Keyboard (movable via drag handle).
- *   2. Landscape Ergonomic Split Arc Keyboard (concentric dual-thumb radial layout).
- *   3. Beveled Top Gutter Wings (customizable action buttons seamlessly contoured to arc curvature).
- *   4. Power-user Animations: Fan Open (quạt mở - default) & Corner Zoom (phóng từ góc).
+ *   2. Landscape Ergonomic Split Arc Keyboard (concentric dual-thumb radial layout matching Gboard QWERTY).
+ *   3. Long-press numbers on top row (Q->1, W->2 ... P->0) with corner subscripts.
+ *   4. Centered bottom Space Bar for dual-thumb typing.
+ *   5. Slim, non-bulky Beveled Top Wings contoured to arc curve.
+ *   6. Corner fan-shaped dismiss keyboard button.
+ *   7. Dedicated ?123 Symbol layer.
+ *   8. Snappy 180ms Fan Open and Corner Zoom animations.
  */
 public class VirtualKeyboardView extends View {
 
@@ -68,25 +71,56 @@ public class VirtualKeyboardView extends View {
             {"Ctrl", "Alt", "Space", "Alt", "Home", "LT", "DN", "RT", "End", "Ctrl"}
     };
 
-    // ---------- Landscape Split Arc Radial Keyrings (Concentric from bottom corners) ----------
-    // Ring 0 is closest to thumb pivot; Ring 4 is outermost.
-    private static final String[][] LEFT_ARC_ROWS = {
-            {"CtrlL", "AltL", "Space"},
-            {"ShiftL", "Z", "X", "C", "V", "B"},
-            {"Caps", "A", "S", "D", "F", "G"},
-            {"Tab", "Q", "W", "E", "R", "T"},
-            {"ESC", "1", "2", "3", "4", "5"}
+    // ---------- Landscape Split Arc Gboard QWERTY Layout (3 Rings) ----------
+    // Left Arc:
+    // Ring 0 (inner): Z, X, C, V, B
+    // Ring 1 (middle): A, S, D, F, G
+    // Ring 2 (outer): Q, W, E, R, T
+    private static final String[][] LEFT_ARC_LETTERS = {
+            {"Z", "X", "C", "V", "B"},
+            {"A", "S", "D", "F", "G"},
+            {"Q", "W", "E", "R", "T"}
     };
 
-    private static final String[][] RIGHT_ARC_ROWS = {
-            {"Space", "LT", "DN", "RT"},
-            {"N", "M", ",", ".", "/", "UP", "ShiftR"},
-            {"H", "J", "K", "L", ";", "'", "Enter"},
-            {"Y", "U", "I", "O", "P", "[", "]", "\\"},
-            {"6", "7", "8", "9", "0", "-", "=", "BKSP"}
+    // Right Arc:
+    // Ring 0 (inner): ,, M, N, .
+    // Ring 1 (middle): H, J, K, L, Enter
+    // Ring 2 (outer): Y, U, I, O, P, BKSP
+    private static final String[][] RIGHT_ARC_LETTERS = {
+            {",", "M", "N", "."},
+            {"H", "J", "K", "L", "Enter"},
+            {"Y", "U", "I", "O", "P", "BKSP"}
     };
 
-    // ---------- Symbols Map ----------
+    // Symbols Layer (?123)
+    private static final String[][] LEFT_ARC_SYMBOLS = {
+            {"%", "&", "*", "-", "+"},
+            {"@", "#", "$", "_", "/"},
+            {"1", "2", "3", "4", "5"}
+    };
+
+    private static final String[][] RIGHT_ARC_SYMBOLS = {
+            {"!", "?", ":", ";"},
+            {"(", ")", "\"", "'", "Enter"},
+            {"6", "7", "8", "9", "0", "BKSP"}
+    };
+
+    // Map QWERTY top row to long-press numbers like Gboard
+    private static final Map<String, String> NUMBER_SUBSCRIPTS = new HashMap<>();
+    static {
+        NUMBER_SUBSCRIPTS.put("Q", "1");
+        NUMBER_SUBSCRIPTS.put("W", "2");
+        NUMBER_SUBSCRIPTS.put("E", "3");
+        NUMBER_SUBSCRIPTS.put("R", "4");
+        NUMBER_SUBSCRIPTS.put("T", "5");
+        NUMBER_SUBSCRIPTS.put("Y", "6");
+        NUMBER_SUBSCRIPTS.put("U", "7");
+        NUMBER_SUBSCRIPTS.put("I", "8");
+        NUMBER_SUBSCRIPTS.put("O", "9");
+        NUMBER_SUBSCRIPTS.put("P", "0");
+    }
+
+    // ---------- Symbols Map (Portrait) ----------
     private static final Map<String, String> SYMBOL_CHAR_MAP = new HashMap<>();
     static {
         String[] digits = {"1","2","3","4","5","6","7","8","9","0"};
@@ -118,13 +152,15 @@ public class VirtualKeyboardView extends View {
     private boolean rightShiftPressed = false;
     private boolean capsLockOn = false;
     private boolean symbolLayerActive = false;
+    private boolean mIsArcSymbolLayer = false;
 
-    // Standard portrait keys
+    // Keys
     private final List<KeyData> keys = new ArrayList<>();
-    // Landscape Split Arc keys
     private final List<KeyData> mArcKeys = new ArrayList<>();
-    // Landscape Beveled Top Wing keys
     private final List<KeyData> mWingKeys = new ArrayList<>();
+    private KeyData mCenterSpaceKey;
+    private KeyData mSymbolToggleKey;
+    private KeyData mCornerDismissKey;
 
     private final SparseArray<KeyData> activePointers = new SparseArray<>();
 
@@ -143,23 +179,23 @@ public class VirtualKeyboardView extends View {
     private final Handler mLongPressHandler = new Handler(Looper.getMainLooper());
     private KeyData mPendingLongPressKey = null;
 
-    private Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint keyBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint pressedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint modActivePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint handlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private Paint keyStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint keyBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint subTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint modActivePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint handlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint keyStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private int keyHeight;
     private int padding = 4;
     private int cornerRadius = 6;
 
-    private int keyColor = 0xFF2A2B3D;
-    private int pressedColor = 0xFF35395E;
-    private int modActiveColor = 0xFF80DEEA;
-    private int textColor = Color.WHITE;
-    private int bgColor = 0xEE181825;
+    private final int keyColor = 0xFF2A2B3D;
+    private final int pressedColor = 0xFF35395E;
+    private final int modActiveColor = 0xFF80DEEA;
+    private final int textColor = Color.WHITE;
+    private final int bgColor = 0xEE181825;
 
     private static final int HANDLE_COLOR     = 0x66FFFFFF;
     private static final int KEY_STROKE_COLOR = 0x22FFFFFF;
@@ -228,7 +264,7 @@ public class VirtualKeyboardView extends View {
         mAnimProgress = 0f;
 
         mAnimator = ValueAnimator.ofFloat(0f, 1f);
-        mAnimator.setDuration(180); // Power-user snappy 180ms
+        mAnimator.setDuration(180); // Snappy power-user 180ms
         mAnimator.setInterpolator(new DecelerateInterpolator(1.8f));
         mAnimator.addUpdateListener(a -> {
             mAnimProgress = (float) a.getAnimatedValue();
@@ -316,6 +352,7 @@ public class VirtualKeyboardView extends View {
                 leftAltOn = false;
                 rightShiftPressed = false;
                 symbolLayerActive = false;
+                mIsArcSymbolLayer = false;
                 if (listener != null) {
                     listener.onKeyUp(KeyCodeMapper.getScanCode(KeyEvent.KEYCODE_SHIFT_RIGHT));
                 }
@@ -330,6 +367,10 @@ public class VirtualKeyboardView extends View {
                 for (KeyData k : mWingKeys) {
                     k.pressed = false;
                 }
+                if (mCenterSpaceKey != null) mCenterSpaceKey.pressed = false;
+                if (mSymbolToggleKey != null) mSymbolToggleKey.pressed = false;
+                if (mCornerDismissKey != null) mCornerDismissKey.pressed = false;
+
                 applySymbolLayer();
                 invalidate();
             }
@@ -343,12 +384,19 @@ public class VirtualKeyboardView extends View {
         textPaint.setAntiAlias(true);
         textPaint.setColor(textColor);
         textPaint.setShadowLayer(2, 0, 1, Color.BLACK);
+
+        subTextPaint.setTextAlign(Paint.Align.CENTER);
+        subTextPaint.setAntiAlias(true);
+        subTextPaint.setColor(M3.COLOR_TEXT_MUTED);
+
         keyBgPaint.setAntiAlias(true);
         pressedPaint.setAntiAlias(true);
         modActivePaint.setAntiAlias(true);
         modActivePaint.setColor(modActiveColor);
+
         handlePaint.setColor(HANDLE_COLOR);
         handlePaint.setAntiAlias(true);
+
         keyBgPaint.setStyle(Paint.Style.FILL);
         keyStrokePaint.setStyle(Paint.Style.STROKE);
         keyStrokePaint.setStrokeWidth(1);
@@ -357,7 +405,7 @@ public class VirtualKeyboardView extends View {
 
     // ========== Initialize Keys ==========
     private void initKeys() {
-        // 1. Standard QWERTY keys
+        // 1. Standard QWERTY portrait keys
         keys.clear();
         for (int r = 0; r < keyboardRows.length; r++) {
             String[] row = keyboardRows[r];
@@ -381,8 +429,20 @@ public class VirtualKeyboardView extends View {
         // 2. Arc keys (Left & Right)
         initArcKeys();
 
-        // 3. Top Wing keys
+        // 3. Slim Beveled Top Wings
         initTopWings();
+
+        // 4. Center Space Key
+        mCenterSpaceKey = new KeyData("SPACE", KeyEvent.KEYCODE_SPACE, 1f, false);
+        mCenterSpaceKey.isSpace = true;
+
+        // 5. Symbol Toggle Key (?123 / ABC)
+        mSymbolToggleKey = new KeyData("?123", KeyEvent.KEYCODE_UNKNOWN, 1f, false);
+        mSymbolToggleKey.isSymbolToggle = true;
+
+        // 6. Corner Dismiss Key (Fan-shaped in bottom-right corner)
+        mCornerDismissKey = new KeyData("DOWN", KeyEvent.KEYCODE_UNKNOWN, 1f, false);
+        mCornerDismissKey.isCornerDismiss = true;
     }
 
     private String resolveInternalLabel(String rawLabel, int r, int c, int rowLen) {
@@ -405,19 +465,20 @@ public class VirtualKeyboardView extends View {
 
     private void initArcKeys() {
         mArcKeys.clear();
+        String[][] leftSource = mIsArcSymbolLayer ? LEFT_ARC_SYMBOLS : LEFT_ARC_LETTERS;
+        String[][] rightSource = mIsArcSymbolLayer ? RIGHT_ARC_SYMBOLS : RIGHT_ARC_LETTERS;
+
         // Left Arc
-        for (int r = 0; r < LEFT_ARC_ROWS.length; r++) {
-            String[] row = LEFT_ARC_ROWS[r];
+        for (int r = 0; r < leftSource.length; r++) {
+            String[] row = leftSource[r];
             for (int c = 0; c < row.length; c++) {
                 String raw = row[c];
                 String internal = raw;
                 String display = resolveDisplayLabel(raw, internal);
                 int keyCode = getKeyCodeForLabel(internal);
-                boolean hasSym = hasSymbol(raw);
 
-                KeyData k = new KeyData(display, keyCode, 1f, hasSym);
+                KeyData k = new KeyData(display, keyCode, 1f, false);
                 k.internalLabel = internal;
-                k.symbolChar = hasSym ? SYMBOL_CHAR_MAP.get(raw) : null;
                 k.currentLabel = display;
                 k.currentKeyCode = keyCode;
                 k.isArc = true;
@@ -425,22 +486,23 @@ public class VirtualKeyboardView extends View {
                 k.ringIndex = r;
                 k.colIndex = c;
                 k.ringTotalKeys = row.length;
+                if (!mIsArcSymbolLayer && NUMBER_SUBSCRIPTS.containsKey(display)) {
+                    k.longPressNumber = NUMBER_SUBSCRIPTS.get(display);
+                }
                 mArcKeys.add(k);
             }
         }
         // Right Arc
-        for (int r = 0; r < RIGHT_ARC_ROWS.length; r++) {
-            String[] row = RIGHT_ARC_ROWS[r];
+        for (int r = 0; r < rightSource.length; r++) {
+            String[] row = rightSource[r];
             for (int c = 0; c < row.length; c++) {
                 String raw = row[c];
                 String internal = raw;
                 String display = resolveDisplayLabel(raw, internal);
                 int keyCode = getKeyCodeForLabel(internal);
-                boolean hasSym = hasSymbol(raw);
 
-                KeyData k = new KeyData(display, keyCode, 1f, hasSym);
+                KeyData k = new KeyData(display, keyCode, 1f, false);
                 k.internalLabel = internal;
-                k.symbolChar = hasSym ? SYMBOL_CHAR_MAP.get(raw) : null;
                 k.currentLabel = display;
                 k.currentKeyCode = keyCode;
                 k.isArc = true;
@@ -448,6 +510,9 @@ public class VirtualKeyboardView extends View {
                 k.ringIndex = r;
                 k.colIndex = c;
                 k.ringTotalKeys = row.length;
+                if (!mIsArcSymbolLayer && NUMBER_SUBSCRIPTS.containsKey(display)) {
+                    k.longPressNumber = NUMBER_SUBSCRIPTS.get(display);
+                }
                 mArcKeys.add(k);
             }
         }
@@ -455,12 +520,12 @@ public class VirtualKeyboardView extends View {
 
     private void initTopWings() {
         mWingKeys.clear();
-        // Default 4 left keys, 4 right keys
-        String[] leftDefLabels = {"F1", "F2", "F3", "SUPER"};
-        int[] leftDefCodes = {KeyEvent.KEYCODE_F1, KeyEvent.KEYCODE_F2, KeyEvent.KEYCODE_F3, KeyEvent.KEYCODE_META_LEFT};
+        // Slim, non-bulky auxiliary buttons
+        String[] leftDefLabels = {"ESC", "TAB", "CTRL", "ALT"};
+        int[] leftDefCodes = {KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_TAB, KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_ALT_LEFT};
 
-        String[] rightDefLabels = {"DEL", "HOME", "END", "SETTINGS"};
-        int[] rightDefCodes = {KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_MOVE_HOME, KeyEvent.KEYCODE_MOVE_END, KeyEvent.KEYCODE_SETTINGS};
+        String[] rightDefLabels = {"DEL", "SHIFT", "UP", "HOME"};
+        int[] rightDefCodes = {KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_SHIFT_RIGHT, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MOVE_HOME};
 
         SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String customJson = prefs.getString(KEY_SPLIT_ARC_TOP_WINGS, null);
@@ -559,6 +624,23 @@ public class VirtualKeyboardView extends View {
             case "0": return KeyEvent.KEYCODE_0;
             case "-": return KeyEvent.KEYCODE_MINUS;
             case "=": return KeyEvent.KEYCODE_EQUALS;
+            case "+": return KeyEvent.KEYCODE_PLUS;
+            case "@": return KeyEvent.KEYCODE_AT;
+            case "#": return KeyEvent.KEYCODE_POUND;
+            case "$": return KeyEvent.KEYCODE_4; // Shift+4
+            case "_": return KeyEvent.KEYCODE_MINUS;
+            case "/": return KeyEvent.KEYCODE_SLASH;
+            case "%": return KeyEvent.KEYCODE_5;
+            case "&": return KeyEvent.KEYCODE_7;
+            case "*": return KeyEvent.KEYCODE_STAR;
+            case "(": return KeyEvent.KEYCODE_NUMPAD_LEFT_PAREN;
+            case ")": return KeyEvent.KEYCODE_NUMPAD_RIGHT_PAREN;
+            case "\"": return KeyEvent.KEYCODE_APOSTROPHE;
+            case "'": return KeyEvent.KEYCODE_APOSTROPHE;
+            case ":": return KeyEvent.KEYCODE_SEMICOLON;
+            case ";": return KeyEvent.KEYCODE_SEMICOLON;
+            case "!": return KeyEvent.KEYCODE_1;
+            case "?": return KeyEvent.KEYCODE_SLASH;
             case "BKSP": return KeyEvent.KEYCODE_DEL;
             case "Tab": return KeyEvent.KEYCODE_TAB;
             case "Q": return KeyEvent.KEYCODE_Q;
@@ -584,9 +666,8 @@ public class VirtualKeyboardView extends View {
             case "J": return KeyEvent.KEYCODE_J;
             case "K": return KeyEvent.KEYCODE_K;
             case "L": return KeyEvent.KEYCODE_L;
-            case ";": return KeyEvent.KEYCODE_SEMICOLON;
-            case "'": return KeyEvent.KEYCODE_APOSTROPHE;
             case "Enter": return KeyEvent.KEYCODE_ENTER;
+            case "Shift":
             case "ShiftL": return KeyEvent.KEYCODE_SHIFT_LEFT;
             case "ShiftR": return KeyEvent.KEYCODE_SHIFT_RIGHT;
             case "Z": return KeyEvent.KEYCODE_Z;
@@ -599,9 +680,10 @@ public class VirtualKeyboardView extends View {
             case ",": return KeyEvent.KEYCODE_COMMA;
             case "UP": return KeyEvent.KEYCODE_DPAD_UP;
             case ".": return KeyEvent.KEYCODE_PERIOD;
-            case "/": return KeyEvent.KEYCODE_SLASH;
+            case "Ctrl":
             case "CtrlL": return KeyEvent.KEYCODE_CTRL_LEFT;
             case "CtrlR": return KeyEvent.KEYCODE_CTRL_RIGHT;
+            case "Alt":
             case "AltL": return KeyEvent.KEYCODE_ALT_LEFT;
             case "AltR": return KeyEvent.KEYCODE_ALT_RIGHT;
             case "Home": return KeyEvent.KEYCODE_MOVE_HOME;
@@ -740,21 +822,19 @@ public class VirtualKeyboardView extends View {
         if (viewW <= 0 || viewH <= 0) return;
         float density = getResources().getDisplayMetrics().density;
 
-        // Concentric ring radii from bottom corners
+        // Concentric ring radii (3 spacious rings for true Gboard QWERTY)
         float[] ringRadii = {
-                75f * density,
-                116f * density,
-                157f * density,
-                198f * density,
-                239f * density
+                86f * density,
+                134f * density,
+                182f * density
         };
-        float keyThickness = 34f * density;
-        float arcSpanDeg = 78f;
+        float keyThickness = 38f * density;
+        float arcSpanDeg = 76f;
 
-        // 1. Layout Left Arc (Pivot: 0, viewH)
-        float leftPivotX = -4f * density;
-        float leftPivotY = viewH + 4f * density;
-        float leftStartAngle = -74f; // sweeping from top-left downwards-rightwards to +4 deg
+        // 1. Layout Left Arc (Pivot: 0, viewH - 12dp)
+        float leftPivotX = -6f * density;
+        float leftPivotY = viewH - 10f * density;
+        float leftStartAngle = -74f;
 
         for (KeyData k : mArcKeys) {
             if (k.isRight) continue;
@@ -772,14 +852,14 @@ public class VirtualKeyboardView extends View {
             k.currentCy = leftPivotY + r * (float) Math.sin(rad);
             k.currentRotation = normalizeKeyRotation(k.baseAngleDeg + 90f);
 
-            float arcLen = (float) (r * Math.toRadians(angleStep)) - 4f * density;
-            k.keyWidth = Math.max(26f * density, Math.min(48f * density, arcLen));
+            float arcLen = (float) (r * Math.toRadians(angleStep)) - 5f * density;
+            k.keyWidth = Math.max(34f * density, Math.min(56f * density, arcLen));
         }
 
-        // 2. Layout Right Arc (Pivot: viewW, viewH)
-        float rightPivotX = viewW + 4f * density;
-        float rightPivotY = viewH + 4f * density;
-        float rightStartAngle = 176f; // sweeping from 176 deg to 254 deg
+        // 2. Layout Right Arc (Pivot: viewW, viewH - 12dp)
+        float rightPivotX = viewW + 6f * density;
+        float rightPivotY = viewH - 10f * density;
+        float rightStartAngle = 178f;
 
         for (KeyData k : mArcKeys) {
             if (!k.isRight) continue;
@@ -797,19 +877,20 @@ public class VirtualKeyboardView extends View {
             k.currentCy = rightPivotY + r * (float) Math.sin(rad);
             k.currentRotation = normalizeKeyRotation(k.baseAngleDeg - 90f);
 
-            float arcLen = (float) (r * Math.toRadians(angleStep)) - 4f * density;
-            k.keyWidth = Math.max(26f * density, Math.min(48f * density, arcLen));
+            float arcLen = (float) (r * Math.toRadians(angleStep)) - 5f * density;
+            k.keyWidth = Math.max(34f * density, Math.min(56f * density, arcLen));
         }
 
-        // 3. Layout Beveled Top Wings - seamlessly meeting the outer arc below
-        float wingW = 104f * density;
-        float wingTop = 20f * density;
-        float spacing = 6f * density;
-        float cutRadiusLeft = ringRadii[4] + 24f * density;
-        float cutRadiusRight = ringRadii[4] + 24f * density;
+        // 3. Layout Slim Beveled Top Wings (compact, non-bulky 2x2 grid)
+        float wingW = 76f * density;
+        float wingTop = 18f * density;
+        float spacing = 5f * density;
+        float wingBtnH = 28f * density;
+        float cutRadiusLeft = ringRadii[2] + 20f * density;
+        float cutRadiusRight = ringRadii[2] + 20f * density;
 
-        // Left Wing: 2 cols x 2 rows
-        float lwLeft = 8f * density;
+        // Left Wing
+        float lwLeft = 6f * density;
         float lwColW = (wingW - spacing) / 2f;
 
         for (KeyData k : mWingKeys) {
@@ -818,23 +899,23 @@ public class VirtualKeyboardView extends View {
             int row = k.wingIndex / 2;
             float kLeft = lwLeft + col * (lwColW + spacing);
             float kRight = kLeft + lwColW;
-            float kTop = (row == 0) ? wingTop : (wingTop + 44f * density + spacing);
+            float kTop = (row == 0) ? wingTop : (wingTop + wingBtnH + spacing);
 
             float kBottom;
             if (row == 1) {
                 float midX = (kLeft + kRight) / 2f;
                 float arcY = calculateArcY(midX, leftPivotX, leftPivotY, cutRadiusLeft);
-                kBottom = Math.max(kTop + 36f * density, arcY);
+                kBottom = Math.max(kTop + 24f * density, arcY);
                 k.beveledPath = createBeveledPath(kLeft, kTop, kRight, kBottom, leftPivotX, leftPivotY, cutRadiusLeft, false, density);
             } else {
-                kBottom = kTop + 44f * density;
+                kBottom = kTop + wingBtnH;
                 k.beveledPath = null;
             }
             k.wingBounds.set(kLeft, kTop, kRight, kBottom);
         }
 
-        // Right Wing: 2 cols x 2 rows
-        float rwRight = viewW - 8f * density;
+        // Right Wing
+        float rwRight = viewW - 6f * density;
         float rwLeft = rwRight - wingW;
         float rwColW = (wingW - spacing) / 2f;
 
@@ -845,28 +926,58 @@ public class VirtualKeyboardView extends View {
             int row = idx / 2;
             float kLeft = rwLeft + col * (rwColW + spacing);
             float kRight = kLeft + rwColW;
-            float kTop = (row == 0) ? wingTop : (wingTop + 44f * density + spacing);
+            float kTop = (row == 0) ? wingTop : (wingTop + wingBtnH + spacing);
 
             float kBottom;
             if (row == 1) {
                 float midX = (kLeft + kRight) / 2f;
                 float arcY = calculateArcY(midX, rightPivotX, rightPivotY, cutRadiusRight);
-                kBottom = Math.max(kTop + 36f * density, arcY);
+                kBottom = Math.max(kTop + 24f * density, arcY);
                 k.beveledPath = createBeveledPath(kLeft, kTop, kRight, kBottom, rightPivotX, rightPivotY, cutRadiusRight, true, density);
             } else {
-                kBottom = kTop + 44f * density;
+                kBottom = kTop + wingBtnH;
                 k.beveledPath = null;
             }
             k.wingBounds.set(kLeft, kTop, kRight, kBottom);
+        }
+
+        // 4. Layout Center Space Key (Pill-shaped in bottom-center for dual thumbs)
+        float spaceW = Math.min(220f * density, viewW * 0.28f);
+        float spaceH = 34f * density;
+        float spaceLeft = (viewW - spaceW) / 2f;
+        float spaceBottom = viewH - 10f * density;
+        float spaceTop = spaceBottom - spaceH;
+        if (mCenterSpaceKey != null) {
+            mCenterSpaceKey.rect.set(Math.round(spaceLeft), Math.round(spaceTop), Math.round(spaceLeft + spaceW), Math.round(spaceBottom));
+            mCenterSpaceKey.currentLabel = "SPACE";
+        }
+
+        // 5. Layout Symbol Toggle Key (?123 / ABC) near left thumb inner arc
+        float symW = 44f * density;
+        float symH = 32f * density;
+        float symLeft = 14f * density;
+        float symTop = viewH - symH - 8f * density;
+        if (mSymbolToggleKey != null) {
+            mSymbolToggleKey.rect.set(Math.round(symLeft), Math.round(symTop), Math.round(symLeft + symW), Math.round(symTop + symH));
+            mSymbolToggleKey.currentLabel = mIsArcSymbolLayer ? "ABC" : "?123";
+        }
+
+        // 6. Layout Corner Dismiss Key (Fan-shaped in bottom-right corner)
+        float disW = 44f * density;
+        float disH = 32f * density;
+        float disRight = viewW - 14f * density;
+        float disLeft = disRight - disW;
+        float disTop = viewH - disH - 8f * density;
+        if (mCornerDismissKey != null) {
+            mCornerDismissKey.rect.set(Math.round(disLeft), Math.round(disTop), Math.round(disRight), Math.round(disTop + disH));
         }
     }
 
     private Path createBeveledPath(float left, float top, float right, float bottom,
                                   float pivotX, float pivotY, float radius, boolean isRightHand, float density) {
         Path path = new Path();
-        float r = 6f * density;
+        float r = 5f * density;
 
-        // Top edge with rounded corners
         path.moveTo(left, top + r);
         path.quadTo(left, top, left + r, top);
         path.lineTo(right - r, top);
@@ -939,7 +1050,6 @@ public class VirtualKeyboardView extends View {
     private void applySymbolLayer() {
         try {
             List<KeyData> all = new ArrayList<>(keys);
-            all.addAll(mArcKeys);
             for (KeyData k : all) {
                 if (k.hasSymbol && k.symbolChar != null) {
                     if (symbolLayerActive) {
@@ -1168,7 +1278,25 @@ public class VirtualKeyboardView extends View {
                         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                     }
 
-                    // Top Wing key long-press check for rebind
+                    // 1. Check Corner Dismiss Key
+                    if (hitKey.isCornerDismiss) {
+                        hideWithAnimation(null);
+                        return true;
+                    }
+
+                    // 2. Check Symbol Layer Toggle (?123 / ABC)
+                    if (hitKey.isSymbolToggle) {
+                        mIsArcSymbolLayer = !mIsArcSymbolLayer;
+                        initArcKeys();
+                        layoutSplitArc(getWidth(), getHeight());
+                        if (mSymbolToggleKey != null) {
+                            mSymbolToggleKey.currentLabel = mIsArcSymbolLayer ? "ABC" : "?123";
+                        }
+                        invalidate();
+                        return true;
+                    }
+
+                    // 3. Top Wing key long-press check for rebind
                     if (hitKey.isWing) {
                         mPendingLongPressKey = hitKey;
                         final KeyData wingToRebind = hitKey;
@@ -1186,6 +1314,26 @@ public class VirtualKeyboardView extends View {
                                 });
                             }
                         }, 450);
+                    }
+
+                    // 4. Letter key with long-press number (Q->1, W->2 ... P->0)
+                    if (hitKey.isArc && hitKey.longPressNumber != null) {
+                        mPendingLongPressKey = hitKey;
+                        final KeyData numKey = hitKey;
+                        mLongPressHandler.postDelayed(() -> {
+                            if (mPendingLongPressKey == numKey) {
+                                mPendingLongPressKey = null;
+                                numKey.longPressFired = true;
+                                if (isHapticEnabled()) {
+                                    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                                }
+                                int numKeyCode = getKeyCodeForLabel(numKey.longPressNumber);
+                                sendKey(numKeyCode, true);
+                                postDelayed(() -> sendKey(numKeyCode, false), 40);
+                                numKey.pressed = false;
+                                invalidate();
+                            }
+                        }, 350); // Snappy 350ms long-press
                     }
 
                     if (isLeftModifier(hitKey)) {
@@ -1211,7 +1359,7 @@ public class VirtualKeyboardView extends View {
 
                     if (hitKey.isWing && hitKey.customAction != null) {
                         dispatchWingAction(hitKey.customAction, true);
-                    } else {
+                    } else if (hitKey.longPressNumber == null) {
                         int code = hitKey.currentKeyCode;
                         if (isDirectionKey(code) || code == KeyEvent.KEYCODE_MOVE_HOME || code == KeyEvent.KEYCODE_MOVE_END) {
                             sendKey(code, true);
@@ -1232,7 +1380,14 @@ public class VirtualKeyboardView extends View {
                     KeyData released = activePointers.get(pointerId);
                     if (released == null) break;
 
-                    if (released.isWing && released.customAction != null) {
+                    if (released.isArc && released.longPressNumber != null) {
+                        if (!released.longPressFired) {
+                            int code = released.currentKeyCode;
+                            sendKeyWithCaps(code, true);
+                            sendKeyWithCaps(code, false);
+                        }
+                        released.longPressFired = false;
+                    } else if (released.isWing && released.customAction != null) {
                         dispatchWingAction(released.customAction, false);
                     } else {
                         int relCode = released.currentKeyCode;
@@ -1274,10 +1429,12 @@ public class VirtualKeyboardView extends View {
                         }
 
                         if (!stillHit) {
+                            mPendingLongPressKey = null;
+                            mLongPressHandler.removeCallbacksAndMessages(null);
                             key.pressed = false;
                             if (key.isWing && key.customAction != null) {
                                 dispatchWingAction(key.customAction, false);
-                            } else {
+                            } else if (!key.longPressFired) {
                                 int kc = key.currentKeyCode;
                                 if (isRightModifier(key)) {
                                     releaseRightModifier(key);
@@ -1287,6 +1444,7 @@ public class VirtualKeyboardView extends View {
                                     sendKeyWithCaps(kc, false);
                                 }
                             }
+                            key.longPressFired = false;
                             activePointers.remove(pid);
                             invalidate();
                         }
@@ -1300,6 +1458,7 @@ public class VirtualKeyboardView extends View {
                     for (int i = 0; i < activePointers.size(); i++) {
                         KeyData key = activePointers.valueAt(i);
                         key.pressed = false;
+                        key.longPressFired = false;
                         if (key.isWing && key.customAction != null) {
                             dispatchWingAction(key.customAction, false);
                         } else {
@@ -1365,7 +1524,19 @@ public class VirtualKeyboardView extends View {
 
     private KeyData findKeyAt(float x, float y) {
         if (mIsSplitArcMode) {
-            // Check top wings first
+            // Check Center Space Key
+            if (mCenterSpaceKey != null && mCenterSpaceKey.rect.contains((int) x, (int) y)) {
+                return mCenterSpaceKey;
+            }
+            // Check Symbol Toggle Key
+            if (mSymbolToggleKey != null && mSymbolToggleKey.rect.contains((int) x, (int) y)) {
+                return mSymbolToggleKey;
+            }
+            // Check Corner Dismiss Key
+            if (mCornerDismissKey != null && mCornerDismissKey.rect.contains((int) x, (int) y)) {
+                return mCornerDismissKey;
+            }
+            // Check top wings
             for (KeyData k : mWingKeys) {
                 if (k.wingBounds.contains(x, y)) {
                     return k;
@@ -1451,7 +1622,7 @@ public class VirtualKeyboardView extends View {
         float viewW = getWidth();
         float viewH = getHeight();
 
-        // 1. Draw Radial Arc Keys
+        // 1. Draw Radial Arc Keys (Gboard QWERTY)
         for (KeyData k : mArcKeys) {
             float cx = k.currentCx;
             float cy = k.currentCy;
@@ -1491,21 +1662,29 @@ public class VirtualKeyboardView extends View {
             float cr = 6f * density;
 
             canvas.drawRoundRect(-hw, -hh, hw, hh, cr, cr, keyBgPaint);
-            keyStrokePaint.setAlpha(Math.round(0x33 * (alpha / 255f)));
+            keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
             canvas.drawRoundRect(-hw, -hh, hw, hh, cr, cr, keyStrokePaint);
 
+            // Main Label
             textPaint.setColor(textColor);
             textPaint.setAlpha(alpha);
-            textPaint.setTextSize(12.5f * density);
+            textPaint.setTextSize(13.5f * density);
             float textY = -((textPaint.descent() + textPaint.ascent()) / 2f);
             String display = k.currentLabel != null ? k.currentLabel : k.defaultLabel;
             canvas.drawText(display, 0, textY, textPaint);
 
+            // Subscript Number in top-right corner (Gboard style Q->1, W->2 ... P->0)
+            if (k.longPressNumber != null) {
+                subTextPaint.setAlpha(Math.round(0xCC * (alpha / 255f)));
+                subTextPaint.setTextSize(8.5f * density);
+                canvas.drawText(k.longPressNumber, hw - 6f * density, -hh + 9f * density, subTextPaint);
+            }
+
             canvas.restore();
         }
 
-        // 2. Draw Beveled Top Wings
-        float wingSlideY = (animType == ANIM_FAN) ? ((1f - mAnimProgress) * -24f * density) : 0f;
+        // 2. Draw Slim Beveled Top Wings
+        float wingSlideY = (animType == ANIM_FAN) ? ((1f - mAnimProgress) * -20f * density) : 0f;
         for (KeyData k : mWingKeys) {
             canvas.save();
             canvas.translate(0, wingSlideY);
@@ -1516,25 +1695,93 @@ public class VirtualKeyboardView extends View {
 
             if (k.beveledPath != null) {
                 canvas.drawPath(k.beveledPath, keyBgPaint);
-                keyStrokePaint.setAlpha(Math.round(0x33 * (alpha / 255f)));
+                keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
                 canvas.drawPath(k.beveledPath, keyStrokePaint);
             } else {
                 RectF r = k.wingBounds;
-                float cr = 8f * density;
+                float cr = 6f * density;
                 canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyBgPaint);
-                keyStrokePaint.setAlpha(Math.round(0x33 * (alpha / 255f)));
+                keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
                 canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyStrokePaint);
             }
 
             textPaint.setColor(M3.COLOR_PRIMARY);
             textPaint.setAlpha(alpha);
-            textPaint.setTextSize(11f * density);
+            textPaint.setTextSize(10.5f * density);
             float cx = k.wingBounds.centerX();
             float cy = k.wingBounds.centerY() - ((textPaint.descent() + textPaint.ascent()) / 2f);
             String display = k.currentLabel != null ? k.currentLabel : k.defaultLabel;
             canvas.drawText(display, cx, cy, textPaint);
 
             canvas.restore();
+        }
+
+        // 3. Draw Center Bottom Space Bar
+        if (mCenterSpaceKey != null) {
+            Rect r = mCenterSpaceKey.rect;
+            int bg = resolveKeyBg(mCenterSpaceKey);
+            keyBgPaint.setColor(bg);
+            keyBgPaint.setAlpha(alpha);
+            float cr = 8f * density;
+            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyBgPaint);
+            keyStrokePaint.setAlpha(Math.round(0x33 * (alpha / 255f)));
+            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyStrokePaint);
+
+            textPaint.setColor(M3.COLOR_TEXT_MUTED);
+            textPaint.setAlpha(alpha);
+            textPaint.setTextSize(11f * density);
+            float cy = r.centerY() - ((textPaint.descent() + textPaint.ascent()) / 2f);
+            canvas.drawText(mCenterSpaceKey.currentLabel, r.centerX(), cy, textPaint);
+        }
+
+        // 4. Draw Symbol Toggle Key (?123 / ABC)
+        if (mSymbolToggleKey != null) {
+            Rect r = mSymbolToggleKey.rect;
+            int bg = resolveKeyBg(mSymbolToggleKey);
+            keyBgPaint.setColor(bg);
+            keyBgPaint.setAlpha(alpha);
+            float cr = 6f * density;
+            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyBgPaint);
+            keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
+            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyStrokePaint);
+
+            textPaint.setColor(M3.COLOR_SECONDARY);
+            textPaint.setAlpha(alpha);
+            textPaint.setTextSize(11.5f * density);
+            float cy = r.centerY() - ((textPaint.descent() + textPaint.ascent()) / 2f);
+            canvas.drawText(mSymbolToggleKey.currentLabel, r.centerX(), cy, textPaint);
+        }
+
+        // 5. Draw Corner Fan-shaped Dismiss Key
+        if (mCornerDismissKey != null) {
+            Rect r = mCornerDismissKey.rect;
+            int bg = resolveKeyBg(mCornerDismissKey);
+            keyBgPaint.setColor(bg);
+            keyBgPaint.setAlpha(alpha);
+            float cr = 6f * density;
+            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyBgPaint);
+            keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
+            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyStrokePaint);
+
+            // Vector Keyboard Dismiss Icon (keyboard base + chevron down)
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setColor(M3.COLOR_PRIMARY);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(1.6f * density);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setStrokeJoin(Paint.Join.ROUND);
+            p.setAlpha(alpha);
+
+            float cx = r.centerX();
+            float cy = r.centerY();
+            float w = 6f * density;
+            float h = 4f * density;
+
+            // Keyboard outline
+            canvas.drawRoundRect(cx - w, cy - h - 1.5f * density, cx + w, cy + 1.5f * density, 1.5f * density, 1.5f * density, p);
+            // Down chevron below it
+            canvas.drawLine(cx - 3.5f * density, cy + 3.5f * density, cx, cy + 5.5f * density, p);
+            canvas.drawLine(cx, cy + 5.5f * density, cx + 3.5f * density, cy + 3.5f * density, p);
         }
     }
 
@@ -1560,6 +1807,10 @@ public class VirtualKeyboardView extends View {
         boolean pressed = false;
         boolean modActive = false;
 
+        // Gboard Long-press numbers
+        String longPressNumber = null;
+        boolean longPressFired = false;
+
         // Split Arc specific attributes
         boolean isArc = false;
         boolean isRight = false;
@@ -1582,6 +1833,11 @@ public class VirtualKeyboardView extends View {
         RectF wingBounds = new RectF();
         Path beveledPath = null;
         HudAction customAction = null;
+
+        // Custom Special keys
+        boolean isSpace = false;
+        boolean isSymbolToggle = false;
+        boolean isCornerDismiss = false;
 
         KeyData(String label, int keyCode, float weight, boolean hasSymbol) {
             this.defaultLabel = label;
