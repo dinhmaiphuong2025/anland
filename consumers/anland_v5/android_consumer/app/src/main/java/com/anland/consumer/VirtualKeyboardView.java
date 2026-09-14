@@ -258,6 +258,11 @@ public class VirtualKeyboardView extends View {
     public void showWithAnimation() {
         cancelAnimation();
         checkOrientationMode();
+        if (mIsSplitArcMode) {
+            post(() -> applySplitArcTilt(getWidth(), getHeight()));
+        } else {
+            setRotation(0f);
+        }
         setVisibility(VISIBLE);
         bringToFront();
         mIsAnimating = true;
@@ -366,6 +371,7 @@ public class VirtualKeyboardView extends View {
                 }
                 for (KeyData k : mWingKeys) {
                     k.pressed = false;
+                    k.modActive = false;
                 }
                 if (mCenterSpaceKey != null) mCenterSpaceKey.pressed = false;
                 if (mSymbolToggleKey != null) mSymbolToggleKey.pressed = false;
@@ -519,12 +525,16 @@ public class VirtualKeyboardView extends View {
 
     private void initTopWings() {
         mWingKeys.clear();
-        // Slim, non-bulky auxiliary buttons
-        String[] leftDefLabels = {"ESC", "TAB", "CTRL", "ALT"};
-        int[] leftDefCodes = {KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_TAB, KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_ALT_LEFT};
+        // Nut phu nho gon 3x2 moi ben (12 nut), lui len tren tao khe voi arc.
+        String[] leftDefLabels = {"ESC", "TAB", "CTRL", "ALT", "SHIFT", "CAPS"};
+        int[] leftDefCodes = {KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_TAB,
+                KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_ALT_LEFT,
+                KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_CAPS_LOCK};
 
-        String[] rightDefLabels = {"DEL", "SHIFT", "UP", "HOME"};
-        int[] rightDefCodes = {KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_SHIFT_RIGHT, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MOVE_HOME};
+        String[] rightDefLabels = {"DEL", "SHIFT", "UP", "HOME", "END", "PGDN"};
+        int[] rightDefCodes = {KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_SHIFT_RIGHT,
+                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MOVE_HOME,
+                KeyEvent.KEYCODE_MOVE_END, KeyEvent.KEYCODE_PAGE_DOWN};
 
         SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String customJson = prefs.getString(KEY_SPLIT_ARC_TOP_WINGS, null);
@@ -546,8 +556,25 @@ public class VirtualKeyboardView extends View {
             } catch (Exception ignored) {}
         }
 
-        // Left Top Wing (indices 0..3)
-        for (int i = 0; i < 4; i++) {
+        // Tuong thich layout cu 4+4 nut: map index phai cu 4..7 sang 6..9 moi.
+        if (customLabels.containsKey(4) || customLabels.containsKey(5)
+                || customLabels.containsKey(6) || customLabels.containsKey(7)) {
+            boolean hasNew = customLabels.containsKey(8) || customLabels.containsKey(9)
+                    || customLabels.containsKey(10) || customLabels.containsKey(11)
+                    || customLabels.containsKey(6);
+            if (!hasNew) {
+                for (int old = 4; old <= 7; old++) {
+                    if (customLabels.containsKey(old)) {
+                        int nw = 6 + (old - 4);
+                        customLabels.put(nw, customLabels.get(old));
+                        if (customActions.containsKey(old)) customActions.put(nw, customActions.get(old));
+                    }
+                }
+            }
+        }
+
+        // Left Top Wing (indices 0..5: 3 cot x 2 dong)
+        for (int i = 0; i < 6; i++) {
             String lbl = customLabels.containsKey(i) ? customLabels.get(i) : leftDefLabels[i];
             HudAction act = customActions.get(i);
             int code = (act != null && act.code > 0) ? act.code : leftDefCodes[i];
@@ -557,12 +584,13 @@ public class VirtualKeyboardView extends View {
             k.isRight = false;
             k.wingIndex = i;
             k.customAction = act;
+            k.internalLabel = wingInternalLabel(lbl, code, false);
             mWingKeys.add(k);
         }
 
-        // Right Top Wing (indices 4..7)
-        for (int i = 0; i < 4; i++) {
-            int slotIdx = 4 + i;
+        // Right Top Wing (indices 6..11: 3 cot x 2 dong)
+        for (int i = 0; i < 6; i++) {
+            int slotIdx = 6 + i;
             String lbl = customLabels.containsKey(slotIdx) ? customLabels.get(slotIdx) : rightDefLabels[i];
             HudAction act = customActions.get(slotIdx);
             int code = (act != null && act.code > 0) ? act.code : rightDefCodes[i];
@@ -572,8 +600,26 @@ public class VirtualKeyboardView extends View {
             k.isRight = true;
             k.wingIndex = slotIdx;
             k.customAction = act;
+            k.internalLabel = wingInternalLabel(lbl, code, true);
             mWingKeys.add(k);
         }
+    }
+
+    // Map wing nut phu sang internal modifier de combo duoc voi phim chu.
+    // Uu tien code (rebind), fallback sang label khi code la UNKNOWN.
+    private String wingInternalLabel(String lbl, int code, boolean right) {
+        if (code == KeyEvent.KEYCODE_CTRL_LEFT) return "CtrlL";
+        if (code == KeyEvent.KEYCODE_ALT_LEFT) return "AltL";
+        if (code == KeyEvent.KEYCODE_SHIFT_LEFT) return "ShiftL";
+        if (code == KeyEvent.KEYCODE_CTRL_RIGHT) return "CtrlR";
+        if (code == KeyEvent.KEYCODE_ALT_RIGHT) return "AltR";
+        if (code == KeyEvent.KEYCODE_SHIFT_RIGHT) return "ShiftR";
+        if (lbl == null) return "Wing";
+        String u = lbl.trim().toUpperCase();
+        if (u.equals("CTRL")) return right ? "CtrlR" : "CtrlL";
+        if (u.equals("ALT")) return right ? "AltR" : "AltL";
+        if (u.equals("SHIFT")) return right ? "ShiftR" : "ShiftL";
+        return lbl;
     }
 
     private void saveTopWingsCustomization() {
@@ -758,13 +804,24 @@ public class VirtualKeyboardView extends View {
         try {
             if (mIsSplitArcMode) {
                 layoutSplitArc(w, h);
+                applySplitArcTilt(w, h);
             } else {
+                setRotation(0f);
                 layoutKeys(w, h);
                 post(this::setInitialPosition);
             }
         } catch (Exception e) {
             Log.e(TAG, "onSizeChanged error", e);
         }
+    }
+
+    // Nang toan bo ban phim Split-Arc len ~7 do quanh day man hinh.
+    // Dung View rotation de Android tu map touch, khong phai inverse tay.
+    private void applySplitArcTilt(int w, int h) {
+        if (w <= 0 || h <= 0) return;
+        setPivotX(w / 2f);
+        setPivotY(h);
+        if (getRotation() != -7f) setRotation(-7f);
     }
 
     private void layoutKeys(int viewW, int viewH) {
@@ -881,21 +938,21 @@ public class VirtualKeyboardView extends View {
         }
 
         // 3. Layout Slim Beveled Top Wings (compact, non-bulky 2x2 grid)
-        float wingW = 76f * density;
-        float wingTop = 18f * density;
-        float spacing = 5f * density;
-        float wingBtnH = 28f * density;
-        float cutRadiusLeft = ringRadii[2] + 20f * density;
-        float cutRadiusRight = ringRadii[2] + 20f * density;
+        float wingW = 96f * density;
+        float wingTop = 10f * density;
+        float spacing = 4f * density;
+        float wingBtnH = 24f * density;
+        float cutRadiusLeft = ringRadii[2] + 34f * density;
+        float cutRadiusRight = ringRadii[2] + 34f * density;
 
         // Left Wing
         float lwLeft = 6f * density;
-        float lwColW = (wingW - spacing) / 2f;
+        float lwColW = (wingW - spacing * 2f) / 3f;
 
         for (KeyData k : mWingKeys) {
             if (k.isRight) continue;
-            int col = k.wingIndex % 2;
-            int row = k.wingIndex / 2;
+            int col = k.wingIndex % 3;
+            int row = k.wingIndex / 3;
             float kLeft = lwLeft + col * (lwColW + spacing);
             float kRight = kLeft + lwColW;
             float kTop = (row == 0) ? wingTop : (wingTop + wingBtnH + spacing);
@@ -904,7 +961,7 @@ public class VirtualKeyboardView extends View {
             if (row == 1) {
                 float midX = (kLeft + kRight) / 2f;
                 float arcY = calculateArcY(midX, leftPivotX, leftPivotY, cutRadiusLeft);
-                kBottom = Math.max(kTop + 24f * density, arcY);
+                kBottom = Math.max(kTop + 20f * density, arcY + 6f * density);
                 k.beveledPath = createBeveledPath(kLeft, kTop, kRight, kBottom, leftPivotX, leftPivotY, cutRadiusLeft, false, density);
             } else {
                 kBottom = kTop + wingBtnH;
@@ -916,13 +973,13 @@ public class VirtualKeyboardView extends View {
         // Right Wing
         float rwRight = viewW - 6f * density;
         float rwLeft = rwRight - wingW;
-        float rwColW = (wingW - spacing) / 2f;
+        float rwColW = (wingW - spacing * 2f) / 3f;
 
         for (KeyData k : mWingKeys) {
             if (!k.isRight) continue;
-            int idx = k.wingIndex - 4;
-            int col = idx % 2;
-            int row = idx / 2;
+            int idx = k.wingIndex - 6;
+            int col = idx % 3;
+            int row = idx / 3;
             float kLeft = rwLeft + col * (rwColW + spacing);
             float kRight = kLeft + rwColW;
             float kTop = (row == 0) ? wingTop : (wingTop + wingBtnH + spacing);
@@ -931,7 +988,7 @@ public class VirtualKeyboardView extends View {
             if (row == 1) {
                 float midX = (kLeft + kRight) / 2f;
                 float arcY = calculateArcY(midX, rightPivotX, rightPivotY, cutRadiusRight);
-                kBottom = Math.max(kTop + 24f * density, arcY);
+                kBottom = Math.max(kTop + 20f * density, arcY + 6f * density);
                 k.beveledPath = createBeveledPath(kLeft, kTop, kRight, kBottom, rightPivotX, rightPivotY, cutRadiusRight, true, density);
             } else {
                 kBottom = kTop + wingBtnH;
@@ -1120,9 +1177,17 @@ public class VirtualKeyboardView extends View {
         List<KeyData> mods = new ArrayList<>();
         List<KeyData> all = new ArrayList<>(keys);
         all.addAll(mArcKeys);
+        all.addAll(mWingKeys);
         for (KeyData k : all) {
             if (isLeftModifier(k) && getLeftModifierState(k)) {
                 mods.add(k);
+            }
+        }
+        // Wing modifier dang giu da cham (multi-touch): lay tu activePointers.
+        for (int i = 0; i < activePointers.size(); i++) {
+            KeyData held = activePointers.valueAt(i);
+            if (held != null && held.isWing && isLeftModifier(held) && !mods.contains(held)) {
+                mods.add(held);
             }
         }
         if (mods.isEmpty()) return;
@@ -1356,6 +1421,15 @@ public class VirtualKeyboardView extends View {
                     activePointers.put(pointerId, hitKey);
                     hitKey.pressed = true;
 
+                    // Nut phu la modifier (CTRL/ALT/SHIFT): tap = latch de combo 1 ngon,
+                    // giu da cham + cham phim chu = combo nho evdev down san.
+                    if (hitKey.isWing && isLeftModifier(hitKey)
+                            && (hitKey.customAction == null
+                                || HudAction.TYPE_MODIFIER.equals(hitKey.customAction.type))) {
+                        toggleLeftModifier(hitKey);
+                        return true;
+                    }
+
                     if (hitKey.isWing && hitKey.customAction != null) {
                         dispatchWingAction(hitKey.customAction, true);
                     } else if (hitKey.longPressNumber == null) {
@@ -1387,7 +1461,12 @@ public class VirtualKeyboardView extends View {
                         }
                         released.longPressFired = false;
                     } else if (released.isWing && released.customAction != null) {
-                        dispatchWingAction(released.customAction, false);
+                        // Wing latch modifier: DOWN chi toggle latch, khong gui down
+                        // nen UP khong gui up keo lech trang thai evdev.
+                        if (!(isLeftModifier(released)
+                                && HudAction.TYPE_MODIFIER.equals(released.customAction.type))) {
+                            dispatchWingAction(released.customAction, false);
+                        }
                     } else {
                         int relCode = released.currentKeyCode;
                         if (isRightModifier(released)) {
@@ -1420,7 +1499,7 @@ public class VirtualKeyboardView extends View {
                             double rad = Math.toRadians(-key.currentRotation);
                             float lx = (float) (dx * Math.cos(rad) - dy * Math.sin(rad));
                             float ly = (float) (dx * Math.sin(rad) + dy * Math.cos(rad));
-                            stillHit = Math.abs(lx) <= key.keyWidth * 0.6f && Math.abs(ly) <= key.keyHeight * 0.6f;
+                            stillHit = hitTrapezoid(lx, ly, key.keyWidth * 0.5f, key.keyHeight * 0.5f);
                         } else if (key.isWing) {
                             stillHit = key.wingBounds.contains(px, py);
                         } else {
@@ -1432,7 +1511,10 @@ public class VirtualKeyboardView extends View {
                             mLongPressHandler.removeCallbacksAndMessages(null);
                             key.pressed = false;
                             if (key.isWing && key.customAction != null) {
-                                dispatchWingAction(key.customAction, false);
+                                if (!(isLeftModifier(key)
+                                        && HudAction.TYPE_MODIFIER.equals(key.customAction.type))) {
+                                    dispatchWingAction(key.customAction, false);
+                                }
                             } else if (!key.longPressFired) {
                                 int kc = key.currentKeyCode;
                                 if (isRightModifier(key)) {
@@ -1459,7 +1541,10 @@ public class VirtualKeyboardView extends View {
                         key.pressed = false;
                         key.longPressFired = false;
                         if (key.isWing && key.customAction != null) {
-                            dispatchWingAction(key.customAction, false);
+                            if (!(isLeftModifier(key)
+                                    && HudAction.TYPE_MODIFIER.equals(key.customAction.type))) {
+                                dispatchWingAction(key.customAction, false);
+                            }
                         } else {
                             int kc = key.currentKeyCode;
                             if (isRightModifier(key)) {
@@ -1541,14 +1626,14 @@ public class VirtualKeyboardView extends View {
                     return k;
                 }
             }
-            // Check radial arc keys
+            // Check radial arc keys (hinh thang)
             for (KeyData k : mArcKeys) {
                 float dx = x - k.currentCx;
                 float dy = y - k.currentCy;
                 double rad = Math.toRadians(-k.currentRotation);
                 float lx = (float) (dx * Math.cos(rad) - dy * Math.sin(rad));
                 float ly = (float) (dx * Math.sin(rad) + dy * Math.cos(rad));
-                if (Math.abs(lx) <= k.keyWidth * 0.54f && Math.abs(ly) <= k.keyHeight * 0.54f) {
+                if (hitTrapezoid(lx, ly, k.keyWidth * 0.5f, k.keyHeight * 0.5f)) {
                     return k;
                 }
             }
@@ -1612,6 +1697,33 @@ public class VirtualKeyboardView extends View {
         return keyColor;
     }
 
+    // Phim hinh thang: canh tren hep hon ~14% moi ben, bo goc nhe.
+    private Path buildTrapezoidPath(float hw, float hh, float cr) {
+        float taper = hw * 0.28f;
+        float tlx = -hw + taper, trx = hw - taper;
+        Path p = new Path();
+        p.moveTo(tlx + cr, -hh);
+        p.lineTo(trx - cr, -hh);
+        p.quadTo(trx, -hh, trx, -hh + cr);
+        p.lineTo(hw - cr * 0.4f, hh - cr);
+        p.quadTo(hw, hh, hw - cr, hh);
+        p.lineTo(-hw + cr, hh);
+        p.quadTo(-hw, hh, -hw + cr * 0.4f, hh - cr);
+        p.lineTo(tlx, -hh + cr);
+        p.quadTo(tlx - (trx - tlx <= 0 ? 0 : 0), -hh, tlx + cr, -hh);
+        p.close();
+        return p;
+    }
+
+    // Nua-rong hinh thang tai ly (-hh..hh): tren hep, duoi rong.
+    private boolean hitTrapezoid(float lx, float ly, float hw, float hh) {
+        if (Math.abs(ly) > hh * 0.62f) return false;
+        float taper = hw * 0.28f;
+        float t = (hh - ly) / (2f * hh);
+        float halfW = hw - taper * t;
+        return Math.abs(lx) <= halfW * 1.08f;
+    }
+
     private void drawSplitArcLayout(Canvas canvas) {
         int animType = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .getInt(KEY_SPLIT_ARC_ANIM, ANIM_FAN);
@@ -1660,9 +1772,10 @@ public class VirtualKeyboardView extends View {
             float hh = k.keyHeight * 0.5f;
             float cr = 6f * density;
 
-            canvas.drawRoundRect(-hw, -hh, hw, hh, cr, cr, keyBgPaint);
+            Path trap = buildTrapezoidPath(hw, hh, cr);
+            canvas.drawPath(trap, keyBgPaint);
             keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
-            canvas.drawRoundRect(-hw, -hh, hw, hh, cr, cr, keyStrokePaint);
+            canvas.drawPath(trap, keyStrokePaint);
 
             // Main Label
             textPaint.setColor(textColor);

@@ -145,6 +145,9 @@ public class MainActivity extends Activity
     private int mImeBottom = 0;   // last IME bottom inset
     private int mBarHeight = 0;   // extra-keys bar height in px
     private ExtraKeysBar extraKeysBar;
+    // Bo cuc nut tu an khi mo ban phim: nho trang thai cu de khoi phuc.
+    private boolean mHudAutoHidden = false;
+    private boolean mBarAutoHidden = false;
     private FrameLayout mRoot;    // content root, host of the extra-keys bar
     private float mDensity = 1f;
     // Layout JSON the current bar was built from; used to detect edits on resume.
@@ -2189,6 +2192,12 @@ public class MainActivity extends Activity
         if (imeVisible != wasImeVisible && "with_keyboard".equals(mode))
             setExtraKeysBarVisible(imeVisible);
 
+        // Ban phim he thong mo: an HUD de khoi che cho go; dong: khoi phuc.
+        if (imeVisible != wasImeVisible) {
+            if (imeVisible) hideFloatingForKeyboard();
+            else restoreFloatingAfterKeyboard();
+        }
+
         relayout();
     }
 
@@ -2275,10 +2284,9 @@ public class MainActivity extends Activity
             lp.gravity = Gravity.NO_GRAVITY;
             lp.leftMargin = 0;
             lp.topMargin = 0;
-            if (lp.bottomMargin != target) {
-                lp.bottomMargin = target;
-                surfaceView.setLayoutParams(lp);
-            }
+            lp.bottomMargin = target;
+            surfaceView.setLayoutParams(lp);
+            surfaceView.requestLayout();
             surfaceOffsetX = 0f;
             surfaceOffsetY = 0f;
             surfaceScale = 1f;
@@ -2342,7 +2350,7 @@ public class MainActivity extends Activity
         if (parentW <= 0 || parentH <= 0) return;
 
         int availH = Math.max(100, parentH - lp.bottomMargin);
-        float targetRatio = 16f / 9f;
+        float targetRatio = 14f / 9f;
         int surfaceW = Math.round(availH * targetRatio);
         int surfaceH = availH;
         if (surfaceW > parentW) {
@@ -2359,7 +2367,7 @@ public class MainActivity extends Activity
 
         surfaceOffsetX = (parentW - surfaceW) / 2f;
         surfaceOffsetY = (lp.bottomMargin > 0) ? 0f : ((parentH - surfaceH) / 2f);
-        surfaceScale = (float) surfaceW / 1920f;
+        surfaceScale = (float) surfaceW / 1680f;
     }
 
     // Show/hide the extra-keys bar and re-apply the layout so the display area
@@ -2374,9 +2382,21 @@ public class MainActivity extends Activity
         }
         boolean cur = extraKeysBar.getVisibility() == View.VISIBLE;
         if (cur == visible) return;
-        extraKeysBar.setVisibility(visible ? View.VISIBLE : View.GONE);
-        if (!visible) extraKeysBar.reset();
-        relayout();
+        if (visible) {
+            // Co surface TRUOC khi hien bar de tranh giat nhay 1 frame:
+            // bar phu len surface cu truoc khi surface kip co lai.
+            refreshBarHeight();
+            extraKeysBar.setVisibility(View.INVISIBLE);
+            relayout();
+            extraKeysBar.setVisibility(View.VISIBLE);
+            extraKeysBar.bringToFront();
+            if (mRoot != null) mRoot.post(this::relayout);
+        } else {
+            extraKeysBar.setVisibility(View.GONE);
+            extraKeysBar.reset();
+            relayout();
+            if (mRoot != null) mRoot.post(this::relayout);
+        }
     }
 
     // Construct the extra-keys bar from the user's saved JSON layout and add it to
@@ -2385,10 +2405,12 @@ public class MainActivity extends Activity
         if (virtualKeyboardView == null) return;
         if (virtualKeyboardView.getVisibility() == View.VISIBLE) {
             virtualKeyboardView.hideWithAnimation(() -> {
+                restoreFloatingAfterKeyboard();
                 setExtraKeysBarVisible(shouldShowBar(systemIme.isImeVisible()));
             });
         } else {
-            if (virtualKeyboardView.isSplitArcMode() && extraKeysBar != null) {
+            hideFloatingForKeyboard();
+            if (extraKeysBar != null) {
                 extraKeysBar.setVisibility(View.GONE);
             }
             virtualKeyboardView.bringToFront();
@@ -2399,6 +2421,35 @@ public class MainActivity extends Activity
                 imm.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
             }
         }
+    }
+
+    // Mo ban phim ao / ban phim he thong: tu an bo cuc nut (HUD + ExtraKeys).
+    private void hideFloatingForKeyboard() {
+        if (mHudOverlay != null && mHudOverlay.getVisibility() == View.VISIBLE
+                && !mHudOverlay.isEditMode() && !mHudAutoHidden) {
+            mHudAutoHidden = true;
+            mHudOverlay.setVisibility(View.GONE);
+        }
+        if (extraKeysBar != null && extraKeysBar.getVisibility() == View.VISIBLE
+                && !mBarAutoHidden) {
+            mBarAutoHidden = true;
+        }
+    }
+
+    // Dong ban phim: khoi phuc bo cuc nut theo dung preference hien tai.
+    private void restoreFloatingAfterKeyboard() {
+        if (mHudAutoHidden) {
+            mHudAutoHidden = false;
+            boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .getBoolean("use_hud_overlay", false);
+            if (useHud && mHudOverlay != null && !mHudOverlay.isEditMode()
+                    && mImeBottom <= 0
+                    && (virtualKeyboardView == null
+                        || virtualKeyboardView.getVisibility() != View.VISIBLE)) {
+                mHudOverlay.setVisibility(View.VISIBLE);
+            }
+        }
+        mBarAutoHidden = false;
     }
 
     // scales with the parsed row count. Records the layout JSON it was built from.
@@ -2427,6 +2478,19 @@ public class MainActivity extends Activity
             FrameLayout.LayoutParams.MATCH_PARENT, mBarHeight, Gravity.BOTTOM));
         mAppliedLayoutJson = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getString(KEY_EXTRA_KEYS_LAYOUT, "");
+    }
+
+    // Tinh lai chieu cao bar theo so dong hien tai (layout JSON co the doi).
+    private void refreshBarHeight() {
+        if (extraKeysBar == null || mRoot == null) return;
+        int h = Math.round(37.5f * mDensity * Math.max(1, extraKeysBar.getRowCount()));
+        if (h != mBarHeight) {
+            mBarHeight = h;
+            FrameLayout.LayoutParams lp =
+                (FrameLayout.LayoutParams) extraKeysBar.getLayoutParams();
+            lp.height = h;
+            extraKeysBar.setLayoutParams(lp);
+        }
     }
 
     // Replace the bar with a freshly-parsed one after the user edits the layout in

@@ -479,7 +479,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
         final String[] options = new String[] {
                 copyOption,
-                "Load Switch Controller Preset (16:9 Gutters)",
+                "Load Switch Controller Preset (14:9 Gutters)",
                 "Load Niri Default Preset",
                 "Clear Active Layout"
         };
@@ -501,7 +501,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         rebuildActiveLayout();
                         Toast.makeText(getContext(), "Layout Copied", Toast.LENGTH_SHORT).show();
                     } else if (which == 1) {
-                        // Load Switch Controller Preset (16:9 Gutters)
+                        // Load Switch Controller Preset (14:9 Gutters)
                         HudLayout dst = getActiveLayout();
                         dst.floatingButtons.clear();
 

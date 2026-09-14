@@ -1489,7 +1489,7 @@ public class SettingsActivity extends Activity {
 
     Switch letterbox169Switch = new Switch(this);
     M3.styleSwitch(letterbox169Switch);
-    letterbox169Switch.setText("Landscape 16:9 Letterbox (1920x1080)");
+    letterbox169Switch.setText("Landscape 14:9 Letterbox (1680x1080)");
     letterbox169Switch.setPadding(0, dp(16), 0, 0);
     letterbox169Switch.setChecked(prefs.getBoolean("landscape_16_9_letterbox", false));
     letterbox169Switch.setOnCheckedChangeListener((v, checked) ->
@@ -1497,7 +1497,7 @@ public class SettingsActivity extends Activity {
     root.addView(letterbox169Switch);
 
     TextView letterbox169Hint = new TextView(this);
-    letterbox169Hint.setText("Locks desktop to 16:9 1080p center stage on wide screens (1080x2400+), reserving side margins for Switch controller HUD buttons and Split Arc keyboard.");
+    letterbox169Hint.setText("Locks desktop to 14:9 center stage on wide screens (1080x2400+), reserving side margins for Switch controller HUD buttons and Split Arc keyboard.");
     letterbox169Hint.setTextSize(12);
     letterbox169Hint.setTextColor(M3.COLOR_TEXT_MUTED);
     letterbox169Hint.setPadding(0, dp(4), 0, 0);
