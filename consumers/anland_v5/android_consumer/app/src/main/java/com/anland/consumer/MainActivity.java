@@ -1023,13 +1023,33 @@ public class MainActivity extends Activity
         }
     }
 
+    public static float getSafeFloat(SharedPreferences prefs, String key, float defValue) {
+        try {
+            return prefs.getFloat(key, defValue);
+        } catch (ClassCastException e) {
+            try {
+                int intVal = prefs.getInt(key, Math.round(defValue));
+                prefs.edit().putFloat(key, (float) intVal).apply();
+                return (float) intVal;
+            } catch (Exception e2) {
+                try {
+                    float floatVal = Float.parseFloat(prefs.getString(key, String.valueOf(defValue)));
+                    prefs.edit().putFloat(key, floatVal).apply();
+                    return floatVal;
+                } catch (Exception ignored) {
+                    return defValue;
+                }
+            }
+        }
+    }
+
     /**
      * Push the touchpad tuning preferences to both instances. Called from onCreate
      * and again on resume, so edits made in Settings take effect on return.
      */
     private void applyTouchpadPrefs(SharedPreferences prefs) {
         capturedTouchpadAccel = Math.max(0.5f,
-                Math.min(10.0f, prefs.getFloat(KEY_MOUSE_ACCEL, 1.0f)));
+                Math.min(10.0f, getSafeFloat(prefs, KEY_MOUSE_ACCEL, 1.0f)));
         applyTouchpadPrefs(prefs, screenTouchpad);
         applyTouchpadPrefs(prefs, capturedTouchpad);
     }
@@ -1039,16 +1059,16 @@ public class MainActivity extends Activity
         if (pad == null)
             return;
         pad.setAccelStrength(Math.max(0.5f,
-                Math.min(10.0f, prefs.getFloat(KEY_MOUSE_ACCEL, 1.0f))));
-        pad.setScrollSpeed(prefs.getFloat(KEY_SCROLL_SPEED,
+                Math.min(10.0f, getSafeFloat(prefs, KEY_MOUSE_ACCEL, 1.0f))));
+        pad.setScrollSpeed(getSafeFloat(prefs, KEY_SCROLL_SPEED,
                 Touchpad.DEFAULT_SCROLL_SPEED));
         pad.setScrollReversed(prefs.getBoolean(KEY_SCROLL_REVERSE, false));
         pad.setGestureThresholds(
-                prefs.getFloat(KEY_SCROLL_THRESHOLD,
+                getSafeFloat(prefs, KEY_SCROLL_THRESHOLD,
                         Touchpad.DEFAULT_SCROLL_THRESHOLD_FACTOR),
-                prefs.getFloat(KEY_MOVE_THRESHOLD,
+                getSafeFloat(prefs, KEY_MOVE_THRESHOLD,
                         Touchpad.DEFAULT_MOVE_THRESHOLD_FACTOR));
-        pad.setGestureScale(prefs.getFloat(KEY_GESTURE_SCALE,
+        pad.setGestureScale(getSafeFloat(prefs, KEY_GESTURE_SCALE,
                 Touchpad.DEFAULT_GESTURE_SCALE));
         pad.setMultiFingerGesturesDisabled(
                 prefs.getBoolean(KEY_DISABLE_MULTI_FINGER_GESTURES, false));
@@ -2347,6 +2367,11 @@ public class MainActivity extends Activity
     // feature and does NOT force the bar off here.
     private void setExtraKeysBarVisible(boolean visible) {
         if (extraKeysBar == null) return;
+        if (visible && virtualKeyboardView != null
+                && virtualKeyboardView.getVisibility() == View.VISIBLE
+                && virtualKeyboardView.isSplitArcMode()) {
+            visible = false;
+        }
         boolean cur = extraKeysBar.getVisibility() == View.VISIBLE;
         if (cur == visible) return;
         extraKeysBar.setVisibility(visible ? View.VISIBLE : View.GONE);
@@ -2359,8 +2384,13 @@ public class MainActivity extends Activity
     private void toggleVirtualKeyboard() {
         if (virtualKeyboardView == null) return;
         if (virtualKeyboardView.getVisibility() == View.VISIBLE) {
-            virtualKeyboardView.hideWithAnimation(null);
+            virtualKeyboardView.hideWithAnimation(() -> {
+                setExtraKeysBarVisible(shouldShowBar(systemIme.isImeVisible()));
+            });
         } else {
+            if (virtualKeyboardView.isSplitArcMode() && extraKeysBar != null) {
+                extraKeysBar.setVisibility(View.GONE);
+            }
             virtualKeyboardView.bringToFront();
             positionVirtualKeyboard();
             virtualKeyboardView.showWithAnimation();

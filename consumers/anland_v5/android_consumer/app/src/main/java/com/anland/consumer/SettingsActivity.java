@@ -1085,7 +1085,7 @@ public class SettingsActivity extends Activity {
         SeekBar accelSeek = new SeekBar(this);
         styleSeekBar(accelSeek, 0xFFB4BEFE);
         accelSeek.setMax(190); // 0.5 ~ 10.0 step 0.05
-        float curAccel = prefs.getFloat(KEY_MOUSE_ACCEL, 1.0f);
+        float curAccel = MainActivity.getSafeFloat(prefs, KEY_MOUSE_ACCEL, 1.0f);
         curAccel = Math.max(0.5f, Math.min(10.0f, curAccel));
         accelSeek.setProgress((int)((curAccel - 0.5f) / 0.05f));
         accelValue.setText(getString(R.string.mouse_accel_value, curAccel));
@@ -1182,7 +1182,7 @@ public class SettingsActivity extends Activity {
         SeekBar seek = new SeekBar(this);
         styleSeekBar(seek, 0xFFB4BEFE);
         seek.setMax(Math.round((max - min) / step));
-        float cur = Math.max(min, Math.min(max, prefs.getFloat(key, defValue)));
+        float cur = Math.max(min, Math.min(max, MainActivity.getSafeFloat(prefs, key, defValue)));
         seek.setProgress(Math.round((cur - min) / step));
         value.setText(getString(valueFormatRes, cur));
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -1700,6 +1700,8 @@ public class SettingsActivity extends Activity {
                 Object v = obj.get(k);
                 if (v instanceof Boolean) {
                     editor.putBoolean(k, (Boolean) v);
+                } else if (isFloatPrefKey(k) && v instanceof Number) {
+                    editor.putFloat(k, ((Number) v).floatValue());
                 } else if (v instanceof Integer) {
                     editor.putInt(k, (Integer) v);
                 } else if (v instanceof Long) {
@@ -1748,6 +1750,14 @@ public class SettingsActivity extends Activity {
             status.setText(getString(R.string.layout_status_invalid, err));
             status.setTextColor(0xFFC62828);  // red
         }
+    }
+
+    public static boolean isFloatPrefKey(String k) {
+        return KEY_MOUSE_ACCEL.equals(k)
+                || KEY_SCROLL_SPEED.equals(k)
+                || KEY_SCROLL_THRESHOLD.equals(k)
+                || KEY_MOVE_THRESHOLD.equals(k)
+                || KEY_GESTURE_SCALE.equals(k);
     }
 
     private int dp(int dp) {

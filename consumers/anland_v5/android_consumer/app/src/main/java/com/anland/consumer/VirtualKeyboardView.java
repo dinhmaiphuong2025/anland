@@ -730,6 +730,12 @@ public class VirtualKeyboardView extends View {
         }
     }
 
+    private float normalizeKeyRotation(float rot) {
+        while (rot > 90f) rot -= 180f;
+        while (rot < -90f) rot += 180f;
+        return rot;
+    }
+
     private void layoutSplitArc(int viewW, int viewH) {
         if (viewW <= 0 || viewH <= 0) return;
         float density = getResources().getDisplayMetrics().density;
@@ -746,8 +752,8 @@ public class VirtualKeyboardView extends View {
         float arcSpanDeg = 78f;
 
         // 1. Layout Left Arc (Pivot: 0, viewH)
-        float leftPivotX = 0f;
-        float leftPivotY = viewH;
+        float leftPivotX = -4f * density;
+        float leftPivotY = viewH + 4f * density;
         float leftStartAngle = -74f; // sweeping from top-left downwards-rightwards to +4 deg
 
         for (KeyData k : mArcKeys) {
@@ -764,15 +770,15 @@ public class VirtualKeyboardView extends View {
             double rad = Math.toRadians(k.baseAngleDeg);
             k.currentCx = leftPivotX + r * (float) Math.cos(rad);
             k.currentCy = leftPivotY + r * (float) Math.sin(rad);
-            k.currentRotation = k.baseAngleDeg + 90f;
+            k.currentRotation = normalizeKeyRotation(k.baseAngleDeg + 90f);
 
             float arcLen = (float) (r * Math.toRadians(angleStep)) - 4f * density;
             k.keyWidth = Math.max(26f * density, Math.min(48f * density, arcLen));
         }
 
         // 2. Layout Right Arc (Pivot: viewW, viewH)
-        float rightPivotX = viewW;
-        float rightPivotY = viewH;
+        float rightPivotX = viewW + 4f * density;
+        float rightPivotY = viewH + 4f * density;
         float rightStartAngle = 176f; // sweeping from 176 deg to 254 deg
 
         for (KeyData k : mArcKeys) {
@@ -789,19 +795,18 @@ public class VirtualKeyboardView extends View {
             double rad = Math.toRadians(k.baseAngleDeg);
             k.currentCx = rightPivotX + r * (float) Math.cos(rad);
             k.currentCy = rightPivotY + r * (float) Math.sin(rad);
-            k.currentRotation = k.baseAngleDeg - 90f;
+            k.currentRotation = normalizeKeyRotation(k.baseAngleDeg - 90f);
 
             float arcLen = (float) (r * Math.toRadians(angleStep)) - 4f * density;
             k.keyWidth = Math.max(26f * density, Math.min(48f * density, arcLen));
         }
 
-        // 3. Layout Beveled Top Wings
-        float wingW = 96f * density;
-        float wingTop = 38f * density;
-        float wingBtnH = 34f * density;
+        // 3. Layout Beveled Top Wings - seamlessly meeting the outer arc below
+        float wingW = 104f * density;
+        float wingTop = 20f * density;
         float spacing = 6f * density;
-        float cutRadiusLeft = ringRadii[4] + 20f * density;
-        float cutRadiusRight = ringRadii[4] + 20f * density;
+        float cutRadiusLeft = ringRadii[4] + 24f * density;
+        float cutRadiusRight = ringRadii[4] + 24f * density;
 
         // Left Wing: 2 cols x 2 rows
         float lwLeft = 8f * density;
@@ -812,17 +817,20 @@ public class VirtualKeyboardView extends View {
             int col = k.wingIndex % 2;
             int row = k.wingIndex / 2;
             float kLeft = lwLeft + col * (lwColW + spacing);
-            float kTop = wingTop + row * (wingBtnH + spacing);
             float kRight = kLeft + lwColW;
-            float kBottom = kTop + wingBtnH;
+            float kTop = (row == 0) ? wingTop : (wingTop + 44f * density + spacing);
 
-            k.wingBounds.set(kLeft, kTop, kRight, kBottom);
+            float kBottom;
             if (row == 1) {
-                // Bottom-most button: beveled along the left arc circle
+                float midX = (kLeft + kRight) / 2f;
+                float arcY = calculateArcY(midX, leftPivotX, leftPivotY, cutRadiusLeft);
+                kBottom = Math.max(kTop + 36f * density, arcY);
                 k.beveledPath = createBeveledPath(kLeft, kTop, kRight, kBottom, leftPivotX, leftPivotY, cutRadiusLeft, false, density);
             } else {
+                kBottom = kTop + 44f * density;
                 k.beveledPath = null;
             }
+            k.wingBounds.set(kLeft, kTop, kRight, kBottom);
         }
 
         // Right Wing: 2 cols x 2 rows
@@ -836,17 +844,20 @@ public class VirtualKeyboardView extends View {
             int col = idx % 2;
             int row = idx / 2;
             float kLeft = rwLeft + col * (rwColW + spacing);
-            float kTop = wingTop + row * (wingBtnH + spacing);
             float kRight = kLeft + rwColW;
-            float kBottom = kTop + wingBtnH;
+            float kTop = (row == 0) ? wingTop : (wingTop + 44f * density + spacing);
 
-            k.wingBounds.set(kLeft, kTop, kRight, kBottom);
+            float kBottom;
             if (row == 1) {
-                // Bottom-most button: beveled along the right arc circle
+                float midX = (kLeft + kRight) / 2f;
+                float arcY = calculateArcY(midX, rightPivotX, rightPivotY, cutRadiusRight);
+                kBottom = Math.max(kTop + 36f * density, arcY);
                 k.beveledPath = createBeveledPath(kLeft, kTop, kRight, kBottom, rightPivotX, rightPivotY, cutRadiusRight, true, density);
             } else {
+                kBottom = kTop + 44f * density;
                 k.beveledPath = null;
             }
+            k.wingBounds.set(kLeft, kTop, kRight, kBottom);
         }
     }
 
@@ -861,16 +872,11 @@ public class VirtualKeyboardView extends View {
         path.lineTo(right - r, top);
         path.quadTo(right, top, right, top + r);
 
-        // Right side down to arc intersection
         float yAtRight = calculateArcY(right, pivotX, pivotY, radius);
         float yAtLeft = calculateArcY(left, pivotX, pivotY, radius);
 
-        float clampedBotRight = Math.max(top + r * 2, Math.min(bottom + 12f * density, yAtRight));
-        float clampedBotLeft = Math.max(top + r * 2, Math.min(bottom + 12f * density, yAtLeft));
-
-        path.lineTo(right, clampedBotRight);
-        // Beveled bottom edge cut along the arc
-        path.lineTo(left, clampedBotLeft);
+        path.lineTo(right, yAtRight);
+        path.lineTo(left, yAtLeft);
         path.lineTo(left, top + r);
         path.close();
         return path;
@@ -1460,7 +1466,7 @@ public class VirtualKeyboardView extends View {
                 double rad = Math.toRadians(angle);
                 cx = k.pivotX + radius * (float) Math.cos(rad);
                 cy = k.pivotY + radius * (float) Math.sin(rad);
-                rot = k.isRight ? (angle - 90f) : (angle + 90f);
+                rot = normalizeKeyRotation(k.isRight ? (angle - 90f) : (angle + 90f));
             } else if (animType == ANIM_CORNER_ZOOM) {
                 float zoom = 0.35f + 0.65f * mAnimProgress;
                 float pivotX = k.isRight ? viewW : 0f;
