@@ -922,114 +922,13 @@ public class VirtualKeyboardView extends View {
         if (viewW <= 0 || viewH <= 0) return;
         float density = getResources().getDisplayMetrics().density;
 
-        // 3 concentric ring radii: ring0 (inner) 116dp, ring1 162dp, ring2 208dp
-        // At 116dp, left pitch (16.4 deg = 0.286 rad) yields arc chord of ~33.2dp.
-        // With key radius 15dp (diam 30dp), distance between neighboring key centers is ~33.2dp,
-        // giving a clean >= 3.2dp to 4dp visual gap!
-        float[] ringRadii = {
-                116f * density,
-                162f * density,
-                208f * density
-        };
-        float arcSpanDeg = 82f;
-
-        // 1. Layout Left Arc (Pivot: bottom-left corner near edge)
-        float leftPivotX = -6f * density;
-        float leftPivotY = viewH - 4f * density;
-        float leftStartAngle = -80f;
-        float leftPitch = arcSpanDeg / 5f;
-
-        for (KeyData k : mArcKeys) {
-            if (k.isRight) continue;
-            float r = ringRadii[k.ringIndex];
-            k.pivotX = leftPivotX;
-            k.pivotY = leftPivotY;
-            k.baseRadius = r;
-            // Radius: inner ring = 30dp (r=15dp), middle = 32dp, outer = 34dp
-            float keyDiam = (k.ringIndex == 0 ? 30f : (k.ringIndex == 1 ? 32f : 34f)) * density;
-            k.keyHeight = keyDiam;
-            k.keyWidth = keyDiam;
-
-            k.baseAngleDeg = leftStartAngle + (k.colIndex + 0.5f) * leftPitch;
-
-            double rad = Math.toRadians(k.baseAngleDeg);
-            k.currentCx = leftPivotX + r * (float) Math.cos(rad);
-            k.currentCy = leftPivotY + r * (float) Math.sin(rad);
-            k.currentRotation = 0f;
-        }
-
-        // 2. Layout Right Arc (Pivot: bottom-right corner near edge)
-        float rightPivotX = viewW + 6f * density;
-        float rightPivotY = viewH - 4f * density;
-        float rightStartAngle = 178f;
-        float rightPitch = arcSpanDeg / 6f;
-
-        for (KeyData k : mArcKeys) {
-            if (!k.isRight) continue;
-            float r = ringRadii[k.ringIndex];
-            k.pivotX = rightPivotX;
-            k.pivotY = rightPivotY;
-            k.baseRadius = r;
-            float keyDiam = (k.ringIndex == 0 ? 30f : (k.ringIndex == 1 ? 32f : 34f)) * density;
-            k.keyHeight = keyDiam;
-            k.keyWidth = keyDiam;
-
-            k.baseAngleDeg = rightStartAngle + (k.colIndex + 0.5f) * rightPitch;
-
-            double rad = Math.toRadians(k.baseAngleDeg);
-            k.currentCx = rightPivotX + r * (float) Math.cos(rad);
-            k.currentCy = rightPivotY + r * (float) Math.sin(rad);
-            k.currentRotation = 0f;
-        }
-
-        // 3. Layout Slim Flat Top Wings (lowered close to letter keys, clean rounded rects)
-        float wingW = 102f * density;
-        float spacing = 4f * density;
-        float wingBtnH = 26f * density;
-        float topOfArc = viewH - 4f * density - ringRadii[2];
-        float wingTop = Math.max(16f * density, topOfArc - 2f * wingBtnH - spacing - 8f * density);
-
-        // Left Wing
-        float lwLeft = 8f * density;
-        float lwColW = (wingW - spacing * 2f) / 3f;
-
-        for (KeyData k : mWingKeys) {
-            if (k.isRight) continue;
-            int col = k.wingIndex % 3;
-            int row = k.wingIndex / 3;
-            float kLeft = lwLeft + col * (lwColW + spacing);
-            float kRight = kLeft + lwColW;
-            float kTop = wingTop + row * (wingBtnH + spacing);
-            float kBottom = kTop + wingBtnH;
-            k.beveledPath = null;
-            k.wingBounds.set(kLeft, kTop, kRight, kBottom);
-        }
-
-        // Right Wing
-        float rwRight = viewW - 8f * density;
-        float rwLeft = rwRight - wingW;
-        float rwColW = (wingW - spacing * 2f) / 3f;
-
-        for (KeyData k : mWingKeys) {
-            if (!k.isRight) continue;
-            int idx = k.wingIndex - 6;
-            int col = idx % 3;
-            int row = idx / 3;
-            float kLeft = rwLeft + col * (rwColW + spacing);
-            float kRight = kLeft + rwColW;
-            float kTop = wingTop + row * (wingBtnH + spacing);
-            float kBottom = kTop + wingBtnH;
-            k.beveledPath = null;
-            k.wingBounds.set(kLeft, kTop, kRight, kBottom);
-        }
-
-        // 4. Layout Bottom Rows:
-        // Left cluster bottom: ?123, comma, spaceL (Caps positioned right above ?123)
+        // 4. Layout Bottom Rows first so we know exactly where the restricted bottom zone is:
         float btnH = 34f * density;
         float btnBottom = viewH - 10f * density;
         float btnTop = btnBottom - btnH;
         float gap = 6f * density;
 
+        // Left cluster bottom: ?123, comma, spaceL (Caps positioned right above ?123)
         float curX = 10f * density;
         float symW = 44f * density;
         if (mSymbolToggleKey != null) {
@@ -1097,6 +996,98 @@ public class VirtualKeyboardView extends View {
                     Math.round(curRight), Math.round(btnBottom));
             mRightSpaceKey.currentLabel = "";
         }
+
+        // Straight ergonomic grid for both clusters (zero overlapping keys by construction):
+        // 3 rows: row 0 (top: ringIndex 2), row 1 (mid: ringIndex 1), row 2 (bottom: ringIndex 0)
+        float keySize = 34f * density;
+        float keyGap = 6f * density;
+        float step = keySize + keyGap;
+        float keyRadius = keySize * 0.5f;
+
+        // Bottom row of letter keys sits cleanly above the bottom pills with >= 10dp clearance:
+        float letterRow2Y = btnTop - keyRadius - 10f * density;
+        float letterRow1Y = letterRow2Y - step;
+        float letterRow0Y = letterRow1Y - step;
+
+        // 1. Layout Left Cluster (Straight Grid: 5 columns x 3 rows)
+        // Col 0 aligns with ?123 / Caps column:
+        float leftCol0X = 10f * density + (symW * 0.5f);
+        for (KeyData k : mArcKeys) {
+            if (k.isRight) continue;
+            k.keyHeight = keySize;
+            k.keyWidth = keySize;
+
+            int row = 2 - k.ringIndex; // ring 2 -> row 0 (top), ring 1 -> row 1, ring 0 -> row 2 (bottom)
+            float cy = (row == 0) ? letterRow0Y : ((row == 1) ? letterRow1Y : letterRow2Y);
+            float cx = leftCol0X + k.colIndex * step;
+
+            k.currentCx = cx;
+            k.currentCy = cy;
+            k.currentRotation = 0f;
+        }
+
+        // 2. Layout Right Cluster (Straight Grid: 6 columns x 3 rows)
+        // Aligns to the right screen edge with safe margin:
+        float rightCol5X = curRight - (enterW * 0.5f); // rightmost col align above Enter
+        float rightCol0X = rightCol5X - 5 * step;
+        for (KeyData k : mArcKeys) {
+            if (!k.isRight) continue;
+            k.keyHeight = keySize;
+            k.keyWidth = keySize;
+
+            int row = 2 - k.ringIndex; // ring 2 -> row 0 (top), ring 1 -> row 1, ring 0 -> row 2 (bottom)
+            float cy = (row == 0) ? letterRow0Y : ((row == 1) ? letterRow1Y : letterRow2Y);
+            float cx = rightCol0X + k.colIndex * step;
+
+            k.currentCx = cx;
+            k.currentCy = cy;
+            k.currentRotation = 0f;
+        }
+
+        // 3. Layout Slim Flat Top Wings above the letter grid with >= 10dp clearance:
+        float wingW = 102f * density;
+        float spacing = 4f * density;
+        float wingBtnH = 26f * density;
+        float wingBottom = letterRow0Y - keyRadius - 10f * density;
+        float wingTop = wingBottom - (2 * wingBtnH + spacing);
+        if (wingTop < 8f * density) {
+            wingTop = 8f * density;
+        }
+
+        // Left Wing
+        float lwLeft = 8f * density;
+        float lwColW = (wingW - spacing * 2f) / 3f;
+
+        for (KeyData k : mWingKeys) {
+            if (k.isRight) continue;
+            int col = k.wingIndex % 3;
+            int row = k.wingIndex / 3;
+            float kLeft = lwLeft + col * (lwColW + spacing);
+            float kRight = kLeft + lwColW;
+            float kTop = wingTop + row * (wingBtnH + spacing);
+            float kBottom = kTop + wingBtnH;
+            k.beveledPath = null;
+            k.wingBounds.set(kLeft, kTop, kRight, kBottom);
+        }
+
+        // Right Wing
+        float rwRight = viewW - 8f * density;
+        float rwLeft = rwRight - wingW;
+        float rwColW = (wingW - spacing * 2f) / 3f;
+
+        for (KeyData k : mWingKeys) {
+            if (!k.isRight) continue;
+            int idx = k.wingIndex - 6;
+            int col = idx % 3;
+            int row = idx / 3;
+            float kLeft = rwLeft + col * (rwColW + spacing);
+            float kRight = kLeft + rwColW;
+            float kTop = wingTop + row * (wingBtnH + spacing);
+            float kBottom = kTop + wingBtnH;
+            k.beveledPath = null;
+            k.wingBounds.set(kLeft, kTop, kRight, kBottom);
+        }
+    }
     }
 
     public void setInitialPosition() {
@@ -1919,29 +1910,12 @@ public class VirtualKeyboardView extends View {
         float viewH = getHeight();
 
         // 1. Draw Radial Arc Keys as Circles with upright text
+        // Clean slide-up animation from bottom:
+        float slideOffset = (1f - mAnimProgress) * 24f * density;
         for (KeyData k : mArcKeys) {
             float cx = k.currentCx;
-            float cy = k.currentCy;
+            float cy = k.currentCy + slideOffset;
             float keyRadius = k.keyWidth * 0.5f;
-
-            if (animType == ANIM_FAN) {
-                float spread = (float) Math.sin(mAnimProgress * Math.PI / 2.0);
-                float angle = k.isRight
-                        ? (k.baseAngleDeg + (1f - spread) * 26f)
-                        : (k.baseAngleDeg - (1f - spread) * 26f);
-                float radius = k.baseRadius * (0.65f + 0.35f * spread);
-                double rad = Math.toRadians(angle);
-                cx = k.pivotX + radius * (float) Math.cos(rad);
-                cy = k.pivotY + radius * (float) Math.sin(rad);
-            } else if (animType == ANIM_CORNER_ZOOM) {
-                float zoom = 0.35f + 0.65f * mAnimProgress;
-                float pivotX = k.isRight ? viewW : 0f;
-                float pivotY = viewH;
-                cx = pivotX + (k.currentCx - pivotX) * zoom;
-                cy = pivotY + (k.currentCy - pivotY) * zoom;
-            }
-            k.currentCx = cx;
-            k.currentCy = cy;
 
             int bg = resolveKeyBg(k);
             keyBgPaint.setColor(bg);
@@ -1970,7 +1944,7 @@ public class VirtualKeyboardView extends View {
         }
 
         // 2. Draw Slim Flat Top Wings (clean rounded rects, lowered close to letter keys)
-        float wingSlideY = (animType == ANIM_FAN) ? ((1f - mAnimProgress) * -20f * density) : 0f;
+        float wingSlideY = (1f - mAnimProgress) * -16f * density;
         for (KeyData k : mWingKeys) {
             canvas.save();
             canvas.translate(0, wingSlideY);
