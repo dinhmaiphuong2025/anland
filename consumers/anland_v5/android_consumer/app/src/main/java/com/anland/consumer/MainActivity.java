@@ -787,6 +787,7 @@ public class MainActivity extends Activity
                 if (mNative != null) mNative.sendKey(1, scanCode);
             }
         });
+        virtualKeyboardView.setOnDismissListener(this::restoreHudAfterKeyboard);
         // Add to root with no gravity – we will position manually.
         root.addView(virtualKeyboardView, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -2439,14 +2440,27 @@ public class MainActivity extends Activity
     // Dong ban phim: hien lai HUD neu truoc do bi tu an. Bo qua ExtraKeys.
     private void restoreHudAfterKeyboard() {
         if (!mHudAutoHidden) return;
-        mHudAutoHidden = false;
         boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getBoolean("use_hud_overlay", false);
-        if (useHud && mHudOverlay != null && !mHudOverlay.isEditMode()
-                && mImeBottom <= 0
+        if (!useHud || mHudOverlay == null || mHudOverlay.isEditMode()) {
+            mHudAutoHidden = false;
+            return;
+        }
+        if (mImeBottom <= 0
                 && (virtualKeyboardView == null
                     || virtualKeyboardView.getVisibility() != View.VISIBLE)) {
             mHudOverlay.setVisibility(View.VISIBLE);
+            mHudAutoHidden = false;
+        } else if (mRoot != null) {
+            // Neu ban phim dang trong qua trinh tat (animation), thu lai sau 1 frame
+            mRoot.postDelayed(() -> {
+                if (mHudAutoHidden && mImeBottom <= 0
+                        && (virtualKeyboardView == null
+                            || virtualKeyboardView.getVisibility() != View.VISIBLE)) {
+                    mHudOverlay.setVisibility(View.VISIBLE);
+                    mHudAutoHidden = false;
+                }
+            }, 100);
         }
     }
 
@@ -2570,6 +2584,9 @@ public class MainActivity extends Activity
                 .getString(KEY_EXTRA_KEYS_MODE, "always");
         if ("with_keyboard".equals(mode))
             setExtraKeysBarVisible(visible);
+        if (!visible) {
+            restoreHudAfterKeyboard();
+        }
         if (!visible && surfaceView != null) {
             surfaceView.requestFocus();
             if (mRoot != null)
