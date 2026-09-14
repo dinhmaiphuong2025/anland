@@ -258,11 +258,7 @@ public class VirtualKeyboardView extends View {
     public void showWithAnimation() {
         cancelAnimation();
         checkOrientationMode();
-        if (mIsSplitArcMode) {
-            post(() -> applySplitArcTilt(getWidth(), getHeight()));
-        } else {
-            setRotation(0f);
-        }
+        setRotation(0f);
         setVisibility(VISIBLE);
         bringToFront();
         mIsAnimating = true;
@@ -804,7 +800,7 @@ public class VirtualKeyboardView extends View {
         try {
             if (mIsSplitArcMode) {
                 layoutSplitArc(w, h);
-                applySplitArcTilt(w, h);
+                setRotation(0f);
             } else {
                 setRotation(0f);
                 layoutKeys(w, h);
@@ -815,14 +811,9 @@ public class VirtualKeyboardView extends View {
         }
     }
 
-    // Nang toan bo ban phim Split-Arc len ~7 do quanh day man hinh.
-    // Dung View rotation de Android tu map touch, khong phai inverse tay.
-    private void applySplitArcTilt(int w, int h) {
-        if (w <= 0 || h <= 0) return;
-        setPivotX(w / 2f);
-        setPivotY(h);
-        if (getRotation() != -7f) setRotation(-7f);
-    }
+    // Nghieng doi xung tung phim arc: trai -7, phai +7 (dau ngoai venh len).
+    // Wings/SPACE khong xoay. Luu vao currentRotation de hit-test khop.
+    private static final float ARC_TILT_DEG = 7f;
 
     private void layoutKeys(int viewW, int viewH) {
         int totalRows = keyboardRows.length;
@@ -1697,29 +1688,29 @@ public class VirtualKeyboardView extends View {
         return keyColor;
     }
 
-    // Phim hinh thang: canh tren hep hon ~14% moi ben, bo goc nhe.
+    // Phim hinh thang: dinh rong, day hep hon ~14% moi ben, bo goc nhe.
     private Path buildTrapezoidPath(float hw, float hh, float cr) {
         float taper = hw * 0.28f;
-        float tlx = -hw + taper, trx = hw - taper;
+        float blx = -hw + taper, brx = hw - taper;
         Path p = new Path();
-        p.moveTo(tlx + cr, -hh);
-        p.lineTo(trx - cr, -hh);
-        p.quadTo(trx, -hh, trx, -hh + cr);
-        p.lineTo(hw - cr * 0.4f, hh - cr);
-        p.quadTo(hw, hh, hw - cr, hh);
-        p.lineTo(-hw + cr, hh);
-        p.quadTo(-hw, hh, -hw + cr * 0.4f, hh - cr);
-        p.lineTo(tlx, -hh + cr);
-        p.quadTo(tlx - (trx - tlx <= 0 ? 0 : 0), -hh, tlx + cr, -hh);
+        p.moveTo(-hw + cr, -hh);
+        p.lineTo(hw - cr, -hh);
+        p.quadTo(hw, -hh, hw - cr * 0.4f, -hh + cr);
+        p.lineTo(brx, hh - cr);
+        p.quadTo(brx, hh, brx - cr, hh);
+        p.lineTo(blx + cr, hh);
+        p.quadTo(blx, hh, blx, hh - cr);
+        p.lineTo(-hw + cr * 0.4f, -hh + cr);
+        p.quadTo(-hw, -hh, -hw + cr, -hh);
         p.close();
         return p;
     }
 
-    // Nua-rong hinh thang tai ly (-hh..hh): tren hep, duoi rong.
+    // Nua-rong hinh thang tai ly (-hh..hh): dinh rong, day hep.
     private boolean hitTrapezoid(float lx, float ly, float hw, float hh) {
         if (Math.abs(ly) > hh * 0.62f) return false;
         float taper = hw * 0.28f;
-        float t = (hh - ly) / (2f * hh);
+        float t = (ly + hh) / (2f * hh);
         float halfW = hw - taper * t;
         return Math.abs(lx) <= halfW * 1.08f;
     }
@@ -1755,9 +1746,13 @@ public class VirtualKeyboardView extends View {
                 float pivotY = viewH;
                 cx = pivotX + (k.currentCx - pivotX) * zoom;
                 cy = pivotY + (k.currentCy - pivotY) * zoom;
+                // Go tilt cu truoc khi cong lai de khong cong don moi frame.
+                rot = normalizeKeyRotation(rot - (k.isRight ? ARC_TILT_DEG : -ARC_TILT_DEG));
             }
             k.currentCx = cx;
             k.currentCy = cy;
+            // Nghieng doi xung: trai -7, phai +7 (dau ngoai venh len).
+            rot = normalizeKeyRotation(rot + (k.isRight ? ARC_TILT_DEG : -ARC_TILT_DEG));
             k.currentRotation = rot;
 
             canvas.save();
