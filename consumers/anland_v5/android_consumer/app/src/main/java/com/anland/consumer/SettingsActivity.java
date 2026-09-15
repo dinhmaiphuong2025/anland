@@ -598,6 +598,90 @@ public class SettingsActivity extends Activity {
         });
         themeCard.addView(themeSpinner);
         root.addView(themeCard);
+
+        // Keyboard Bottom Margin
+        TextView marginLabel = new TextView(this);
+        marginLabel.setText("Keyboard Bottom Margin (Plan A: lifts Wings synchronously)");
+        marginLabel.setTextSize(14);
+        marginLabel.setTextColor(Color.WHITE);
+        marginLabel.setPadding(0, dp(12), 0, dp(4));
+        root.addView(marginLabel);
+
+        LinearLayout marginCard = new LinearLayout(this);
+        marginCard.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable mBg = new android.graphics.drawable.GradientDrawable();
+        mBg.setCornerRadius(dp(8));
+        mBg.setColor(0xFF181825);
+        mBg.setStroke(dp(1), 0x22FFFFFF);
+        marginCard.setBackground(mBg);
+        marginCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+
+        Spinner marginSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
+        String[] marginOptions = {"8dp (Low - Default)", "16dp (Medium)", "24dp (High)", "32dp (Very High)"};
+        setupDarkSpinner(marginSpinner, marginOptions);
+        float currentMargin = prefs.getFloat("keyboard_bottom_margin_dp", 8f);
+        int marginSel = 0;
+        if (currentMargin == 16f) marginSel = 1;
+        else if (currentMargin == 24f) marginSel = 2;
+        else if (currentMargin == 32f) marginSel = 3;
+        marginSpinner.setSelection(marginSel);
+        marginSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+                float val = 8f;
+                if (pos == 1) val = 16f;
+                else if (pos == 2) val = 24f;
+                else if (pos == 3) val = 32f;
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putFloat("keyboard_bottom_margin_dp", val).apply();
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        marginCard.addView(marginSpinner);
+        root.addView(marginCard);
+
+        // Key Height
+        TextView heightLabel = new TextView(this);
+        heightLabel.setText("Key Height");
+        heightLabel.setTextSize(14);
+        heightLabel.setTextColor(Color.WHITE);
+        heightLabel.setPadding(0, dp(12), 0, dp(4));
+        root.addView(heightLabel);
+
+        LinearLayout heightCard = new LinearLayout(this);
+        heightCard.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable htBg = new android.graphics.drawable.GradientDrawable();
+        htBg.setCornerRadius(dp(8));
+        htBg.setColor(0xFF181825);
+        htBg.setStroke(dp(1), 0x22FFFFFF);
+        heightCard.setBackground(htBg);
+        heightCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+
+        Spinner heightSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
+        String[] heightOptions = {"38dp (Compact)", "42dp (Default Gboard)", "46dp (Medium)", "50dp (Large)"};
+        setupDarkSpinner(heightSpinner, heightOptions);
+        float currentHeight = prefs.getFloat("keyboard_key_height_dp", 42f);
+        int heightSel = 1;
+        if (currentHeight == 38f) heightSel = 0;
+        else if (currentHeight == 46f) heightSel = 2;
+        else if (currentHeight == 50f) heightSel = 3;
+        heightSpinner.setSelection(heightSel);
+        heightSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+                float val = 42f;
+                if (pos == 0) val = 38f;
+                else if (pos == 2) val = 46f;
+                else if (pos == 3) val = 50f;
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putFloat("keyboard_key_height_dp", val).apply();
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        heightCard.addView(heightSpinner);
+        root.addView(heightCard);
     }
 
     /**
@@ -1573,6 +1657,7 @@ public class SettingsActivity extends Activity {
     Spinner ratioSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
     String[] ratioOptions = {
             "Auto Stretch (Fullscreen)",
+            "Fit Between Keyboards (Nằm gọn giữa hai phím)",
             "16:9 Letterbox (1920x1080)",
             "14:9 Letterbox (1680x1080)",
             "4:3 Letterbox (1440x1080)"
@@ -1580,19 +1665,21 @@ public class SettingsActivity extends Activity {
     setupDarkSpinner(ratioSpinner, ratioOptions);
     String currentRatio = prefs.getString("landscape_aspect_ratio", null);
     int sel = 0;
-    if ("16_9".equals(currentRatio)) sel = 1;
-    else if ("14_9".equals(currentRatio)) sel = 2;
-    else if ("4_3".equals(currentRatio)) sel = 3;
-    else if (prefs.getBoolean("landscape_16_9_letterbox", false)) sel = 1;
+    if ("fit_between".equals(currentRatio)) sel = 1;
+    else if ("16_9".equals(currentRatio)) sel = 2;
+    else if ("14_9".equals(currentRatio)) sel = 3;
+    else if ("4_3".equals(currentRatio)) sel = 4;
+    else if (prefs.getBoolean("landscape_16_9_letterbox", false)) sel = 2;
 
     ratioSpinner.setSelection(sel);
     ratioSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
         @Override
         public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
             String val = "auto";
-            if (pos == 1) val = "16_9";
-            else if (pos == 2) val = "14_9";
-            else if (pos == 3) val = "4_3";
+            if (pos == 1) val = "fit_between";
+            else if (pos == 2) val = "16_9";
+            else if (pos == 3) val = "14_9";
+            else if (pos == 4) val = "4_3";
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putString("landscape_aspect_ratio", val)
                     .putBoolean("landscape_16_9_letterbox", pos != 0)

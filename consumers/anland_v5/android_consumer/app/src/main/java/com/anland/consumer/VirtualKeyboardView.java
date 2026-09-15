@@ -102,27 +102,51 @@ public class VirtualKeyboardView extends View {
             {"Y", "U", "I", "O", "P"}
     };
 
-    // Symbols Layer 1 (?123)
-    private static final String[][] LEFT_SYMBOLS_1 = {
-            {"-", "+", "(", ")"},
+    // Symbols Layer 1 (?123) - Left Handed
+    private static final String[][] LEFT_SYMBOLS_1_LH = {
+            {"+", "(", ")", "/"},
             {"@", "#", "$", "_", "&"},
             {"1", "2", "3", "4", "5"}
     };
-    private static final String[][] RIGHT_SYMBOLS_1 = {
+    private static final String[][] RIGHT_SYMBOLS_1_LH = {
             {";", "!", "?"},
-            {"/", "*", "\"", "'", ":"},
+            {"*", "\"", "'", ":"},
             {"6", "7", "8", "9", "0"}
     };
 
-    // Symbols Layer 2 (=\<)
-    private static final String[][] LEFT_SYMBOLS_2 = {
+    // Symbols Layer 1 (?123) - Right Handed
+    private static final String[][] LEFT_SYMBOLS_1_RH = {
+            {"+", "(", ")"},
+            {"@", "#", "$", "_"},
+            {"1", "2", "3", "4", "5"}
+    };
+    private static final String[][] RIGHT_SYMBOLS_1_RH = {
+            {"/", ";", "!", "?"},
+            {"&", "*", "\"", "'", ":"},
+            {"6", "7", "8", "9", "0"}
+    };
+
+    // Symbols Layer 2 (=\<) - Left Handed
+    private static final String[][] LEFT_SYMBOLS_2_LH = {
             {"^", "°", "=", "§"},
             {"[", "]", "{", "}", "%"},
             {"~", "\\", "|", "<", ">"}
     };
-    private static final String[][] RIGHT_SYMBOLS_2 = {
+    private static final String[][] RIGHT_SYMBOLS_2_LH = {
             {"_", "+", "*"},
-            {"©", "®", "™", "✓", "•"},
+            {"©", "®", "™", "•"},
+            {"€", "£", "¥", "¢", "₹"}
+    };
+
+    // Symbols Layer 2 (=\<) - Right Handed
+    private static final String[][] LEFT_SYMBOLS_2_RH = {
+            {"^", "°", "="},
+            {"[", "]", "{", "}"},
+            {"~", "\\", "|", "<", ">"}
+    };
+    private static final String[][] RIGHT_SYMBOLS_2_RH = {
+            {"§", "_", "+", "*"},
+            {"%", "©", "®", "™", "•"},
             {"€", "£", "¥", "¢", "₹"}
     };
 
@@ -241,6 +265,7 @@ public class VirtualKeyboardView extends View {
     private KeyData mRightSpaceKey;
     private KeyData mCommaKey;
     private KeyData mPeriodKey;
+    private KeyData mMinusKey;
     private KeyData mCapsKey;
     private KeyData mEnterKey;
     private KeyData mBkspKey;
@@ -250,6 +275,10 @@ public class VirtualKeyboardView extends View {
 
     private boolean mIsTouchScrolling = false;
     private float mTouchScrollLastY = 0f;
+
+    private boolean mSpaceSwipeActive = false;
+    private float mSpaceDragStartX = 0f;
+    private float mSpaceLastMoveX = 0f;
 
         public interface OnDismissListener {
         void onDismiss();
@@ -554,6 +583,8 @@ public class VirtualKeyboardView extends View {
         mCommaKey.internalLabel = ",";
         mPeriodKey = new KeyData(".", KeyEvent.KEYCODE_PERIOD, 1f, false);
         mPeriodKey.internalLabel = ".";
+        mMinusKey = new KeyData("-", KeyEvent.KEYCODE_MINUS, 1f, false);
+        mMinusKey.internalLabel = "-";
         mCapsKey = new KeyData("Caps", KeyEvent.KEYCODE_CAPS_LOCK, 1f, false);
         mCapsKey.internalLabel = "Caps";
         mEnterKey = new KeyData("Enter", KeyEvent.KEYCODE_ENTER, 1f, false);
@@ -606,12 +637,13 @@ public class VirtualKeyboardView extends View {
         mArcKeys.clear();
         String[][] leftSource;
         String[][] rightSource;
+        boolean rh = isRightHanded();
         if (mSymbolLayer == 1) {
-            leftSource = LEFT_SYMBOLS_1;
-            rightSource = RIGHT_SYMBOLS_1;
+            leftSource = rh ? LEFT_SYMBOLS_1_RH : LEFT_SYMBOLS_1_LH;
+            rightSource = rh ? RIGHT_SYMBOLS_1_RH : RIGHT_SYMBOLS_1_LH;
         } else if (mSymbolLayer == 2) {
-            leftSource = LEFT_SYMBOLS_2;
-            rightSource = RIGHT_SYMBOLS_2;
+            leftSource = rh ? LEFT_SYMBOLS_2_RH : LEFT_SYMBOLS_2_LH;
+            rightSource = rh ? RIGHT_SYMBOLS_2_RH : RIGHT_SYMBOLS_2_LH;
         } else {
             boolean rh = isRightHanded();
             leftSource = rh ? LEFT_LETTERS_RH : LEFT_LETTERS_LH;
@@ -1026,8 +1058,13 @@ public class VirtualKeyboardView extends View {
         if (viewW <= 0 || viewH <= 0) return;
         float density = getResources().getDisplayMetrics().density;
 
+        float bottomMarginDp = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getFloat("keyboard_bottom_margin_dp", 8f);
+        float customKeyHDp = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getFloat("keyboard_key_height_dp", 42f);
+
         float u = 38f * density;
-        float keyH = 42f * density;
+        float keyH = customKeyHDp * density;
         float gap = 5f * density;
         float indent = 0.5f * u;
         float capsW = 1.5f * u;
@@ -1038,7 +1075,7 @@ public class VirtualKeyboardView extends View {
         boolean rh = isRightHanded();
 
         // Vertical positions of the 4 rows (bottom-up):
-        float row3Bottom = viewH - 8f * density;
+        float row3Bottom = viewH - bottomMarginDp * density;
         float row3Top = row3Bottom - keyH;
 
         float row2Bottom = row3Top - gap;
@@ -1113,12 +1150,20 @@ public class VirtualKeyboardView extends View {
         }
         // SpaceL to the right of comma
         float spaceLeft = commaLeft + u + gap;
-        float spaceW = Math.max(95f * density, 2.5f * u);
+        float spaceW = Math.max(76f * density, 2.0f * u);
         if (mLeftSpaceKey != null) {
             mLeftSpaceKey.keyHeight = keyH;
             mLeftSpaceKey.keyWidth = spaceW;
             mLeftSpaceKey.rect.set(Math.round(spaceLeft), Math.round(row3Top), Math.round(spaceLeft + spaceW), Math.round(row3Bottom));
             mLeftSpaceKey.currentLabel = "";
+        }
+        // Minus key to the right of SpaceL
+        float minusLeft = spaceLeft + spaceW + gap;
+        if (mMinusKey != null) {
+            mMinusKey.keyHeight = keyH;
+            mMinusKey.keyWidth = u;
+            mMinusKey.rect.set(Math.round(minusLeft), Math.round(row3Top), Math.round(minusLeft + u), Math.round(row3Bottom));
+            mMinusKey.currentLabel = "-";
         }
 
         // 2. Right Cluster Letters
@@ -1747,23 +1792,13 @@ public class VirtualKeyboardView extends View {
                         return true;
                     }
 
-                    // 7. Space keys
+                    // 7. Space keys (touch down: initialize cursor swipe tracking)
                     if (hitKey == mLeftSpaceKey || hitKey == mRightSpaceKey) {
                         activePointers.put(pointerId, hitKey);
                         hitKey.pressed = true;
-                        if (hasAnyActiveModifier()) {
-                            hitKey.comboFired = true;
-                            executeCombination(hitKey);
-                        } else {
-                            sendKey(KeyEvent.KEYCODE_SPACE, true);
-                            postDelayed(() -> sendKey(KeyEvent.KEYCODE_SPACE, false), 30);
-                            if (mAutoReturnToAbcOnSpace && mSymbolLayer > 0) {
-                                mAutoReturnToAbcOnSpace = false;
-                                mSymbolLayer = 0;
-                                initArcKeys();
-                                layoutSplitArc(getWidth(), getHeight());
-                            }
-                        }
+                        mSpaceSwipeActive = false;
+                        mSpaceDragStartX = touchX;
+                        mSpaceLastMoveX = touchX;
                         invalidate();
                         return true;
                     }
@@ -1846,8 +1881,23 @@ public class VirtualKeyboardView extends View {
                             sendKey(released.currentKeyCode, true);
                             postDelayed(() -> sendKey(released.currentKeyCode, false), 30);
                         }
-                    } else if (released != mLeftSpaceKey && released != mRightSpaceKey) {
-                        int relCode = released.currentKeyCode;
+                    } else if (released == mLeftSpaceKey || released == mRightSpaceKey) {
+                        if (mSpaceSwipeActive) {
+                            mSpaceSwipeActive = false;
+                        } else if (hasAnyActiveModifier()) {
+                            released.comboFired = true;
+                            executeCombination(released);
+                        } else {
+                            sendKey(KeyEvent.KEYCODE_SPACE, true);
+                            postDelayed(() -> sendKey(KeyEvent.KEYCODE_SPACE, false), 30);
+                            if (mAutoReturnToAbcOnSpace && mSymbolLayer > 0) {
+                                mAutoReturnToAbcOnSpace = false;
+                                mSymbolLayer = 0;
+                                initArcKeys();
+                                layoutSplitArc(getWidth(), getHeight());
+                            }
+                        }
+                    } else {
                         if (isDirectionKey(relCode) || relCode == KeyEvent.KEYCODE_MOVE_HOME || relCode == KeyEvent.KEYCODE_MOVE_END) {
                             sendKey(relCode, false);
                         } else if (!isLeftModifier(released) && !"Caps".equals(released.internalLabel)) {
@@ -1881,6 +1931,34 @@ public class VirtualKeyboardView extends View {
                         if (idx < 0) continue;
                         float px = event.getX(idx);
                         float py = event.getY(idx);
+
+                        if (key == mLeftSpaceKey || key == mRightSpaceKey) {
+                            float totalDx = px - mSpaceDragStartX;
+                            float density = getResources().getDisplayMetrics().density;
+                            if (!mSpaceSwipeActive && Math.abs(totalDx) > 10f * density) {
+                                mSpaceSwipeActive = true;
+                                mSpaceLastMoveX = px;
+                            }
+                            if (mSpaceSwipeActive) {
+                                float delta = px - mSpaceLastMoveX;
+                                float stepPx = 9f * density;
+                                while (delta >= stepPx) {
+                                    sendKey(KeyEvent.KEYCODE_DPAD_RIGHT, true);
+                                    sendKey(KeyEvent.KEYCODE_DPAD_RIGHT, false);
+                                    if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                                    delta -= stepPx;
+                                    mSpaceLastMoveX += stepPx;
+                                }
+                                while (delta <= -stepPx) {
+                                    sendKey(KeyEvent.KEYCODE_DPAD_LEFT, true);
+                                    sendKey(KeyEvent.KEYCODE_DPAD_LEFT, false);
+                                    if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                                    delta += stepPx;
+                                    mSpaceLastMoveX -= stepPx;
+                                }
+                            }
+                            continue;
+                        }
 
                         boolean stillHit = false;
                         if (key.isWing) {
@@ -2026,6 +2104,9 @@ public class VirtualKeyboardView extends View {
             }
             if (mCommaKey != null && mCommaKey.rect.contains((int) x, (int) y)) {
                 return mCommaKey;
+            }
+            if (mMinusKey != null && mMinusKey.rect.contains((int) x, (int) y)) {
+                return mMinusKey;
             }
             if (mPeriodKey != null && mPeriodKey.rect.contains((int) x, (int) y)) {
                 return mPeriodKey;
@@ -2353,6 +2434,16 @@ public class VirtualKeyboardView extends View {
         // SpaceL (Row 3, Left)
         if (mLeftSpaceKey != null) {
             drawSpecialButton(canvas, mLeftSpaceKey, alpha, slideOffset, cr);
+        }
+
+        // Minus key (Row 3, Right of SpaceL)
+        if (mMinusKey != null) {
+            drawSpecialButton(canvas, mMinusKey, alpha, slideOffset, cr);
+            textPaint.setColor(M3.COLOR_TEXT_MUTED);
+            textPaint.setAlpha(alpha);
+            textPaint.setTextSize(14f * density);
+            float cy = (mMinusKey.rect.centerY() + slideOffset) - ((textPaint.descent() + textPaint.ascent()) / 2f);
+            canvas.drawText("-", mMinusKey.rect.centerX(), cy, textPaint);
         }
 
         // SpaceR (Row 3, Right)

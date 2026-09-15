@@ -164,6 +164,7 @@ public class MainActivity extends Activity
     public static final String RATIO_16_9 = "16_9";
     public static final String RATIO_14_9 = "14_9";
     public static final String RATIO_4_3 = "4_3";
+    public static final String RATIO_FIT_BETWEEN = "fit_between";
     private float mScrollVirtualY = 0f;
     public static final String KEY_LANDSCAPE_SPLIT_ARC = "landscape_split_arc";
     private boolean mUserDismissedImeInForeground = false;
@@ -2388,7 +2389,31 @@ public class MainActivity extends Activity
         int availH = Math.max(100, parentH - lp.bottomMargin);
         float targetRatio;
         float baseWidth;
-        if (RATIO_4_3.equals(ratioPref)) {
+        if (RATIO_FIT_BETWEEN.equals(ratioPref)) {
+            float clusterWidthPx = (8f + 5 * 38f + 4 * 5f + 16f) * mDensity;
+            int maxSafeW = Math.round(parentW - 2f * clusterWidthPx);
+            if (maxSafeW < 300) maxSafeW = parentW;
+            float desktopRatio = (customScreenWidth > 0 && customScreenHeight > 0)
+                    ? ((float) customScreenWidth / customScreenHeight) : (16f / 9f);
+            int surfaceW = maxSafeW;
+            int surfaceH = Math.round(surfaceW / desktopRatio);
+            if (surfaceH > availH) {
+                surfaceH = availH;
+                surfaceW = Math.round(availH * desktopRatio);
+            }
+            baseWidth = (customScreenWidth > 0) ? customScreenWidth : 1920f;
+            lp.width = surfaceW;
+            lp.height = surfaceH;
+            lp.gravity = (lp.bottomMargin > 0) ? (Gravity.TOP | Gravity.CENTER_HORIZONTAL) : Gravity.CENTER;
+            lp.leftMargin = 0;
+            lp.topMargin = 0;
+            surfaceView.setLayoutParams(lp);
+
+            surfaceOffsetX = (parentW - surfaceW) / 2f;
+            surfaceOffsetY = (lp.bottomMargin > 0) ? 0f : ((parentH - surfaceH) / 2f);
+            surfaceScale = (float) surfaceW / baseWidth;
+            return;
+        } else if (RATIO_4_3.equals(ratioPref)) {
             targetRatio = 4f / 3f;
             baseWidth = 1440f;
         } else if (RATIO_14_9.equals(ratioPref)) {
