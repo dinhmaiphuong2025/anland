@@ -645,7 +645,6 @@ public class VirtualKeyboardView extends View {
             leftSource = rh ? LEFT_SYMBOLS_2_RH : LEFT_SYMBOLS_2_LH;
             rightSource = rh ? RIGHT_SYMBOLS_2_RH : RIGHT_SYMBOLS_2_LH;
         } else {
-            boolean rh = isRightHanded();
             leftSource = rh ? LEFT_LETTERS_RH : LEFT_LETTERS_LH;
             rightSource = rh ? RIGHT_LETTERS_RH : RIGHT_LETTERS_LH;
         }
@@ -1898,6 +1897,7 @@ public class VirtualKeyboardView extends View {
                             }
                         }
                     } else {
+                        int relCode = released.currentKeyCode;
                         if (isDirectionKey(relCode) || relCode == KeyEvent.KEYCODE_MOVE_HOME || relCode == KeyEvent.KEYCODE_MOVE_END) {
                             sendKey(relCode, false);
                         } else if (!isLeftModifier(released) && !"Caps".equals(released.internalLabel)) {
