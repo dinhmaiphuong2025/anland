@@ -682,6 +682,24 @@ public class SettingsActivity extends Activity {
         });
         heightCard.addView(heightSpinner);
         root.addView(heightCard);
+
+        // Enable Touch Scroll Pad
+        Switch scrollPadSwitch = new Switch(this);
+        M3.styleSwitch(scrollPadSwitch);
+        scrollPadSwitch.setText("Enable Touch Scroll Pad");
+        scrollPadSwitch.setPadding(0, dp(12), 0, 0);
+        scrollPadSwitch.setChecked(prefs.getBoolean("enable_touch_scroll_pad", false));
+        scrollPadSwitch.setOnCheckedChangeListener((v, checked) ->
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putBoolean("enable_touch_scroll_pad", checked).apply());
+        root.addView(scrollPadSwitch);
+
+        TextView scrollPadHint = new TextView(this);
+        scrollPadHint.setText("Adds a vertical touch drag strip in the cluster gap to scroll content with kinetic touch.");
+        scrollPadHint.setTextSize(12);
+        scrollPadHint.setTextColor(M3.COLOR_TEXT_MUTED);
+        scrollPadHint.setPadding(0, dp(4), 0, dp(8));
+        root.addView(scrollPadHint);
     }
 
     /**

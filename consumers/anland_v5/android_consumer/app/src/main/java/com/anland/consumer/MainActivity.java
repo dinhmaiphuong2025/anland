@@ -413,11 +413,22 @@ public class MainActivity extends Activity
         mNative.configure(sock, useRoot, helperPath, bridgePath);
         int orientation = getResources().getConfiguration().orientation;
         boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
-        boolean landscape169 = prefs.getBoolean(KEY_LANDSCAPE_16_9, false);
-        if (isLandscape && landscape169) {
-            customScreenWidth = 1920;
-            customScreenHeight = 1080;
-            mNative.setCustomResolution(1920, 1080);
+        String ratioPref = prefs.getString(KEY_LANDSCAPE_ASPECT_RATIO, null);
+        if (ratioPref == null) {
+            boolean legacy169 = prefs.getBoolean(KEY_LANDSCAPE_16_9, false);
+            ratioPref = legacy169 ? RATIO_16_9 : RATIO_AUTO;
+        }
+        if (isLandscape && RATIO_FIT_BETWEEN.equals(ratioPref)) {
+            if (customScreenWidth > 0 && customScreenHeight > 0) {
+                mNative.setCustomResolution(customScreenWidth, customScreenHeight);
+            }
+        } else if (isLandscape && (RATIO_16_9.equals(ratioPref) || RATIO_14_9.equals(ratioPref) || RATIO_4_3.equals(ratioPref))) {
+            int w = 1920, h = 1080;
+            if (RATIO_14_9.equals(ratioPref)) { w = 1680; h = 1080; }
+            else if (RATIO_4_3.equals(ratioPref)) { w = 1440; h = 1080; }
+            customScreenWidth = w;
+            customScreenHeight = h;
+            mNative.setCustomResolution(w, h);
         } else {
             int customW = prefs.getInt("custom_width", 0);
             int customH = prefs.getInt("custom_height", 0);
@@ -1857,9 +1868,21 @@ public class MainActivity extends Activity
 
         // Pick up a Keyboard-floating toggle made in Settings: update the bar's
         // backdrop and re-run the layout so the surface margin tracks the new mode.
+        int currentOrient = getResources().getConfiguration().orientation;
+        if (currentOrient == Configuration.ORIENTATION_PORTRAIT) {
+            if (virtualKeyboardView != null && virtualKeyboardView.getVisibility() == View.VISIBLE) {
+                virtualKeyboardView.setVisibility(View.GONE);
+            }
+        }
         if (mHudOverlay != null && !mHudOverlay.isEditMode()) {
-            boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
-            mHudOverlay.setVisibility(useHud ? View.VISIBLE : View.GONE);
+            boolean vkbOpen = (virtualKeyboardView != null && virtualKeyboardView.getVisibility() == View.VISIBLE);
+            if (vkbOpen || mImeBottom > 0) {
+                mHudAutoHidden = true;
+                mHudOverlay.setVisibility(View.GONE);
+            } else {
+                boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
+                mHudOverlay.setVisibility(useHud ? View.VISIBLE : View.GONE);
+            }
         }
         mKeyboardFloating = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getBoolean(KEY_KEYBOARD_FLOATING, false);
@@ -2159,6 +2182,12 @@ public class MainActivity extends Activity
     public void onConfigurationChanged(android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         dbg("configChanged orient=" + newConfig.orientation);
+        if (newConfig.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
+            if (virtualKeyboardView != null && virtualKeyboardView.getVisibility() == View.VISIBLE) {
+                virtualKeyboardView.setVisibility(View.GONE);
+                restoreHudAfterKeyboard();
+            }
+        }
         if (mRoot != null)
             mRoot.postDelayed(this::syncScreenSizeToSurface, 400);
     }
@@ -2391,17 +2420,10 @@ public class MainActivity extends Activity
         float baseWidth;
         if (RATIO_FIT_BETWEEN.equals(ratioPref)) {
             float clusterWidthPx = (8f + 5 * 38f + 4 * 5f + 16f) * mDensity;
-            int maxSafeW = Math.round(parentW - 2f * clusterWidthPx);
-            if (maxSafeW < 300) maxSafeW = parentW;
-            float desktopRatio = (customScreenWidth > 0 && customScreenHeight > 0)
-                    ? ((float) customScreenWidth / customScreenHeight) : (16f / 9f);
-            int surfaceW = maxSafeW;
-            int surfaceH = Math.round(surfaceW / desktopRatio);
-            if (surfaceH > availH) {
-                surfaceH = availH;
-                surfaceW = Math.round(availH * desktopRatio);
-            }
-            baseWidth = (customScreenWidth > 0) ? customScreenWidth : 1920f;
+            int surfaceW = Math.round(parentW - 2f * clusterWidthPx);
+            if (surfaceW < 300) surfaceW = parentW;
+            int surfaceH = availH;
+
             lp.width = surfaceW;
             lp.height = surfaceH;
             lp.gravity = (lp.bottomMargin > 0) ? (Gravity.TOP | Gravity.CENTER_HORIZONTAL) : Gravity.CENTER;
@@ -2411,7 +2433,12 @@ public class MainActivity extends Activity
 
             surfaceOffsetX = (parentW - surfaceW) / 2f;
             surfaceOffsetY = (lp.bottomMargin > 0) ? 0f : ((parentH - surfaceH) / 2f);
-            surfaceScale = (float) surfaceW / baseWidth;
+            customScreenWidth = surfaceW;
+            customScreenHeight = surfaceH;
+            if (mNative != null) {
+                mNative.setCustomResolution(surfaceW, surfaceH);
+            }
+            surfaceScale = 1.0f;
             return;
         } else if (RATIO_4_3.equals(ratioPref)) {
             targetRatio = 4f / 3f;

@@ -628,6 +628,11 @@ public class VirtualKeyboardView extends View {
                 .getString(KEY_KEYBOARD_HANDEDNESS, "left"));
     }
 
+    public boolean isTouchScrollEnabled() {
+        return getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getBoolean("enable_touch_scroll_pad", false);
+    }
+
     public int getKeyboardTheme() {
         return getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .getInt(KEY_KEYBOARD_THEME, THEME_FILLED);
@@ -1240,21 +1245,27 @@ public class VirtualKeyboardView extends View {
 
         // 3. Touch Scroll Pad in the cluster gap (width = 1u, height = 2 keys + gap)
         if (mTouchScrollPadKey != null) {
-            mTouchScrollPadKey.keyHeight = (2 * keyH) + gap;
-            mTouchScrollPadKey.keyWidth = u;
-            if (rh) {
-                // Gap on left cluster (to the right of F / C)
-                float fRight = margin + indent + 3 * (u + gap) + u;
-                float padLeft = fRight + gap;
-                mTouchScrollPadKey.rect.set(Math.round(padLeft), Math.round(row1Top), Math.round(padLeft + u), Math.round(row2Bottom));
+            if (isTouchScrollEnabled()) {
+                mTouchScrollPadKey.keyHeight = (2 * keyH) + gap;
+                mTouchScrollPadKey.keyWidth = u;
+                if (rh) {
+                    // Gap on left cluster (to the right of F / C)
+                    float fRight = margin + indent + 3 * (u + gap) + u;
+                    float padLeft = fRight + gap;
+                    mTouchScrollPadKey.rect.set(Math.round(padLeft), Math.round(row1Top), Math.round(padLeft + u), Math.round(row2Bottom));
+                } else {
+                    // Gap on right cluster (to the left of H / B)
+                    float hLeft = (rightMargin - indent) - 3 * (u + gap) - u;
+                    float padRight = hLeft - gap;
+                    mTouchScrollPadKey.rect.set(Math.round(padRight - u), Math.round(row1Top), Math.round(padRight), Math.round(row2Bottom));
+                }
+                mTouchScrollPadKey.currentCx = mTouchScrollPadKey.rect.centerX();
+                mTouchScrollPadKey.currentCy = mTouchScrollPadKey.rect.centerY();
             } else {
-                // Gap on right cluster (to the left of H / B)
-                float hLeft = (rightMargin - indent) - 3 * (u + gap) - u;
-                float padRight = hLeft - gap;
-                mTouchScrollPadKey.rect.set(Math.round(padRight - u), Math.round(row1Top), Math.round(padRight), Math.round(row2Bottom));
+                mTouchScrollPadKey.rect.set(0, 0, 0, 0);
+                mTouchScrollPadKey.currentCx = -1000f;
+                mTouchScrollPadKey.currentCy = -1000f;
             }
-            mTouchScrollPadKey.currentCx = mTouchScrollPadKey.rect.centerX();
-            mTouchScrollPadKey.currentCy = mTouchScrollPadKey.rect.centerY();
         }
 
         // 4. Wings (2 rows x 3 cols, enlarged: 44dp x 32dp each)
@@ -2083,7 +2094,7 @@ public class VirtualKeyboardView extends View {
         if (mIsSplitArcMode) {
             float density = getResources().getDisplayMetrics().density;
             // Check Touch Scroll Pad
-            if (mTouchScrollPadKey != null && mTouchScrollPadKey.rect.contains((int) x, (int) y)) {
+            if (isTouchScrollEnabled() && mTouchScrollPadKey != null && mTouchScrollPadKey.rect.contains((int) x, (int) y)) {
                 return mTouchScrollPadKey;
             }
             // Check bottom keys
@@ -2458,7 +2469,7 @@ public class VirtualKeyboardView extends View {
         }
 
         // Touch Scroll Pad in the cluster gap
-        if (mTouchScrollPadKey != null && mTouchScrollPadKey.rect.width() > 0) {
+        if (isTouchScrollEnabled() && mTouchScrollPadKey != null && mTouchScrollPadKey.rect.width() > 0) {
             drawSpecialButton(canvas, mTouchScrollPadKey, alpha, slideOffset, cr);
             float padCx = mTouchScrollPadKey.rect.centerX();
             float padCy = mTouchScrollPadKey.rect.centerY() + slideOffset;
