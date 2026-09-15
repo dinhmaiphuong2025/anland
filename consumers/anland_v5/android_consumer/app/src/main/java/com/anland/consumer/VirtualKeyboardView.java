@@ -71,38 +71,38 @@ public class VirtualKeyboardView extends View {
             {"Ctrl", "Alt", "Space", "Alt", "Home", "LT", "DN", "RT", "End", "Ctrl"}
     };
 
-    // ---------- Landscape Split Arc Gboard QWERTY Layout (3 Rings) ----------
-    // Left Arc:
-    // Ring 0 (inner): Z, X, C, V, B
-    // Ring 1 (middle): A, S, D, F, G
-    // Ring 2 (outer): Q, W, E, R, T
+    // ---------- Landscape Split Gboard QWERTY Layout (3 Rows) ----------
+    // Left:
+    // Row 2 (bottom): Z, X, C, V (Caps 1.5u is on the far left)
+    // Row 1 (middle): A, S, D, F, G (indented by 0.5u from the left)
+    // Row 0 (top): Q, W, E, R, T
     private static final String[][] LEFT_ARC_LETTERS = {
-            {"Z", "X", "C", "V", "B"},
+            {"Z", "X", "C", "V"},
             {"A", "S", "D", "F", "G"},
             {"Q", "W", "E", "R", "T"}
     };
 
-    // Right Arc:
-    // Ring 0 (inner): N, M (, . da doi xuong dai day 2 ben space)
-    // Ring 1 (middle): H, J, K, L, Enter
-    // Ring 2 (outer): Y, U, I, O, P, BKSP
+    // Right:
+    // Row 2 (bottom): B, N, M (Backspace 1.5u is on the far right)
+    // Row 1 (middle): H, J, K, L (indented by 0.5u from the right)
+    // Row 0 (top): Y, U, I, O, P
     private static final String[][] RIGHT_ARC_LETTERS = {
-            {"N", "M"},
-            {"H", "J", "K", "L", "Enter"},
-            {"Y", "U", "I", "O", "P", "BKSP"}
+            {"B", "N", "M"},
+            {"H", "J", "K", "L"},
+            {"Y", "U", "I", "O", "P"}
     };
 
     // Symbols Layer (?123)
     private static final String[][] LEFT_ARC_SYMBOLS = {
-            {"%", "&", "*", "-", "+"},
+            {"%", "&", "*", "-"},
             {"@", "#", "$", "_", "/"},
             {"1", "2", "3", "4", "5"}
     };
 
     private static final String[][] RIGHT_ARC_SYMBOLS = {
-            {"!", "?", ":", ";"},
-            {"(", ")", "\"", "'", "Enter"},
-            {"6", "7", "8", "9", "0", "BKSP"}
+            {"+", ":", ";"},
+            {"(", ")", "\"", "'"},
+            {"6", "7", "8", "9", "0"}
     };
 
     // Map QWERTY top row to long-press numbers like Gboard
@@ -532,8 +532,8 @@ public class VirtualKeyboardView extends View {
                 k.ringIndex = r;
                 k.colIndex = c;
                 k.ringTotalKeys = row.length;
-                if (!mIsArcSymbolLayer && NUMBER_SUBSCRIPTS.containsKey(display)) {
-                    k.longPressNumber = NUMBER_SUBSCRIPTS.get(display);
+                if (!mIsArcSymbolLayer && NUMBER_SUBSCRIPTS.containsKey(display.toUpperCase())) {
+                    k.longPressNumber = NUMBER_SUBSCRIPTS.get(display.toUpperCase());
                 }
                 mArcKeys.add(k);
             }
@@ -556,8 +556,8 @@ public class VirtualKeyboardView extends View {
                 k.ringIndex = r;
                 k.colIndex = c;
                 k.ringTotalKeys = row.length;
-                if (!mIsArcSymbolLayer && NUMBER_SUBSCRIPTS.containsKey(display)) {
-                    k.longPressNumber = NUMBER_SUBSCRIPTS.get(display);
+                if (!mIsArcSymbolLayer && NUMBER_SUBSCRIPTS.containsKey(display.toUpperCase())) {
+                    k.longPressNumber = NUMBER_SUBSCRIPTS.get(display.toUpperCase());
                 }
                 mArcKeys.add(k);
             }
@@ -922,167 +922,197 @@ public class VirtualKeyboardView extends View {
         if (viewW <= 0 || viewH <= 0) return;
         float density = getResources().getDisplayMetrics().density;
 
-        // 4. Layout Bottom Rows first so we know exactly where the restricted bottom zone is:
-        float btnH = 34f * density;
-        float btnBottom = viewH - 10f * density;
-        float btnTop = btnBottom - btnH;
-        float gap = 6f * density;
+        float u = 38f * density;
+        float keyH = 42f * density;
+        float gap = 5f * density;
+        float indent = 0.5f * u;
+        float capsW = 1.5f * u;
+        float margin = 8f * density;
+        float rightMargin = viewW - margin;
 
-        // Left cluster bottom: ?123, comma, spaceL (Caps positioned right above ?123)
-        float curX = 10f * density;
-        float symW = 44f * density;
+        // Vertical positions of the 4 rows (bottom-up):
+        float row3Bottom = viewH - 8f * density;
+        float row3Top = row3Bottom - keyH;
+
+        float row2Bottom = row3Top - gap;
+        float row2Top = row2Bottom - keyH;
+
+        float row1Bottom = row2Top - gap;
+        float row1Top = row1Bottom - keyH;
+
+        float row0Bottom = row1Top - gap;
+        float row0Top = row0Bottom - keyH;
+
+        // 1. Left Cluster Letters
+        // Row 0 (Q, W, E, R, T): colIndex 0..4, starts at margin
+        // Row 1 (A, S, D, F, G): colIndex 0..4, indented 0.5u -> W center is halfway between A & S!
+        // Row 2 (Z, X, C, V): colIndex 0..3, starts after Caps (1.5u + gap) -> Z is directly under S!
+        for (KeyData k : mArcKeys) {
+            if (k.isRight) continue;
+            k.keyHeight = keyH;
+            k.keyWidth = u;
+            k.currentRotation = 0f;
+
+            float kLeft, kTop;
+            if (k.ringIndex == 2) {
+                // Row 0: Q, W, E, R, T
+                kLeft = margin + k.colIndex * (u + gap);
+                kTop = row0Top;
+            } else if (k.ringIndex == 1) {
+                // Row 1: A, S, D, F, G (indented 0.5u)
+                kLeft = margin + indent + k.colIndex * (u + gap);
+                kTop = row1Top;
+            } else {
+                // Row 2: Z, X, C, V (after Caps 1.5u)
+                kLeft = margin + capsW + gap + k.colIndex * (u + gap);
+                kTop = row2Top;
+            }
+            k.rect.set(Math.round(kLeft), Math.round(kTop), Math.round(kLeft + u), Math.round(kTop + keyH));
+            k.currentCx = k.rect.centerX();
+            k.currentCy = k.rect.centerY();
+        }
+
+        // Left Caps key (Row 2, far left, width = 1.5u)
+        if (mCapsKey != null) {
+            mCapsKey.keyHeight = keyH;
+            mCapsKey.keyWidth = capsW;
+            mCapsKey.rect.set(Math.round(margin), Math.round(row2Top), Math.round(margin + capsW), Math.round(row2Bottom));
+            mCapsKey.currentCx = mCapsKey.rect.centerX();
+            mCapsKey.currentCy = mCapsKey.rect.centerY();
+        }
+
+        // Left Row 3 keys:
+        // ?123 directly below Caps (width = 1.5u)
         if (mSymbolToggleKey != null) {
-            mSymbolToggleKey.rect.set(Math.round(curX), Math.round(btnTop),
-                    Math.round(curX + symW), Math.round(btnBottom));
+            mSymbolToggleKey.keyHeight = keyH;
+            mSymbolToggleKey.keyWidth = capsW;
+            mSymbolToggleKey.rect.set(Math.round(margin), Math.round(row3Top), Math.round(margin + capsW), Math.round(row3Bottom));
             mSymbolToggleKey.currentLabel = mIsArcSymbolLayer ? "ABC" : "?123";
         }
-        // Caps ngay tren dau ?123
-        if (mCapsKey != null) {
-            float capsBottom = btnTop - gap;
-            float capsTop = capsBottom - btnH;
-            mCapsKey.rect.set(Math.round(curX), Math.round(capsTop),
-                    Math.round(curX + symW), Math.round(capsBottom));
-        }
-        curX += symW + gap;
-
-        float commaW = 38f * density;
+        // Comma directly below Z
+        float commaLeft = margin + capsW + gap;
         if (mCommaKey != null) {
-            mCommaKey.rect.set(Math.round(curX), Math.round(btnTop),
-                    Math.round(curX + commaW), Math.round(btnBottom));
+            mCommaKey.keyHeight = keyH;
+            mCommaKey.keyWidth = u;
+            mCommaKey.rect.set(Math.round(commaLeft), Math.round(row3Top), Math.round(commaLeft + u), Math.round(row3Bottom));
             mCommaKey.currentLabel = ",";
         }
-        curX += commaW + gap;
-
-        float spaceW = 86f * density;
+        // SpaceL to the right of comma
+        float spaceLeft = commaLeft + u + gap;
+        float spaceW = Math.max(95f * density, 2.5f * u);
         if (mLeftSpaceKey != null) {
-            mLeftSpaceKey.rect.set(Math.round(curX), Math.round(btnTop),
-                    Math.round(curX + spaceW), Math.round(btnBottom));
+            mLeftSpaceKey.keyHeight = keyH;
+            mLeftSpaceKey.keyWidth = spaceW;
+            mLeftSpaceKey.rect.set(Math.round(spaceLeft), Math.round(row3Top), Math.round(spaceLeft + spaceW), Math.round(row3Bottom));
             mLeftSpaceKey.currentLabel = "";
         }
 
-        // Right cluster bottom: spaceR, dot, enter, dismiss (BKSP right above enter)
-        float curRight = viewW - 10f * density;
-        float disW = 38f * density;
-        if (mCornerDismissKey != null) {
-            mCornerDismissKey.rect.set(Math.round(curRight - disW), Math.round(btnTop),
-                    Math.round(curRight), Math.round(btnBottom));
-        }
-        curRight -= (disW + gap);
+        // 2. Right Cluster Letters
+        float bkspW = 1.5f * u;
+        float enterW = 1.5f * u;
 
-        float enterW = 44f * density;
-        if (mEnterKey != null) {
-            mEnterKey.rect.set(Math.round(curRight - enterW), Math.round(btnTop),
-                    Math.round(curRight), Math.round(btnBottom));
-        }
-        // BKSP ngay tren dau Enter
-        if (mBkspKey != null) {
-            float bkspBottom = btnTop - gap;
-            float bkspTop = bkspBottom - btnH;
-            mBkspKey.rect.set(Math.round(curRight - enterW), Math.round(bkspTop),
-                    Math.round(curRight), Math.round(bkspBottom));
-        }
-        curRight -= (enterW + gap);
-
-        float periodW = 38f * density;
-        if (mPeriodKey != null) {
-            mPeriodKey.rect.set(Math.round(curRight - periodW), Math.round(btnTop),
-                    Math.round(curRight), Math.round(btnBottom));
-            mPeriodKey.currentLabel = ".";
-        }
-        curRight -= (periodW + gap);
-
-        if (mRightSpaceKey != null) {
-            mRightSpaceKey.rect.set(Math.round(curRight - spaceW), Math.round(btnTop),
-                    Math.round(curRight), Math.round(btnBottom));
-            mRightSpaceKey.currentLabel = "";
-        }
-
-        // Straight ergonomic grid for both clusters (zero overlapping keys by construction):
-        // 3 rows: row 0 (top: ringIndex 2), row 1 (mid: ringIndex 1), row 2 (bottom: ringIndex 0)
-        float keySize = 34f * density;
-        float keyGap = 6f * density;
-        float step = keySize + keyGap;
-        float keyRadius = keySize * 0.5f;
-
-        // Bottom row of letter keys sits cleanly above the bottom pills with >= 10dp clearance:
-        float letterRow2Y = btnTop - keyRadius - 10f * density;
-        float letterRow1Y = letterRow2Y - step;
-        float letterRow0Y = letterRow1Y - step;
-
-        // 1. Layout Left Cluster (Straight Grid: 5 columns x 3 rows)
-        // Col 0 aligns with ?123 / Caps column:
-        float leftCol0X = 10f * density + (symW * 0.5f);
-        for (KeyData k : mArcKeys) {
-            if (k.isRight) continue;
-            k.keyHeight = keySize;
-            k.keyWidth = keySize;
-
-            int row = 2 - k.ringIndex; // ring 2 -> row 0 (top), ring 1 -> row 1, ring 0 -> row 2 (bottom)
-            float cy = (row == 0) ? letterRow0Y : ((row == 1) ? letterRow1Y : letterRow2Y);
-            float cx = leftCol0X + k.colIndex * step;
-
-            k.currentCx = cx;
-            k.currentCy = cy;
-            k.currentRotation = 0f;
-        }
-
-        // 2. Layout Right Cluster (Straight Grid: 6 columns x 3 rows)
-        // Aligns to the right screen edge with safe margin:
-        float rightCol5X = curRight - (enterW * 0.5f); // rightmost col align above Enter
-        float rightCol0X = rightCol5X - 5 * step;
+        // Row 0 (Y, U, I, O, P): colIndex 0..4, P is at rightMargin
+        // Row 1 (H, J, K, L): colIndex 0..3, L is indented 0.5u from rightMargin -> O center is halfway between K & L!
+        // Row 2 (B, N, M): colIndex 0..2, M is directly under K, left of Backspace 1.5u!
         for (KeyData k : mArcKeys) {
             if (!k.isRight) continue;
-            k.keyHeight = keySize;
-            k.keyWidth = keySize;
-
-            int row = 2 - k.ringIndex; // ring 2 -> row 0 (top), ring 1 -> row 1, ring 0 -> row 2 (bottom)
-            float cy = (row == 0) ? letterRow0Y : ((row == 1) ? letterRow1Y : letterRow2Y);
-            float cx = rightCol0X + k.colIndex * step;
-
-            k.currentCx = cx;
-            k.currentCy = cy;
+            k.keyHeight = keyH;
+            k.keyWidth = u;
             k.currentRotation = 0f;
+
+            float kRight, kTop;
+            if (k.ringIndex == 2) {
+                // Row 0: Y, U, I, O, P
+                kRight = rightMargin - (4 - k.colIndex) * (u + gap);
+                kTop = row0Top;
+            } else if (k.ringIndex == 1) {
+                // Row 1: H, J, K, L (indented 0.5u from right)
+                kRight = (rightMargin - indent) - (3 - k.colIndex) * (u + gap);
+                kTop = row1Top;
+            } else {
+                // Row 2: B, N, M (left of Backspace 1.5u)
+                kRight = (rightMargin - bkspW - gap) - (2 - k.colIndex) * (u + gap);
+                kTop = row2Top;
+            }
+            float kLeft = kRight - u;
+            k.rect.set(Math.round(kLeft), Math.round(kTop), Math.round(kRight), Math.round(kTop + keyH));
+            k.currentCx = k.rect.centerX();
+            k.currentCy = k.rect.centerY();
         }
 
-        // 3. Layout Slim Flat Top Wings above the letter grid with >= 10dp clearance:
-        float wingW = 102f * density;
-        float spacing = 4f * density;
-        float wingBtnH = 26f * density;
-        float wingBottom = letterRow0Y - keyRadius - 10f * density;
-        float wingTop = wingBottom - (2 * wingBtnH + spacing);
-        if (wingTop < 8f * density) {
-            wingTop = 8f * density;
+        // Right Backspace key (Row 2, far right, width = 1.5u)
+        if (mBkspKey != null) {
+            mBkspKey.keyHeight = keyH;
+            mBkspKey.keyWidth = bkspW;
+            mBkspKey.rect.set(Math.round(rightMargin - bkspW), Math.round(row2Top), Math.round(rightMargin), Math.round(row2Bottom));
+            mBkspKey.currentCx = mBkspKey.rect.centerX();
+            mBkspKey.currentCy = mBkspKey.rect.centerY();
         }
+
+        // Right Row 3 keys:
+        // Enter directly below Backspace (width = 1.5u)
+        if (mEnterKey != null) {
+            mEnterKey.keyHeight = keyH;
+            mEnterKey.keyWidth = enterW;
+            mEnterKey.rect.set(Math.round(rightMargin - enterW), Math.round(row3Top), Math.round(rightMargin), Math.round(row3Bottom));
+            mEnterKey.currentCx = mEnterKey.rect.centerX();
+            mEnterKey.currentCy = mEnterKey.rect.centerY();
+        }
+        // Period directly below M
+        float periodRight = rightMargin - enterW - gap;
+        if (mPeriodKey != null) {
+            mPeriodKey.keyHeight = keyH;
+            mPeriodKey.keyWidth = u;
+            mPeriodKey.rect.set(Math.round(periodRight - u), Math.round(row3Top), Math.round(periodRight), Math.round(row3Bottom));
+            mPeriodKey.currentLabel = ".";
+        }
+        // SpaceR to the left of period
+        float spaceRRight = periodRight - u - gap;
+        if (mRightSpaceKey != null) {
+            mRightSpaceKey.keyHeight = keyH;
+            mRightSpaceKey.keyWidth = spaceW;
+            mRightSpaceKey.rect.set(Math.round(spaceRRight - spaceW), Math.round(row3Top), Math.round(spaceRRight), Math.round(row3Bottom));
+            mRightSpaceKey.currentLabel = "";
+        }
+        // Dismiss to the left of SpaceR
+        float disW = 38f * density;
+        float disRight = spaceRRight - spaceW - gap;
+        if (mCornerDismissKey != null) {
+            mCornerDismissKey.keyHeight = keyH;
+            mCornerDismissKey.keyWidth = disW;
+            mCornerDismissKey.rect.set(Math.round(disRight - disW), Math.round(row3Top), Math.round(disRight), Math.round(row3Bottom));
+        }
+
+        // 3. Wings (2 rows x 3 cols, enlarged: 44dp x 32dp each)
+        float wingColW = 44f * density;
+        float wingBtnH = 32f * density;
+        float wingSpacing = 4f * density;
+        float wingBottom = row0Top - 10f * density;
+        float wingRow1Top = wingBottom - wingBtnH;
+        float wingRow0Top = wingRow1Top - wingSpacing - wingBtnH;
+        float wingTop = Math.max(8f * density, wingRow0Top);
 
         // Left Wing
-        float lwLeft = 8f * density;
-        float lwColW = (wingW - spacing * 2f) / 3f;
-
         for (KeyData k : mWingKeys) {
             if (k.isRight) continue;
             int col = k.wingIndex % 3;
             int row = k.wingIndex / 3;
-            float kLeft = lwLeft + col * (lwColW + spacing);
-            float kRight = kLeft + lwColW;
-            float kTop = wingTop + row * (wingBtnH + spacing);
+            float kLeft = margin + col * (wingColW + wingSpacing);
+            float kTop = wingTop + row * (wingBtnH + wingSpacing);
             float kBottom = kTop + wingBtnH;
             k.beveledPath = null;
-            k.wingBounds.set(kLeft, kTop, kRight, kBottom);
+            k.wingBounds.set(kLeft, kTop, kLeft + wingColW, kBottom);
         }
 
         // Right Wing
-        float rwRight = viewW - 8f * density;
-        float rwLeft = rwRight - wingW;
-        float rwColW = (wingW - spacing * 2f) / 3f;
-
         for (KeyData k : mWingKeys) {
             if (!k.isRight) continue;
             int idx = k.wingIndex - 6;
             int col = idx % 3;
             int row = idx / 3;
-            float kLeft = rwLeft + col * (rwColW + spacing);
-            float kRight = kLeft + rwColW;
-            float kTop = wingTop + row * (wingBtnH + spacing);
+            float kRight = rightMargin - (2 - col) * (wingColW + wingSpacing);
+            float kLeft = kRight - wingColW;
+            float kTop = wingTop + row * (wingBtnH + wingSpacing);
             float kBottom = kTop + wingBtnH;
             k.beveledPath = null;
             k.wingBounds.set(kLeft, kTop, kRight, kBottom);
@@ -1240,11 +1270,13 @@ public class VirtualKeyboardView extends View {
         leftShiftOn = false;
         leftCtrlOn = false;
         leftAltOn = false;
+        leftMetaOn = false;
         for (KeyData k : all) {
             if (isLeftModifier(k)) {
                 k.modActive = false;
             }
         }
+        consumeCapsOnce(normalKeyCode);
         updateSymbolLayer();
         invalidate();
     }
@@ -1252,15 +1284,17 @@ public class VirtualKeyboardView extends View {
     private boolean isLeftModifier(KeyData k) {
         if (k == null) return false;
         String in = k.internalLabel;
-        return "ShiftL".equals(in) || "CtrlL".equals(in) || "AltL".equals(in);
+        return "ShiftL".equals(in) || "CtrlL".equals(in) || "AltL".equals(in) || "MetaL".equals(in)
+                || "ShiftR".equals(in) || "CtrlR".equals(in) || "AltR".equals(in);
     }
 
     private boolean getLeftModifierState(KeyData k) {
         if (k == null) return false;
         String in = k.internalLabel;
-        if ("ShiftL".equals(in)) return leftShiftOn;
-        if ("CtrlL".equals(in)) return leftCtrlOn;
-        if ("AltL".equals(in)) return leftAltOn;
+        if ("ShiftL".equals(in) || "ShiftR".equals(in)) return leftShiftOn;
+        if ("CtrlL".equals(in) || "CtrlR".equals(in)) return leftCtrlOn;
+        if ("AltL".equals(in) || "AltR".equals(in)) return leftAltOn;
+        if ("MetaL".equals(in)) return leftMetaOn;
         return false;
     }
 
@@ -1307,21 +1341,32 @@ public class VirtualKeyboardView extends View {
         if (k == null) return;
         String in = k.internalLabel;
         boolean newState;
-        if ("ShiftL".equals(in)) {
+        if ("ShiftL".equals(in) || "ShiftR".equals(in)) {
             newState = !leftShiftOn;
             leftShiftOn = newState;
-        } else if ("CtrlL".equals(in)) {
+        } else if ("CtrlL".equals(in) || "CtrlR".equals(in)) {
             newState = !leftCtrlOn;
             leftCtrlOn = newState;
-        } else if ("AltL".equals(in)) {
+        } else if ("AltL".equals(in) || "AltR".equals(in)) {
             newState = !leftAltOn;
             leftAltOn = newState;
+        } else if ("MetaL".equals(in)) {
+            newState = !leftMetaOn;
+            leftMetaOn = newState;
         } else {
             return;
         }
         k.modActive = newState;
         updateSymbolLayer();
         invalidate();
+    }
+
+    private boolean hasAnyActiveModifier() {
+        if (leftShiftOn || leftCtrlOn || leftAltOn || leftMetaOn || rightShiftPressed) return true;
+        for (KeyData w : mWingKeys) {
+            if (w.modActive && isLeftModifier(w)) return true;
+        }
+        return false;
     }
 
     private void pressRightModifier(KeyData k) {
@@ -1405,8 +1450,11 @@ public class VirtualKeyboardView extends View {
             switch (action) {
                 case MotionEvent.ACTION_DOWN:
                 case MotionEvent.ACTION_POINTER_DOWN:
+                    if (action == MotionEvent.ACTION_POINTER_DOWN || activePointers.size() > 0) {
+                        mPendingLongPressKey = null;
+                        mLongPressHandler.removeCallbacksAndMessages(null);
+                    }
                     if (hitKey == null) {
-                        // In Split Arc mode: touches outside keys fall through to desktop!
                         if (mIsSplitArcMode && action == MotionEvent.ACTION_DOWN) {
                             return false;
                         }
@@ -1418,13 +1466,13 @@ public class VirtualKeyboardView extends View {
                     }
 
                     // 1. Check Corner Dismiss Key
-                    if (hitKey.isCornerDismiss) {
+                    if (hitKey == mCornerDismissKey || hitKey.isCornerDismiss) {
                         hideWithAnimation(null);
                         return true;
                     }
 
                     // 2. Check Symbol Layer Toggle (?123 / ABC)
-                    if (hitKey.isSymbolToggle) {
+                    if (hitKey == mSymbolToggleKey || hitKey.isSymbolToggle) {
                         mIsArcSymbolLayer = !mIsArcSymbolLayer;
                         initArcKeys();
                         layoutSplitArc(getWidth(), getHeight());
@@ -1435,7 +1483,19 @@ public class VirtualKeyboardView extends View {
                         return true;
                     }
 
-                    // 3. Top Wing key long-press check for rebind
+                    // 3. Caps key tap (toggles 3-state Gboard Caps)
+                    if (hitKey == mCapsKey || "Caps".equals(hitKey.internalLabel)) {
+                        tapCapsKey(hitKey);
+                        return true;
+                    }
+
+                    // 4. Modifier Wing key tap (latch modifier like ExtraKeysBar)
+                    if (isLeftModifier(hitKey)) {
+                        toggleLeftModifier(hitKey);
+                        return true;
+                    }
+
+                    // 5. Top Wing non-modifier key long-press check for rebind (700ms)
                     if (hitKey.isWing) {
                         mPendingLongPressKey = hitKey;
                         final KeyData wingToRebind = hitKey;
@@ -1452,10 +1512,14 @@ public class VirtualKeyboardView extends View {
                                     invalidate();
                                 });
                             }
-                        }, 450);
+                        }, 700);
+                        activePointers.put(pointerId, hitKey);
+                        hitKey.pressed = true;
+                        invalidate();
+                        return true;
                     }
 
-                    // 4. Letter key with long-press number (Q->1, W->2 ... P->0)
+                    // 6. Letter key with long-press number (Q->1, W->2 ... P->0)
                     if (hitKey.isArc && hitKey.longPressNumber != null) {
                         mPendingLongPressKey = hitKey;
                         final KeyData numKey = hitKey;
@@ -1475,46 +1539,19 @@ public class VirtualKeyboardView extends View {
                         }, 350); // Snappy 350ms long-press
                     }
 
-                    if (isLeftModifier(hitKey)) {
-                        toggleLeftModifier(hitKey);
-                        return true;
-                    }
-
-                    if ("Caps".equals(hitKey.internalLabel)) {
-                        tapCapsKey(hitKey);
-                        return true;
-                    }
-
-                    if (isRightModifier(hitKey)) {
-                        activePointers.put(pointerId, hitKey);
-                        pressRightModifier(hitKey);
-                        return true;
-                    }
-
                     activePointers.put(pointerId, hitKey);
                     hitKey.pressed = true;
 
-                    // Nut phu la modifier (CTRL/ALT/SHIFT): tap = latch de combo 1 ngon,
-                    // giu da cham + cham phim chu = combo nho evdev down san.
-                    if (hitKey.isWing && isLeftModifier(hitKey)
-                            && (hitKey.customAction == null
-                                || HudAction.TYPE_MODIFIER.equals(hitKey.customAction.type))) {
-                        toggleLeftModifier(hitKey);
-                        return true;
-                    }
-
-                    if (hitKey.isWing && hitKey.customAction != null) {
-                        dispatchWingAction(hitKey.customAction, true);
-                    } else if (hitKey.longPressNumber == null) {
+                    if (hitKey.longPressNumber == null) {
                         int code = hitKey.currentKeyCode;
                         if (isDirectionKey(code) || code == KeyEvent.KEYCODE_MOVE_HOME || code == KeyEvent.KEYCODE_MOVE_END) {
                             sendKey(code, true);
-                        } else if (leftShiftOn || leftCtrlOn || leftAltOn) {
+                        } else if (hasAnyActiveModifier()) {
+                            hitKey.comboFired = true;
                             executeCombination(code);
-                            consumeCapsOnce(code);
                         } else {
+                            hitKey.comboFired = false;
                             sendKeyWithCaps(code, true);
-                            consumeCapsOnce(code);
                         }
                     }
                     invalidate();
@@ -1531,25 +1568,32 @@ public class VirtualKeyboardView extends View {
                     if (released.isArc && released.longPressNumber != null) {
                         if (!released.longPressFired) {
                             int code = released.currentKeyCode;
-                            sendKeyWithCaps(code, true);
-                            sendKeyWithCaps(code, false);
+                            if (hasAnyActiveModifier()) {
+                                executeCombination(code);
+                            } else {
+                                sendKeyWithCaps(code, true);
+                                sendKeyWithCaps(code, false);
+                                consumeCapsOnce(code);
+                            }
                         }
                         released.longPressFired = false;
-                    } else if (released.isWing && released.customAction != null) {
-                        // Wing latch modifier: DOWN chi toggle latch, khong gui down
-                        // nen UP khong gui up keo lech trang thai evdev.
-                        if (!(isLeftModifier(released)
-                                && HudAction.TYPE_MODIFIER.equals(released.customAction.type))) {
-                            dispatchWingAction(released.customAction, false);
+                    } else if (released.isWing && !isLeftModifier(released)) {
+                        if (released.customAction != null) {
+                            dispatchWingAction(released.customAction, true);
+                            postDelayed(() -> dispatchWingAction(released.customAction, false), 30);
+                        } else {
+                            sendKey(released.currentKeyCode, true);
+                            postDelayed(() -> sendKey(released.currentKeyCode, false), 30);
                         }
                     } else {
                         int relCode = released.currentKeyCode;
-                        if (isRightModifier(released)) {
-                            releaseRightModifier(released);
-                        } else if (isDirectionKey(relCode) || relCode == KeyEvent.KEYCODE_MOVE_HOME || relCode == KeyEvent.KEYCODE_MOVE_END) {
+                        if (isDirectionKey(relCode) || relCode == KeyEvent.KEYCODE_MOVE_HOME || relCode == KeyEvent.KEYCODE_MOVE_END) {
                             sendKey(relCode, false);
+                        } else if (released.comboFired) {
+                            released.comboFired = false;
                         } else if (!isLeftModifier(released) && !"Caps".equals(released.internalLabel)) {
                             sendKeyWithCaps(relCode, false);
+                            consumeCapsOnce(relCode);
                         }
                     }
                     released.pressed = false;
@@ -1568,12 +1612,7 @@ public class VirtualKeyboardView extends View {
                         float py = event.getY(idx);
 
                         boolean stillHit = false;
-                        if (mIsSplitArcMode && key.isArc) {
-                            float dx = px - key.currentCx;
-                            float dy = py - key.currentCy;
-                            float hitRadius = (key.keyWidth * 0.5f) + 6f * getResources().getDisplayMetrics().density;
-                            stillHit = (dx * dx + dy * dy <= hitRadius * hitRadius);
-                        } else if (key.isWing) {
+                        if (key.isWing) {
                             stillHit = key.wingBounds.contains(px, py);
                         } else {
                             stillHit = key.rect.contains((int) px, (int) py);
@@ -1716,12 +1755,11 @@ public class VirtualKeyboardView extends View {
                     return k;
                 }
             }
-            // Check radial arc keys (circles, hitRadius generous for effortless typing)
+            // Check cluster letter keys (direct rectangle hit)
+            int ix = (int) x;
+            int iy = (int) y;
             for (KeyData k : mArcKeys) {
-                float dx = x - k.currentCx;
-                float dy = y - k.currentCy;
-                float hitRadius = (k.keyWidth * 0.5f) + 4f * density;
-                if (dx * dx + dy * dy <= hitRadius * hitRadius) {
+                if (k.rect.contains(ix, iy)) {
                     return k;
                 }
             }
@@ -1789,26 +1827,52 @@ public class VirtualKeyboardView extends View {
         return keyColor;
     }
 
-    // Nut day: 2 nua space hoac phim , . (bo tron + text).
-    private void drawBottomPill(Canvas canvas, KeyData k, String glyph,
-                                boolean roundLeft, boolean roundRight,
-                                int alpha, float density) {
+    private void drawSpecialButton(Canvas canvas, KeyData k, int alpha, float slideOffset, float cr) {
         if (k == null) return;
         Rect r = k.rect;
         int bg = resolveKeyBg(k);
         keyBgPaint.setColor(bg);
         keyBgPaint.setAlpha(alpha);
-        float cr = 8f * density;
-        canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyBgPaint);
-        keyStrokePaint.setAlpha(Math.round(0x33 * (alpha / 255f)));
-        canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyStrokePaint);
-        if (glyph != null) {
-            textPaint.setColor(M3.COLOR_TEXT_MUTED);
-            textPaint.setAlpha(alpha);
-            textPaint.setTextSize(13f * density);
-            float cy = r.centerY() - ((textPaint.descent() + textPaint.ascent()) / 2f);
-            canvas.drawText(glyph, r.centerX(), cy, textPaint);
+        float top = r.top + slideOffset;
+        float bottom = r.bottom + slideOffset;
+        canvas.drawRoundRect(r.left, top, r.right, bottom, cr, cr, keyBgPaint);
+        keyStrokePaint.setAlpha(Math.round(0x28 * (alpha / 255f)));
+        canvas.drawRoundRect(r.left, top, r.right, bottom, cr, cr, keyStrokePaint);
+    }
+
+    private void drawDismissIcon(Canvas canvas, float cx, float cy, int alpha, float density) {
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setColor(M3.COLOR_PRIMARY);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(1.6f * density);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        p.setStrokeJoin(Paint.Join.ROUND);
+        p.setAlpha(alpha);
+
+        float w = 6f * density;
+        float h = 4f * density;
+
+        canvas.drawRoundRect(cx - w, cy - h - 1.5f * density, cx + w, cy + 1.5f * density, 1.5f * density, 1.5f * density, p);
+        canvas.drawLine(cx - 3.5f * density, cy + 3.5f * density, cx, cy + 5.5f * density, p);
+        canvas.drawLine(cx, cy + 5.5f * density, cx + 3.5f * density, cy + 3.5f * density, p);
+    }
+
+    private boolean isCapsOrShiftActive() {
+        return mCapsState != CAPS_OFF || leftShiftOn || rightShiftPressed;
+    }
+
+    private String getLetterDisplay(KeyData k) {
+        if (k == null) return "";
+        String label = k.currentLabel != null ? k.currentLabel : k.defaultLabel;
+        if (mIsArcSymbolLayer) return label;
+        if (isSingleLetter(label)) {
+            return isCapsOrShiftActive() ? label.toUpperCase() : label.toLowerCase();
         }
+        return label;
+    }
+
+    private boolean isSingleLetter(String s) {
+        return s != null && s.length() == 1 && Character.isLetter(s.charAt(0));
     }
 
     // Icon vector thay text cho Caps / BKSP / Enter. Tra ve true neu da ve.
@@ -1900,50 +1964,113 @@ public class VirtualKeyboardView extends View {
     }
 
     private void drawSplitArcLayout(Canvas canvas) {
-        int animType = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getInt(KEY_SPLIT_ARC_ANIM, ANIM_FAN);
         int alpha = Math.max(0, Math.min(255, Math.round(255 * mAnimProgress)));
 
         float density = getResources().getDisplayMetrics().density;
-        float viewW = getWidth();
-        float viewH = getHeight();
-
-        // 1. Draw Radial Arc Keys as Circles with upright text
-        // Clean slide-up animation from bottom:
         float slideOffset = (1f - mAnimProgress) * 24f * density;
-        for (KeyData k : mArcKeys) {
-            float cx = k.currentCx;
-            float cy = k.currentCy + slideOffset;
-            float keyRadius = k.keyWidth * 0.5f;
+        float cr = 8f * density;
 
+        // 1. Draw Left & Right Cluster Letters (Rounded rectangles matching Gboard)
+        for (KeyData k : mArcKeys) {
+            Rect r = k.rect;
             int bg = resolveKeyBg(k);
             keyBgPaint.setColor(bg);
             keyBgPaint.setAlpha(alpha);
 
-            canvas.drawCircle(cx, cy, keyRadius, keyBgPaint);
-            keyStrokePaint.setAlpha(Math.round(0x33 * (alpha / 255f)));
-            canvas.drawCircle(cx, cy, keyRadius, keyStrokePaint);
+            float top = r.top + slideOffset;
+            float bottom = r.bottom + slideOffset;
+            canvas.drawRoundRect(r.left, top, r.right, bottom, cr, cr, keyBgPaint);
+            keyStrokePaint.setAlpha(Math.round(0x28 * (alpha / 255f)));
+            canvas.drawRoundRect(r.left, top, r.right, bottom, cr, cr, keyStrokePaint);
 
-            // Icon thay text cho BKSP / Enter hoac chu thuong (thang dung, khong nghieng)
-            if (!drawKeyIcon(canvas, k, cx, cy, keyRadius * 0.72f, alpha, density)) {
-                textPaint.setColor(textColor);
-                textPaint.setAlpha(alpha);
-                textPaint.setTextSize(13.5f * density);
-                float textY = cy - ((textPaint.descent() + textPaint.ascent()) / 2f);
-                String display = k.currentLabel != null ? k.currentLabel : k.defaultLabel;
-                canvas.drawText(display, cx, textY, textPaint);
-            }
+            // Text (displays lowercase when caps is OFF, uppercase when caps is active)
+            textPaint.setColor(textColor);
+            textPaint.setAlpha(alpha);
+            textPaint.setTextSize(14f * density);
+            float cx = r.centerX();
+            float cy = ((top + bottom) / 2f) - ((textPaint.descent() + textPaint.ascent()) / 2f);
+            String display = getLetterDisplay(k);
+            canvas.drawText(display, cx, cy, textPaint);
 
-            // Subscript Number in top-right corner of circle
+            // Subscript Number in top-right corner
             if (k.longPressNumber != null) {
                 subTextPaint.setAlpha(Math.round(0xCC * (alpha / 255f)));
-                subTextPaint.setTextSize(8.5f * density);
-                canvas.drawText(k.longPressNumber, cx + keyRadius * 0.45f, cy - keyRadius * 0.35f, subTextPaint);
+                subTextPaint.setTextSize(9f * density);
+                canvas.drawText(k.longPressNumber, r.right - 6f * density, top + 11f * density, subTextPaint);
             }
         }
 
-        // 2. Draw Slim Flat Top Wings (clean rounded rects, lowered close to letter keys)
+        // 2. Special Keys
+        // Caps (Row 2, Left, 1.5u)
+        if (mCapsKey != null) {
+            drawSpecialButton(canvas, mCapsKey, alpha, slideOffset, cr);
+            drawShiftIcon(canvas, mCapsKey.rect.centerX(), mCapsKey.rect.centerY() + slideOffset,
+                    mCapsKey.rect.height() * 0.42f, alpha, density, mCapsState);
+        }
+
+        // Backspace (Row 2, Right, 1.5u)
+        if (mBkspKey != null) {
+            drawSpecialButton(canvas, mBkspKey, alpha, slideOffset, cr);
+            drawBackspaceIcon(canvas, mBkspKey.rect.centerX(), mBkspKey.rect.centerY() + slideOffset,
+                    mBkspKey.rect.height() * 0.40f, alpha, density);
+        }
+
+        // Enter (Row 3, Right, 1.5u)
+        if (mEnterKey != null) {
+            drawSpecialButton(canvas, mEnterKey, alpha, slideOffset, cr);
+            drawEnterIcon(canvas, mEnterKey.rect.centerX(), mEnterKey.rect.centerY() + slideOffset,
+                    mEnterKey.rect.height() * 0.40f, alpha, density);
+        }
+
+        // ?123 (Row 3, Left, 1.5u)
+        if (mSymbolToggleKey != null) {
+            drawSpecialButton(canvas, mSymbolToggleKey, alpha, slideOffset, cr);
+            textPaint.setColor(M3.COLOR_SECONDARY);
+            textPaint.setAlpha(alpha);
+            textPaint.setTextSize(12.5f * density);
+            float cy = (mSymbolToggleKey.rect.centerY() + slideOffset) - ((textPaint.descent() + textPaint.ascent()) / 2f);
+            canvas.drawText(mSymbolToggleKey.currentLabel, mSymbolToggleKey.rect.centerX(), cy, textPaint);
+        }
+
+        // Comma (Row 3, Left)
+        if (mCommaKey != null) {
+            drawSpecialButton(canvas, mCommaKey, alpha, slideOffset, cr);
+            textPaint.setColor(M3.COLOR_TEXT_MUTED);
+            textPaint.setAlpha(alpha);
+            textPaint.setTextSize(14f * density);
+            float cy = (mCommaKey.rect.centerY() + slideOffset) - ((textPaint.descent() + textPaint.ascent()) / 2f);
+            canvas.drawText(",", mCommaKey.rect.centerX(), cy, textPaint);
+        }
+
+        // Period (Row 3, Right)
+        if (mPeriodKey != null) {
+            drawSpecialButton(canvas, mPeriodKey, alpha, slideOffset, cr);
+            textPaint.setColor(M3.COLOR_TEXT_MUTED);
+            textPaint.setAlpha(alpha);
+            textPaint.setTextSize(14f * density);
+            float cy = (mPeriodKey.rect.centerY() + slideOffset) - ((textPaint.descent() + textPaint.ascent()) / 2f);
+            canvas.drawText(".", mPeriodKey.rect.centerX(), cy, textPaint);
+        }
+
+        // SpaceL (Row 3, Left)
+        if (mLeftSpaceKey != null) {
+            drawSpecialButton(canvas, mLeftSpaceKey, alpha, slideOffset, cr);
+        }
+
+        // SpaceR (Row 3, Right)
+        if (mRightSpaceKey != null) {
+            drawSpecialButton(canvas, mRightSpaceKey, alpha, slideOffset, cr);
+        }
+
+        // Dismiss (Row 3, Right)
+        if (mCornerDismissKey != null) {
+            drawSpecialButton(canvas, mCornerDismissKey, alpha, slideOffset, cr);
+            drawDismissIcon(canvas, mCornerDismissKey.rect.centerX(), mCornerDismissKey.rect.centerY() + slideOffset, alpha, density);
+        }
+
+        // 3. Wings (2 rows x 3 cols, enlarged: 44dp x 32dp each)
         float wingSlideY = (1f - mAnimProgress) * -16f * density;
+        float wingCr = 8f * density;
         for (KeyData k : mWingKeys) {
             canvas.save();
             canvas.translate(0, wingSlideY);
@@ -1953,110 +2080,20 @@ public class VirtualKeyboardView extends View {
             keyBgPaint.setAlpha(alpha);
 
             RectF r = k.wingBounds;
-            float cr = 6f * density;
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyBgPaint);
-            keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyStrokePaint);
+            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, wingCr, wingCr, keyBgPaint);
+            keyStrokePaint.setAlpha(Math.round(0x28 * (alpha / 255f)));
+            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, wingCr, wingCr, keyStrokePaint);
 
-            textPaint.setColor(M3.COLOR_PRIMARY);
+            textPaint.setColor(k.modActive ? Color.WHITE : M3.COLOR_PRIMARY);
             textPaint.setAlpha(alpha);
-            textPaint.setTextSize(10.5f * density);
+            textPaint.setTextSize(12f * density);
+            textPaint.setFakeBoldText(true);
             float cx = k.wingBounds.centerX();
             float cy = k.wingBounds.centerY() - ((textPaint.descent() + textPaint.ascent()) / 2f);
             String display = k.currentLabel != null ? k.currentLabel : k.defaultLabel;
             canvas.drawText(display, cx, cy, textPaint);
 
             canvas.restore();
-        }
-
-        // 3. Draw Split Space halves + , . beside them
-        if (mLeftSpaceKey != null) drawBottomPill(canvas, mLeftSpaceKey, null, true, true, alpha, density);
-        if (mRightSpaceKey != null) drawBottomPill(canvas, mRightSpaceKey, null, true, true, alpha, density);
-        if (mCommaKey != null) drawBottomPill(canvas, mCommaKey, ",", false, false, alpha, density);
-        if (mPeriodKey != null) drawBottomPill(canvas, mPeriodKey, ".", false, false, alpha, density);
-
-        // 4. Draw Caps Key above ?123
-        if (mCapsKey != null) {
-            Rect r = mCapsKey.rect;
-            int bg = resolveKeyBg(mCapsKey);
-            keyBgPaint.setColor(bg);
-            keyBgPaint.setAlpha(alpha);
-            float cr = 8f * density;
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyBgPaint);
-            keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyStrokePaint);
-            drawShiftIcon(canvas, r.centerX(), r.centerY(), r.height() * 0.42f, alpha, density, mCapsState);
-        }
-
-        // 5. Draw Enter Key and BKSP Key above Enter
-        if (mEnterKey != null) {
-            Rect r = mEnterKey.rect;
-            int bg = resolveKeyBg(mEnterKey);
-            keyBgPaint.setColor(bg);
-            keyBgPaint.setAlpha(alpha);
-            float cr = 8f * density;
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyBgPaint);
-            keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyStrokePaint);
-            drawEnterIcon(canvas, r.centerX(), r.centerY(), r.height() * 0.38f, alpha, density);
-        }
-        if (mBkspKey != null) {
-            Rect r = mBkspKey.rect;
-            int bg = resolveKeyBg(mBkspKey);
-            keyBgPaint.setColor(bg);
-            keyBgPaint.setAlpha(alpha);
-            float cr = 8f * density;
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyBgPaint);
-            keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyStrokePaint);
-            drawBackspaceIcon(canvas, r.centerX(), r.centerY(), r.height() * 0.38f, alpha, density);
-        }
-
-        // 6. Draw Symbol Toggle Key (?123 / ABC)
-        if (mSymbolToggleKey != null) {
-            Rect r = mSymbolToggleKey.rect;
-            int bg = resolveKeyBg(mSymbolToggleKey);
-            keyBgPaint.setColor(bg);
-            keyBgPaint.setAlpha(alpha);
-            float cr = 8f * density;
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyBgPaint);
-            keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyStrokePaint);
-
-            textPaint.setColor(M3.COLOR_SECONDARY);
-            textPaint.setAlpha(alpha);
-            textPaint.setTextSize(11.5f * density);
-            float cy = r.centerY() - ((textPaint.descent() + textPaint.ascent()) / 2f);
-            canvas.drawText(mSymbolToggleKey.currentLabel, r.centerX(), cy, textPaint);
-        }
-
-        // 7. Draw Corner Fan-shaped Dismiss Key
-        if (mCornerDismissKey != null) {
-            Rect r = mCornerDismissKey.rect;
-            int bg = resolveKeyBg(mCornerDismissKey);
-            keyBgPaint.setColor(bg);
-            keyBgPaint.setAlpha(alpha);
-            float cr = 8f * density;
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyBgPaint);
-            keyStrokePaint.setAlpha(Math.round(0x22 * (alpha / 255f)));
-            canvas.drawRoundRect(r.left, r.top, r.right, r.bottom, cr, cr, keyStrokePaint);
-
-            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-            p.setColor(M3.COLOR_PRIMARY);
-            p.setStyle(Paint.Style.STROKE);
-            p.setStrokeWidth(1.6f * density);
-            p.setStrokeCap(Paint.Cap.ROUND);
-            p.setStrokeJoin(Paint.Join.ROUND);
-            p.setAlpha(alpha);
-
-            float cx = r.centerX();
-            float cy = r.centerY();
-            float w = 6f * density;
-            float h = 4f * density;
-
-            canvas.drawRoundRect(cx - w, cy - h - 1.5f * density, cx + w, cy + 1.5f * density, 1.5f * density, 1.5f * density, p);
-            canvas.drawLine(cx - 3.5f * density, cy + 3.5f * density, cx, cy + 5.5f * density, p);
-            canvas.drawLine(cx, cy + 5.5f * density, cx + 3.5f * density, cy + 3.5f * density, p);
         }
     }
 
@@ -2081,6 +2118,7 @@ public class VirtualKeyboardView extends View {
         float weight;
         boolean pressed = false;
         boolean modActive = false;
+        boolean comboFired = false;
 
         // Gboard Long-press numbers
         String longPressNumber = null;
