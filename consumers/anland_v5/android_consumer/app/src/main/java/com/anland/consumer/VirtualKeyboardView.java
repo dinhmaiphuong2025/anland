@@ -2474,6 +2474,7 @@ public class VirtualKeyboardView extends View {
         boolean isSpace = false;
         boolean isSymbolToggle = false;
         boolean isCornerDismiss = false;
+        boolean isTouchScrollPad = false;
 
         KeyData(String label, int keyCode, float weight, boolean hasSymbol) {
             this.defaultLabel = label;
