@@ -274,6 +274,7 @@ public class VirtualKeyboardView extends View {
     private KeyData mTouchScrollPadKey;
 
     private boolean mIsTouchScrolling = false;
+    private int mTouchScrollPointerId = -1;
     private float mTouchScrollLastY = 0f;
 
     private boolean mSpaceSwipeActive = false;
@@ -331,7 +332,7 @@ public class VirtualKeyboardView extends View {
         void onKeyDown(int scanCode);
         void onKeyUp(int scanCode);
         void onTextInput(String text);
-        void onTouchScroll(int action, float dy);
+        void onScroll(float dy);
     }
 
     public VirtualKeyboardView(Context context) {
@@ -630,7 +631,7 @@ public class VirtualKeyboardView extends View {
 
     public boolean isTouchScrollEnabled() {
         return getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .getBoolean("enable_touch_scroll_pad", false);
+                .getBoolean("enable_touch_scroll_pad", true);
     }
 
     public int getKeyboardTheme() {
@@ -1716,12 +1717,10 @@ public class VirtualKeyboardView extends View {
                     // 1. Touch Scroll Pad Key
                     if (hitKey == mTouchScrollPadKey) {
                         mIsTouchScrolling = true;
+                        mTouchScrollPointerId = pointerId;
                         mTouchScrollLastY = touchY;
                         activePointers.put(pointerId, hitKey);
                         hitKey.pressed = true;
-                        if (listener != null) {
-                            listener.onTouchScroll(MotionEvent.ACTION_DOWN, 0f);
-                        }
                         invalidate();
                         return true;
                     }
@@ -1859,15 +1858,13 @@ public class VirtualKeyboardView extends View {
                     KeyData released = activePointers.get(pointerId);
                     if (released == null) break;
 
-                    if (released == mTouchScrollPadKey) {
+                    if (released == mTouchScrollPadKey || pointerId == mTouchScrollPointerId) {
                         mIsTouchScrolling = false;
-                        if (listener != null) {
-                            listener.onTouchScroll(MotionEvent.ACTION_UP, 0f);
-                        }
-                        released.pressed = false;
+                        mTouchScrollPointerId = -1;
+                        if (mTouchScrollPadKey != null) mTouchScrollPadKey.pressed = false;
                         activePointers.remove(pointerId);
                         invalidate();
-                        break;
+                        if (released == mTouchScrollPadKey) break;
                     }
 
                     if (released.comboFired) {
@@ -1922,14 +1919,14 @@ public class VirtualKeyboardView extends View {
                 }
 
                 case MotionEvent.ACTION_MOVE: {
-                    if (mIsTouchScrolling) {
-                        int idx = event.findPointerIndex(pointerId);
+                    if (mIsTouchScrolling && mTouchScrollPointerId >= 0) {
+                        int idx = event.findPointerIndex(mTouchScrollPointerId);
                         if (idx >= 0) {
                             float py = event.getY(idx);
                             float dy = py - mTouchScrollLastY;
                             mTouchScrollLastY = py;
-                            if (listener != null) {
-                                listener.onTouchScroll(MotionEvent.ACTION_MOVE, dy);
+                            if (Math.abs(dy) > 0.5f && listener != null) {
+                                listener.onScroll(dy);
                             }
                         }
                     }
@@ -2010,12 +2007,9 @@ public class VirtualKeyboardView extends View {
                 case MotionEvent.ACTION_CANCEL: {
                     mPendingLongPressKey = null;
                     mLongPressHandler.removeCallbacksAndMessages(null);
-                    if (mIsTouchScrolling) {
-                        mIsTouchScrolling = false;
-                        if (listener != null) {
-                            listener.onTouchScroll(MotionEvent.ACTION_CANCEL, 0f);
-                        }
-                    }
+                    mIsTouchScrolling = false;
+                    mTouchScrollPointerId = -1;
+                    if (mTouchScrollPadKey != null) mTouchScrollPadKey.pressed = false;
                     for (int i = 0; i < activePointers.size(); i++) {
                         KeyData key = activePointers.valueAt(i);
                         key.pressed = false;

@@ -688,7 +688,7 @@ public class SettingsActivity extends Activity {
         M3.styleSwitch(scrollPadSwitch);
         scrollPadSwitch.setText("Enable Touch Scroll Pad");
         scrollPadSwitch.setPadding(0, dp(12), 0, 0);
-        scrollPadSwitch.setChecked(prefs.getBoolean("enable_touch_scroll_pad", false));
+        scrollPadSwitch.setChecked(prefs.getBoolean("enable_touch_scroll_pad", true));
         scrollPadSwitch.setOnCheckedChangeListener((v, checked) ->
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean("enable_touch_scroll_pad", checked).apply());

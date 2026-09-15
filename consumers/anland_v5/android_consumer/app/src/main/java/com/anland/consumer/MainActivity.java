@@ -165,7 +165,6 @@ public class MainActivity extends Activity
     public static final String RATIO_14_9 = "14_9";
     public static final String RATIO_4_3 = "4_3";
     public static final String RATIO_FIT_BETWEEN = "fit_between";
-    private float mScrollVirtualY = 0f;
     public static final String KEY_LANDSCAPE_SPLIT_ARC = "landscape_split_arc";
     private boolean mUserDismissedImeInForeground = false;
 
@@ -811,23 +810,12 @@ public class MainActivity extends Activity
                 }
             }
             @Override
-            public void onTouchScroll(int action, float dy) {
-                if (mNative == null || surfaceView == null) return;
-                int pw = surfaceView.getWidth();
-                int ph = surfaceView.getHeight();
-                if (pw <= 0 || ph <= 0) return;
-                float cx = surfaceOffsetX + (pw * 0.5f);
-                if (action == MotionEvent.ACTION_DOWN) {
-                    mScrollVirtualY = surfaceOffsetY + (ph * 0.5f);
-                    mNative.sendTouch(0, cx, mScrollVirtualY, 99);
-                    mNative.sendTouchFrame();
-                } else if (action == MotionEvent.ACTION_MOVE) {
-                    mScrollVirtualY += dy * 1.5f;
-                    mNative.sendTouch(2, cx, mScrollVirtualY, 99);
-                    mNative.sendTouchFrame();
-                } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
-                    mNative.sendTouch(1, cx, mScrollVirtualY, 99);
-                    mNative.sendTouchFrame();
+            public void onScroll(float dy) {
+                if (mNative != null) {
+                    // Send smooth mouse wheel scroll to Wayland compositor (wl_pointer.axis)
+                    // In Wayland: positive = scroll down, negative = scroll up
+                    // When dragging up (dy < 0): scroll down (+), so -dy * factor
+                    mNative.sendMouseScroll(0, -dy * 0.5f);
                 }
             }
         });
