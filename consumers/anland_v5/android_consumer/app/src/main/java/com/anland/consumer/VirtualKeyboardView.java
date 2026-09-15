@@ -1087,7 +1087,7 @@ public class VirtualKeyboardView extends View {
             mCapsKey.currentCx = mCapsKey.rect.centerX();
             mCapsKey.currentCy = mCapsKey.rect.centerY();
             if (mSymbolLayer == 1) {
-                mCapsKey.currentLabel = "=\<";
+                mCapsKey.currentLabel = "=\\<";
             } else if (mSymbolLayer == 2) {
                 mCapsKey.currentLabel = "?123";
             } else {
