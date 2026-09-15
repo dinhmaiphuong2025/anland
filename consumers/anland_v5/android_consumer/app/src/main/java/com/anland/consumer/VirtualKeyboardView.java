@@ -1088,7 +1088,6 @@ public class VirtualKeyboardView extends View {
             k.wingBounds.set(kLeft, kTop, kRight, kBottom);
         }
     }
-    }
 
     public void setInitialPosition() {
         if (mIsSplitArcMode) {
