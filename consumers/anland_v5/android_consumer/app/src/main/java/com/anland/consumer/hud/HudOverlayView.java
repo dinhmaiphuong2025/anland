@@ -526,6 +526,16 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         btnSelect.posYPercent = 0.38f;
                         dst.floatingButtons.add(btnSelect);
 
+                        HudButton btnVk = new HudButton();
+                        btnVk.label = "KB";
+                        btnVk.action = HudAction.system("toggle_vk");
+                        btnVk.widthDp = 44;
+                        btnVk.heightDp = 34;
+                        btnVk.cornerRadiusDp = 8;
+                        btnVk.posXPercent = isLandscape ? 0.05f : 0.20f;
+                        btnVk.posYPercent = 0.52f;
+                        dst.floatingButtons.add(btnVk);
+
                         HudButton btnHome = new HudButton();
                         btnHome.label = "HOME";
                         btnHome.action = HudAction.modifier(125); // SUPER

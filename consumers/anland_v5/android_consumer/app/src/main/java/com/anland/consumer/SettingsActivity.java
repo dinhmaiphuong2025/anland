@@ -531,6 +531,73 @@ public class SettingsActivity extends Activity {
         });
         animCard.addView(animSpinner);
         root.addView(animCard);
+
+        // Keyboard Handedness Layout
+        TextView handLabel = new TextView(this);
+        handLabel.setText("Keyboard Handedness Layout");
+        handLabel.setTextSize(14);
+        handLabel.setTextColor(Color.WHITE);
+        handLabel.setPadding(0, dp(12), 0, dp(4));
+        root.addView(handLabel);
+
+        LinearLayout handCard = new LinearLayout(this);
+        handCard.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable hBg = new android.graphics.drawable.GradientDrawable();
+        hBg.setCornerRadius(dp(8));
+        hBg.setColor(0xFF181825);
+        hBg.setStroke(dp(1), 0x22FFFFFF);
+        handCard.setBackground(hBg);
+        handCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+
+        Spinner handSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
+        String[] handOptions = {"Left-Handed (G & V on left - Default)", "Right-Handed (G & V on right)"};
+        setupDarkSpinner(handSpinner, handOptions);
+        String currentHand = prefs.getString("keyboard_handedness", "left");
+        handSpinner.setSelection("right".equals(currentHand) ? 1 : 0);
+        handSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putString("keyboard_handedness", pos == 1 ? "right" : "left").apply();
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        handCard.addView(handSpinner);
+        root.addView(handCard);
+
+        // Keyboard Theme
+        TextView themeLabel = new TextView(this);
+        themeLabel.setText("Keyboard Theme (Keys only, excluding Wings)");
+        themeLabel.setTextSize(14);
+        themeLabel.setTextColor(Color.WHITE);
+        themeLabel.setPadding(0, dp(12), 0, dp(4));
+        root.addView(themeLabel);
+
+        LinearLayout themeCard = new LinearLayout(this);
+        themeCard.setOrientation(LinearLayout.VERTICAL);
+        android.graphics.drawable.GradientDrawable tBg = new android.graphics.drawable.GradientDrawable();
+        tBg.setCornerRadius(dp(8));
+        tBg.setColor(0xFF181825);
+        tBg.setStroke(dp(1), 0x22FFFFFF);
+        themeCard.setBackground(tBg);
+        themeCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+
+        Spinner themeSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
+        String[] themeOptions = {"Filled (Default M3 Surface)", "Border Only (Transparent with border)", "Transparent Full (Text only without borders)"};
+        setupDarkSpinner(themeSpinner, themeOptions);
+        themeSpinner.setSelection(prefs.getInt("keyboard_theme", 0));
+        themeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putInt("keyboard_theme", pos).apply();
+            }
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
+        });
+        themeCard.addView(themeSpinner);
+        root.addView(themeCard);
     }
 
     /**
@@ -1487,21 +1554,62 @@ public class SettingsActivity extends Activity {
     autoStretchHint.setPadding(0, dp(4), 0, 0);
     root.addView(autoStretchHint);
 
-    Switch letterbox169Switch = new Switch(this);
-    M3.styleSwitch(letterbox169Switch);
-    letterbox169Switch.setText("Landscape 14:9 Letterbox (1680x1080)");
-    letterbox169Switch.setPadding(0, dp(16), 0, 0);
-    letterbox169Switch.setChecked(prefs.getBoolean("landscape_16_9_letterbox", false));
-    letterbox169Switch.setOnCheckedChangeListener((v, checked) ->
-        prefs.edit().putBoolean("landscape_16_9_letterbox", checked).apply());
-    root.addView(letterbox169Switch);
+    TextView ratioLabel = new TextView(this);
+    ratioLabel.setText("Landscape Display Aspect Ratio");
+    ratioLabel.setTextSize(14);
+    ratioLabel.setTextColor(Color.WHITE);
+    ratioLabel.setPadding(0, dp(16), 0, dp(4));
+    root.addView(ratioLabel);
 
-    TextView letterbox169Hint = new TextView(this);
-    letterbox169Hint.setText("Locks desktop to 14:9 center stage on wide screens (1080x2400+), reserving side margins for Switch controller HUD buttons and Split Arc keyboard.");
-    letterbox169Hint.setTextSize(12);
-    letterbox169Hint.setTextColor(M3.COLOR_TEXT_MUTED);
-    letterbox169Hint.setPadding(0, dp(4), 0, 0);
-    root.addView(letterbox169Hint);
+    LinearLayout ratioCard = new LinearLayout(this);
+    ratioCard.setOrientation(LinearLayout.VERTICAL);
+    android.graphics.drawable.GradientDrawable rBg = new android.graphics.drawable.GradientDrawable();
+    rBg.setCornerRadius(dp(8));
+    rBg.setColor(0xFF181825);
+    rBg.setStroke(dp(1), 0x22FFFFFF);
+    ratioCard.setBackground(rBg);
+    ratioCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+
+    Spinner ratioSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
+    String[] ratioOptions = {
+            "Auto Stretch (Fullscreen)",
+            "16:9 Letterbox (1920x1080)",
+            "14:9 Letterbox (1680x1080)",
+            "4:3 Letterbox (1440x1080)"
+    };
+    setupDarkSpinner(ratioSpinner, ratioOptions);
+    String currentRatio = prefs.getString("landscape_aspect_ratio", null);
+    int sel = 0;
+    if ("16_9".equals(currentRatio)) sel = 1;
+    else if ("14_9".equals(currentRatio)) sel = 2;
+    else if ("4_3".equals(currentRatio)) sel = 3;
+    else if (prefs.getBoolean("landscape_16_9_letterbox", false)) sel = 1;
+
+    ratioSpinner.setSelection(sel);
+    ratioSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        @Override
+        public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+            String val = "auto";
+            if (pos == 1) val = "16_9";
+            else if (pos == 2) val = "14_9";
+            else if (pos == 3) val = "4_3";
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                    .putString("landscape_aspect_ratio", val)
+                    .putBoolean("landscape_16_9_letterbox", pos != 0)
+                    .apply();
+        }
+        @Override
+        public void onNothingSelected(AdapterView<?> parent) {}
+    });
+    ratioCard.addView(ratioSpinner);
+    root.addView(ratioCard);
+
+    TextView ratioHint = new TextView(this);
+    ratioHint.setText("Locks desktop center stage with side margins (gutters) for Switch controller HUD buttons and Split keyboard.");
+    ratioHint.setTextSize(12);
+    ratioHint.setTextColor(M3.COLOR_TEXT_MUTED);
+    ratioHint.setPadding(0, dp(4), 0, 0);
+    root.addView(ratioHint);
     }
 
     // Maps a res_preset_labels index to {width, height}, or null for the index-0

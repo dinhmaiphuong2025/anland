@@ -159,6 +159,12 @@ public class MainActivity extends Activity
 
     public static final String KEY_PORTRAIT_IME_LOCK = "portrait_ime_lock";
     public static final String KEY_LANDSCAPE_16_9 = "landscape_16_9_letterbox";
+    public static final String KEY_LANDSCAPE_ASPECT_RATIO = "landscape_aspect_ratio";
+    public static final String RATIO_AUTO = "auto";
+    public static final String RATIO_16_9 = "16_9";
+    public static final String RATIO_14_9 = "14_9";
+    public static final String RATIO_4_3 = "4_3";
+    private float mScrollVirtualY = 0f;
     public static final String KEY_LANDSCAPE_SPLIT_ARC = "landscape_split_arc";
     private boolean mUserDismissedImeInForeground = false;
 
@@ -785,6 +791,32 @@ public class MainActivity extends Activity
             @Override
             public void onKeyUp(int scanCode) {
                 if (mNative != null) mNative.sendKey(1, scanCode);
+            }
+            @Override
+            public void onTextInput(String text) {
+                if (mNative != null && text != null && !text.isEmpty()) {
+                    mNative.sendTextInput(text.getBytes(StandardCharsets.UTF_8));
+                }
+            }
+            @Override
+            public void onTouchScroll(int action, float dy) {
+                if (mNative == null || surfaceView == null) return;
+                int pw = surfaceView.getWidth();
+                int ph = surfaceView.getHeight();
+                if (pw <= 0 || ph <= 0) return;
+                float cx = surfaceOffsetX + (pw * 0.5f);
+                if (action == MotionEvent.ACTION_DOWN) {
+                    mScrollVirtualY = surfaceOffsetY + (ph * 0.5f);
+                    mNative.sendTouch(0, cx, mScrollVirtualY, 99);
+                    mNative.sendTouchFrame();
+                } else if (action == MotionEvent.ACTION_MOVE) {
+                    mScrollVirtualY += dy * 1.5f;
+                    mNative.sendTouch(2, cx, mScrollVirtualY, 99);
+                    mNative.sendTouchFrame();
+                } else if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    mNative.sendTouch(1, cx, mScrollVirtualY, 99);
+                    mNative.sendTouchFrame();
+                }
             }
         });
         virtualKeyboardView.setOnDismissListener(this::restoreHudAfterKeyboard);
@@ -2271,14 +2303,18 @@ public class MainActivity extends Activity
             (FrameLayout.LayoutParams) surfaceView.getLayoutParams();
 
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        boolean landscape169 = prefs.getBoolean(KEY_LANDSCAPE_16_9, false);
+        String ratioPref = prefs.getString(KEY_LANDSCAPE_ASPECT_RATIO, null);
+        if (ratioPref == null) {
+            boolean legacy169 = prefs.getBoolean(KEY_LANDSCAPE_16_9, false);
+            ratioPref = legacy169 ? RATIO_16_9 : RATIO_AUTO;
+        }
         int orientation = getResources().getConfiguration().orientation;
         boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
 
-        if (isLandscape && landscape169) {
+        if (isLandscape && !RATIO_AUTO.equals(ratioPref)) {
             lp.bottomMargin = target;
-            adjustSurfaceViewLayout16_9(lp);
-        } else if (autoStretch) {
+            adjustSurfaceViewLayoutRatio(lp, ratioPref);
+        } else if (autoStretch || RATIO_AUTO.equals(ratioPref)) {
             lp.width = FrameLayout.LayoutParams.MATCH_PARENT;
             lp.height = FrameLayout.LayoutParams.MATCH_PARENT;
             lp.gravity = Gravity.NO_GRAVITY;
@@ -2343,14 +2379,26 @@ public class MainActivity extends Activity
         surfaceScale = (float) surfaceW / customScreenWidth;
     }
 
-    private void adjustSurfaceViewLayout16_9(FrameLayout.LayoutParams lp) {
+    private void adjustSurfaceViewLayoutRatio(FrameLayout.LayoutParams lp, String ratioPref) {
         if (mRoot == null) return;
         int parentW = mRoot.getWidth();
         int parentH = mRoot.getHeight();
         if (parentW <= 0 || parentH <= 0) return;
 
         int availH = Math.max(100, parentH - lp.bottomMargin);
-        float targetRatio = 14f / 9f;
+        float targetRatio;
+        float baseWidth;
+        if (RATIO_4_3.equals(ratioPref)) {
+            targetRatio = 4f / 3f;
+            baseWidth = 1440f;
+        } else if (RATIO_14_9.equals(ratioPref)) {
+            targetRatio = 14f / 9f;
+            baseWidth = 1680f;
+        } else {
+            targetRatio = 16f / 9f;
+            baseWidth = 1920f;
+        }
+
         int surfaceW = Math.round(availH * targetRatio);
         int surfaceH = availH;
         if (surfaceW > parentW) {
@@ -2367,7 +2415,7 @@ public class MainActivity extends Activity
 
         surfaceOffsetX = (parentW - surfaceW) / 2f;
         surfaceOffsetY = (lp.bottomMargin > 0) ? 0f : ((parentH - surfaceH) / 2f);
-        surfaceScale = (float) surfaceW / 1680f;
+        surfaceScale = (float) surfaceW / baseWidth;
     }
 
     // Show/hide the extra-keys bar and re-apply the layout so the display area
