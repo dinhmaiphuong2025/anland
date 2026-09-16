@@ -272,7 +272,7 @@ int trigger_refresh(display_ctx *ctx)
      * buffer never fills; a momentary miss self-heals via the consumer's 5s
      * poll->fallback rather than freezing the compositor. data_fd's reverse direction
      * is intentionally left unused (reserved for future extension). */
-    char b = 0;
+    char b = 1;
     struct iovec iov = { .iov_base = &b, .iov_len = 1 };
     union {
         char buf[CMSG_SPACE(sizeof(int))];
@@ -296,6 +296,26 @@ int trigger_refresh(display_ctx *ctx)
         close(ctx->pending_render_fence);
         ctx->pending_render_fence = -1;
     }
+    return 0;
+}
+
+int trigger_refresh_nodamage(display_ctx *ctx)
+{
+    if (ctx->fallback)
+        return 0;
+
+    if (ctx->pending_render_fence >= 0) {
+        close(ctx->pending_render_fence);
+        ctx->pending_render_fence = -1;
+    }
+
+    char b = 2; // 2 = NODAMAGE
+    struct iovec iov = { .iov_base = &b, .iov_len = 1 };
+    struct msghdr msg = {
+        .msg_iov = &iov,
+        .msg_iovlen = 1,
+    };
+    sendmsg(ctx->fence_fd, &msg, MSG_NOSIGNAL | MSG_DONTWAIT);
     return 0;
 }
 

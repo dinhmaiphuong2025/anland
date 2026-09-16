@@ -38,6 +38,11 @@ void set_render_fence(display_ctx *ctx, int fence_fd);
  * the render fence, if any) on the dedicated fence channel. No-op in fallback. */
 int  trigger_refresh(display_ctx *ctx);
 
+/* Signal the consumer that the current frame had no damage (screen static).
+ * Sends a NoDamage code on the fence channel so the consumer immediately cancels
+ * the buffer without polling or waiting. */
+int  trigger_refresh_nodamage(display_ctx *ctx);
+
 /* Pull one pending input event. Returns 1 if an event was written, 0 if none was
  * available, -1 on consumer loss. No-op (returns 0) in fallback. */
 int  poll_input_event(display_ctx *ctx, struct InputEvent *event, int timeout_ms);

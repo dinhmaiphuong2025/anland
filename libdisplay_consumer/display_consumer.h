@@ -12,6 +12,7 @@ int  set_screen_info(display_ctx *ctx, uint32_t width, uint32_t height, uint32_t
 int  push_dmabufs(display_ctx *ctx, const int *fds, const struct buf_info *infos, int count);
 int  select_dmabuf(display_ctx *ctx, int idx);
 int  refresh_done(display_ctx *ctx);
+int  refresh_done_status(display_ctx *ctx, int *out_fence);
 int  push_input_event(display_ctx *ctx, const struct InputEvent *event);
 int  push_input_event_with_length(display_ctx *ctx, const struct InputEvent *event, void* payload, size_t size);
 int  set_fallback_callback(display_ctx *ctx, void (*on_fallback)(void *), void *userdata);

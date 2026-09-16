@@ -460,13 +460,17 @@ invalid:
 
 /* Wait for the producer to finish the frame, then return its render-done fence so
  * the caller can hand it to ANativeWindow_queueBuffer (SurfaceFlinger waits on it
- * GPU-side before scanout). The producer sends exactly one message per frame on the
- * dedicated fence channel; the message itself is the "frame rendered" signal (no
- * separate eventfd, no cross-channel ordering) and the optional fence rides as
- * SCM_RIGHTS ancillary data. Returns the fence fd (caller owns it), or -1 if none /
- * on error. */
-int refresh_done(display_ctx *ctx)
+ * GPU-side before scanout).
+ * Returns:
+ *   1  = Frame rendered successfully. *out_fence contains render fence fd (or -1 if none).
+ *   0  = NoDamage: producer skipped rendering this frame. Caller should cancelBuffer().
+ *  <0  = Error or fallback. Caller should cancelBuffer().
+ */
+int refresh_done_status(display_ctx *ctx, int *out_fence)
 {
+    if (out_fence)
+        *out_fence = -1;
+
     pthread_mutex_lock(&ctx->frame_lock);
     pthread_mutex_lock(&ctx->state_lock);
     if (ctx->fallback || !ctx->buffer_pending || ctx->fence_fd < 0) {
@@ -489,7 +493,7 @@ int refresh_done(display_ctx *ctx)
     }
 
     int rfence = -1;
-    char b;
+    char b = 0;
     struct iovec iov = { .iov_base = &b, .iov_len = 1 };
     union {
         char buf[CMSG_SPACE(sizeof(int))];
@@ -517,7 +521,23 @@ int refresh_done(display_ctx *ctx)
     ctx->buffer_pending = false;
     pthread_mutex_unlock(&ctx->state_lock);
     pthread_mutex_unlock(&ctx->frame_lock);
-    return rfence;
+
+    if (b == 2) {
+        // NoDamage signal from producer: buffer not rendered
+        if (rfence >= 0) close(rfence);
+        return 0;
+    }
+
+    if (out_fence)
+        *out_fence = rfence;
+    return 1;
+}
+
+int refresh_done(display_ctx *ctx)
+{
+    int fence = -1;
+    int st = refresh_done_status(ctx, &fence);
+    return (st == 1) ? fence : -1;
 }
 
 int push_input_event(display_ctx *ctx, const struct InputEvent *event)
