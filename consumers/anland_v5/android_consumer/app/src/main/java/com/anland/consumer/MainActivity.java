@@ -1877,7 +1877,7 @@ public class MainActivity extends Activity
         }
         if (mHudOverlay != null && !mHudOverlay.isEditMode()) {
             boolean vkbOpen = (virtualKeyboardView != null && virtualKeyboardView.getVisibility() == View.VISIBLE);
-            if (vkbOpen || mImeBottom > 0) {
+            if (vkbOpen) {
                 mHudAutoHidden = true;
                 mHudOverlay.setVisibility(View.GONE);
             } else {
@@ -2266,12 +2266,6 @@ public class MainActivity extends Activity
                 .getString(KEY_EXTRA_KEYS_MODE, "always");
         if (imeVisible != wasImeVisible && "with_keyboard".equals(mode))
             setExtraKeysBarVisible(imeVisible);
-
-        // Ban phim he thong mo: an HUD de khoi che cho go; dong: khoi phuc.
-        if (imeVisible != wasImeVisible) {
-            if (imeVisible) hideFloatingForKeyboard();
-            else restoreHudAfterKeyboard();
-        }
 
         relayout();
     }
@@ -2697,9 +2691,6 @@ public class MainActivity extends Activity
                 .getString(KEY_EXTRA_KEYS_MODE, "always");
         if ("with_keyboard".equals(mode))
             setExtraKeysBarVisible(visible);
-        if (!visible) {
-            restoreHudAfterKeyboard();
-        }
         if (!visible && surfaceView != null) {
             surfaceView.requestFocus();
             if (mRoot != null)
