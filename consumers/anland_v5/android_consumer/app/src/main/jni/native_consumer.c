@@ -225,16 +225,28 @@ static int collect_dmabufs(struct consumer_state *s)
     /* Drain the stale frames just queued during enumeration so SurfaceFlinger
      * never presents unrendered (possibly garbage) buffer content. Dequeued
      * buffers are cancelled back to the free list without presentation; slot
-     * pointer identity is preserved so later render-loop matching still works. */
+     * pointer identity is preserved so later render-loop matching still works.
+     * Retry briefly on failure: any queued stale frame left behind would be
+     * presented as a garbage flash. */
     {
         int drained = 0;
         for (int i = 0; i < queued; i++) {
             ANativeWindowBuffer *danb = NULL;
             int dfence = -1;
-            if (api.dequeueBuffer(win, &danb, &dfence) != 0 || !danb) {
-                LOGE("drain dequeueBuffer failed at %d/%d", i, queued);
-                if (dfence >= 0)
+            int rc = -1;
+            for (int retry = 0; retry < 5; retry++) {
+                rc = api.dequeueBuffer(win, &danb, &dfence);
+                if (rc == 0 && danb)
+                    break;
+                if (dfence >= 0) {
                     close(dfence);
+                    dfence = -1;
+                }
+                danb = NULL;
+                usleep(2000);
+            }
+            if (rc != 0 || !danb) {
+                LOGE("drain dequeueBuffer failed at %d/%d", i, queued);
                 break;
             }
             if (dfence >= 0)

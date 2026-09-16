@@ -65,6 +65,14 @@ public class MainActivity extends Activity
     // Coalesce rapid changes into a single reconnect at the latest size.
     private static final long RECONNECT_DEBOUNCE_MS = 350;
     private Runnable pendingReconnect = null;
+    // Reconnect storm guard: onResume() + surfaceChanged() + syncScreenSizeToSurface()
+    // can each trigger a full stop/start within ~1s when returning to the app.
+    // Every reconnect re-runs collect_dmabufs (stale buffers) and resets niri's
+    // damage history. Collapse redundant same-size reconnects into one.
+    private static final long RECONNECT_COOLDOWN_MS = 1200;
+    private long lastReconnectTimeMs = 0;
+    private int connectedW = 0;
+    private int connectedH = 0;
     private static final String KEY_BOUND_KEYCODE = "bound_keycode";
     private static final String KEY_SOCKET_PATH = "socket_path";
     private static final String KEY_USE_ROOT = "use_root";
@@ -499,6 +507,11 @@ public class MainActivity extends Activity
         pushRefreshRate();
         mNative.start(surface, clipboard, this);
         mNativeReady = true;
+        if (surfaceView != null) {
+            connectedW = surfaceView.getWidth();
+            connectedH = surfaceView.getHeight();
+        }
+        lastReconnectTimeMs = android.os.SystemClock.uptimeMillis();
     }
 
     // True only when `path` exists and is a unix-domain socket. In root mode the
@@ -2134,6 +2147,18 @@ public class MainActivity extends Activity
     }
 
     private void doReconnectNow(android.view.Surface surface) {
+        // Skip redundant same-size reconnects inside the cooldown window
+        // (e.g. surfaceChanged echo right after onResume already restarted
+        // the pipeline at this size). A real size change always reconnects.
+        int curW = surfaceView != null ? surfaceView.getWidth() : 0;
+        int curH = surfaceView != null ? surfaceView.getHeight() : 0;
+        long now = android.os.SystemClock.uptimeMillis();
+        if (curW == connectedW && curH == connectedH
+                && (now - lastReconnectTimeMs) < RECONNECT_COOLDOWN_MS) {
+            Log.i(TAG, "reconnect skipped (same size " + curW + "x" + curH + " within cooldown)");
+            dbg("reconnect skipped, same size in cooldown");
+            return;
+        }
         updateDisplayRotation();
         ensurePointerPosition();
         surfaceReady = true;
