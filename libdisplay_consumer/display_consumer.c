@@ -552,11 +552,30 @@ int push_input_event(display_ctx *ctx, const struct InputEvent *event)
     bool in_fallback = ctx->fallback;
     int fd = ctx->data_fd;
     pthread_mutex_unlock(&ctx->state_lock);
-    if (in_fallback) {
+    if (in_fallback || fd < 0) {
         pthread_mutex_unlock(&ctx->data_lock);
         return 0;
     }
-    int r = (fd >= 0) ? send_all(fd, msg, sizeof(msg)) : -1;
+
+    /* ANR Guard: Avoid blocking Android Main UI thread if the socket buffer is full.
+     * High-frequency transient motion events can be safely dropped under pressure;
+     * critical events (keys, buttons, touch up/down) wait up to 200ms. */
+    bool is_transient = (event->type == INPUT_TYPE_POINTER_MOTION) ||
+                        (event->type == INPUT_TYPE_TOUCH && event->data.touch.action == INPUT_ACTION_MOVE);
+    int timeout_ms = is_transient ? 20 : 200;
+
+    struct pollfd pfd = { .fd = fd, .events = POLLOUT };
+    int pret = poll(&pfd, 1, timeout_ms);
+    if (pret <= 0 || !(pfd.revents & POLLOUT)) {
+        pthread_mutex_unlock(&ctx->data_lock);
+        if (is_transient) {
+            return 0; /* drop transient motion to keep Android UI thread responsive */
+        }
+        enter_fallback(ctx);
+        return -1;
+    }
+
+    int r = send_all(fd, msg, sizeof(msg));
     pthread_mutex_unlock(&ctx->data_lock);
 
     if (r < 0) {
