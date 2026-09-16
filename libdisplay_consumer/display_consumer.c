@@ -561,7 +561,7 @@ int push_input_event(display_ctx *ctx, const struct InputEvent *event)
      * High-frequency transient motion events can be safely dropped under pressure;
      * critical events (keys, buttons, touch up/down) wait up to 200ms. */
     bool is_transient = (event->type == INPUT_TYPE_POINTER_MOTION) ||
-                        (event->type == INPUT_TYPE_TOUCH && event->data.touch.action == INPUT_ACTION_MOVE);
+                        (event->type == INPUT_TYPE_TOUCH && event->touch.action == INPUT_ACTION_MOVE);
     int timeout_ms = is_transient ? 20 : 200;
 
     struct pollfd pfd = { .fd = fd, .events = POLLOUT };
