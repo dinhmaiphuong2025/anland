@@ -2459,14 +2459,16 @@ public class MainActivity extends Activity
                 .apply();
 
         if (enabled) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
             try {
                 String profileJson = prefs.getString("hud_layout_profile_v2", null);
                 com.anland.consumer.hud.HudLayoutProfile profile = com.anland.consumer.hud.HudLayoutProfile.fromJSON(profileJson);
                 profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
                 prefs.edit().putString("hud_layout_profile_v2", profile.toJSON().toString()).apply();
             } catch (Exception ignored) {}
-            android.widget.Toast.makeText(this, "Đã bật Chế độ Steam Deck", android.widget.Toast.LENGTH_SHORT).show();
+            android.widget.Toast.makeText(this, "Đã bật Chế độ Steam Deck (Xoay ngang)", android.widget.Toast.LENGTH_SHORT).show();
         } else {
+            applyOrientation();
             android.widget.Toast.makeText(this, "Đã thoát Chế độ Steam Deck", android.widget.Toast.LENGTH_SHORT).show();
         }
 
@@ -2763,6 +2765,12 @@ public class MainActivity extends Activity
 
     // Apply the screen-orientation preference (default / landscape / portrait).
     private void applyOrientation() {
+        boolean isSteamDeck = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+            .getBoolean(KEY_STEAM_DECK_MODE, false);
+        if (isSteamDeck) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            return;
+        }
         String mode = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getString("screen_orientation", "default");
         switch (mode) {

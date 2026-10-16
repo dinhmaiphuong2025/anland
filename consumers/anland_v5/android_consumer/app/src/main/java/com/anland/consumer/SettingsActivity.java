@@ -384,11 +384,20 @@ public class SettingsActivity extends Activity {
                     profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
                     edit.putString("hud_layout_profile_v2", profile.toJSON().toString());
                 } catch (Exception ignored) {}
+                edit.apply();
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                Toast.makeText(this, "Đang chuyển sang màn hình ngang Steam Deck...", Toast.LENGTH_SHORT).show();
+                Intent intent = new Intent(this, MainActivity.class);
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                if (mCurrentSocketPath != null) intent.putExtra(MainActivity.EXTRA_SOCKET_PATH, mCurrentSocketPath);
+                startActivity(intent);
+                finish();
             } else {
                 edit.putString("landscape_aspect_ratio", "auto");
+                edit.apply();
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                showKeyboardPage();
             }
-            edit.apply();
-            showKeyboardPage();
         });
         card.addView(steamDeckSwitch);
 
@@ -458,9 +467,18 @@ public class SettingsActivity extends Activity {
                 if (which == 0) {
                     profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
                     prefs.edit().putBoolean("steam_deck_mode", true)
+                                .putBoolean("use_hud_overlay", true)
                                 .putString("landscape_aspect_ratio", "steam_deck_16_10")
+                                .putString("hud_layout_profile_v2", profile.toJSON().toString())
                                 .apply();
-                    Toast.makeText(this, "Steam Deck Handheld Preset Applied", Toast.LENGTH_SHORT).show();
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                    Toast.makeText(this, "Đang vào Chế độ Steam Deck (Xoay ngang)...", Toast.LENGTH_SHORT).show();
+                    Intent intent = new Intent(this, MainActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    if (mCurrentSocketPath != null) intent.putExtra(MainActivity.EXTRA_SOCKET_PATH, mCurrentSocketPath);
+                    startActivity(intent);
+                    finish();
+                    return;
                 } else if (which == 1) {
                     profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createConsoleGamepadLayout(true);
                     Toast.makeText(this, "Console Gamepad Preset Applied to Landscape", Toast.LENGTH_SHORT).show();

@@ -413,6 +413,18 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mBtnTrackPointMode = createBadgeButton("MOUSE");
         mBtnTrackPointMode.setOnClickListener(v -> {
             if (mActiveButton == null) return;
+            if (HudButton.WIDGET_SCROLLBAR.equals(mActiveButton.widgetType)) {
+                boolean wasVert = !"horizontal".equalsIgnoreCase(mActiveButton.trackpointMode);
+                mActiveButton.trackpointMode = wasVert ? "horizontal" : "vertical";
+                int temp = mActiveButton.widthDp;
+                mActiveButton.widthDp = mActiveButton.heightDp;
+                mActiveButton.heightDp = temp;
+                mBtnTrackPointMode.setText(mActiveButton.trackpointMode.toUpperCase());
+                syncSliderAndInput(mWidthSeekBar, mWidthInput, mActiveButton.widthDp, 20, 300);
+                syncSliderAndInput(mHeightSeekBar, mHeightInput, mActiveButton.heightDp, 20, 300);
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                return;
+            }
             String cur = mActiveButton.trackpointMode != null ? mActiveButton.trackpointMode : HudButton.MODE_MOUSE;
             String next;
             if (HudButton.MODE_MOUSE.equals(cur)) next = HudButton.MODE_SCROLL;
@@ -518,12 +530,18 @@ public final class HudPropertyInspectorView extends LinearLayout {
         }
         boolean isTrackpoint = HudButton.WIDGET_TRACKPOINT.equals(b.widgetType);
         boolean isTouchpad = HudButton.WIDGET_TOUCHPAD.equals(b.widgetType);
+        boolean isScrollBar = HudButton.WIDGET_SCROLLBAR.equals(b.widgetType);
         if (mTrackPointOptions != null) {
-            mTrackPointOptions.setVisibility((isTrackpoint || isTouchpad) ? VISIBLE : GONE);
-            if (isTrackpoint || isTouchpad) {
+            mTrackPointOptions.setVisibility((isTrackpoint || isTouchpad || isScrollBar) ? VISIBLE : GONE);
+            if (isTrackpoint || isTouchpad || isScrollBar) {
                 mBtnTrackPointMode.setVisibility(isTouchpad ? GONE : VISIBLE);
-                String mode = b.trackpointMode != null ? b.trackpointMode : HudButton.MODE_MOUSE;
-                mBtnTrackPointMode.setText(mode.toUpperCase().replace('_', ' '));
+                if (isScrollBar) {
+                    boolean isVert = !"horizontal".equalsIgnoreCase(b.trackpointMode);
+                    mBtnTrackPointMode.setText(isVert ? "VERTICAL" : "HORIZONTAL");
+                } else {
+                    String mode = b.trackpointMode != null ? b.trackpointMode : HudButton.MODE_MOUSE;
+                    mBtnTrackPointMode.setText(mode.toUpperCase().replace('_', ' '));
+                }
                 syncSliderAndInput(mTrackSensitivitySeekBar, mTrackSensitivityInput, Math.round(b.trackpointSensitivity * 10), 5, 30);
                 syncSliderAndInput(mTrackDeadzoneSeekBar, mTrackDeadzoneInput, b.trackpointDeadzoneDp, 0, 16);
             }

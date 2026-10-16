@@ -149,8 +149,8 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mBannerStrokePaint.setStrokeWidth(1.5f);
 
         setWillNotDraw(false);
-        loadProfile();
         initViews();
+        loadProfile();
     }
 
     public void loadProfile() {
@@ -584,13 +584,15 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 "Standard Key Button",
                 "Super Gesture Nub",
                 "TrackPoint (Mouse / Scroll)",
-                "Steam Deck Trackpad (Touchpad / Mouse)"
+                "Steam Deck Trackpad (Touchpad / Mouse)",
+                "Scroll Bar (Vertical / Horizontal)"
         };
         final HudButton.WidgetKind[] kinds = new HudButton.WidgetKind[] {
                 HudButton.WidgetKind.KEY,
                 HudButton.WidgetKind.SUPER_GESTURE,
                 HudButton.WidgetKind.TRACKPOINT,
-                HudButton.WidgetKind.TOUCHPAD
+                HudButton.WidgetKind.TOUCHPAD,
+                HudButton.WidgetKind.SCROLLBAR
         };
         mInspectorView.setVisibility(GONE);
         AlertDialog dialog = new android.app.AlertDialog.Builder(getContext(),
@@ -639,12 +641,22 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 break;
             case TOUCHPAD:
                 b.widgetType = HudButton.WIDGET_TOUCHPAD;
-                b.label = "TRACKPAD";
-                b.widthDp = 76;
-                b.heightDp = 76;
-                b.cornerRadiusDp = 14;
+                b.label = "TOUCHPAD";
+                b.widthDp = 92;
+                b.heightDp = 92;
+                b.cornerRadiusDp = 18;
                 b.posXPercent = 0.85f;
-                b.posYPercent = 0.70f;
+                b.posYPercent = 0.65f;
+                break;
+            case SCROLLBAR:
+                b.widgetType = HudButton.WIDGET_SCROLLBAR;
+                b.label = "SCROLL";
+                b.trackpointMode = "vertical";
+                b.widthDp = 34;
+                b.heightDp = 130;
+                b.cornerRadiusDp = 17;
+                b.posXPercent = 0.95f;
+                b.posYPercent = 0.5f;
                 break;
         }
         getActiveLayout().floatingButtons.add(b);
@@ -782,6 +794,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     }
 
     public void rebuildActiveLayout() {
+        if (mFloatingContainer == null) return;
         mFloatingContainer.removeAllViews();
         HudLayout layout = getActiveLayout();
         // Dock strip removed; no per-frame visibility bookkeeping needed.
@@ -861,6 +874,13 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         }
                     }
                     @Override
+                    public void onPointerButton(int button, boolean pressed) {
+                        if (!mIsEditMode && mHost != null) {
+                            int code = (button == 2) ? 0x111 : (button == 3 ? 0x112 : 0x110);
+                            mHost.sendMouseButton(code, pressed);
+                        }
+                    }
+                    @Override
                     public void onPointerScroll(float dx, float dy) {
                         if (!mIsEditMode && mHost != null) {
                             if (Math.abs(dy) > 0.01f) mHost.sendMouseScroll(0, -dy);
@@ -869,6 +889,17 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     }
                 });
                 ((HudTouchpadView) widgetView).setInEditMode(mIsEditMode);
+            } else if (HudButton.WIDGET_SCROLLBAR.equals(b.widgetType)) {
+                widgetView = new HudScrollBarView(getContext(), b, new HudScrollBarView.ScrollDispatcher() {
+                    @Override
+                    public void onPointerScroll(float dx, float dy) {
+                        if (!mIsEditMode && mHost != null) {
+                            if (Math.abs(dy) > 0.01f) mHost.sendMouseScroll(0, dy);
+                            if (Math.abs(dx) > 0.01f) mHost.sendMouseScroll(1, dx);
+                        }
+                    }
+                });
+                ((HudScrollBarView) widgetView).setInEditMode(mIsEditMode);
             } else {
                 widgetView = new HudFreeformButtonView(getContext(), b, new HudFreeformButtonView.ButtonActionListener() {
                     @Override
