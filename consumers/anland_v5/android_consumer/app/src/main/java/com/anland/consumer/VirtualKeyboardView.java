@@ -943,9 +943,6 @@ public class VirtualKeyboardView extends View {
             case "Meta":
             case "MetaL": return KeyEvent.KEYCODE_META_LEFT;
             case "Space": return KeyEvent.KEYCODE_SPACE;
-            case "LT": return KeyEvent.KEYCODE_DPAD_LEFT;
-            case "DN": return KeyEvent.KEYCODE_DPAD_DOWN;
-            case "RT": return KeyEvent.KEYCODE_DPAD_RIGHT;
             default: return KeyEvent.KEYCODE_UNKNOWN;
         }
     }
