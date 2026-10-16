@@ -39,6 +39,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         void sendTextInput(byte[] utf8);
         void sendMouseMotion(float dx, float dy);
         void sendMouseButton(int button, boolean pressed);
+        void sendGamepad(int gpType, int code, int value);
         void sendMouseScroll(int axis, float value);
         void toggleSystemKeyboard();
         void toggleVirtualKeyboard();
@@ -779,6 +780,14 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                             if (Math.abs(dx) > 0.01f) mHost.sendMouseScroll(1, dx);
                         }
                     }
+                    @Override
+                    public void onGamepadAxis(int axis, int value) {
+                        if (!mIsEditMode && mHost != null) mHost.sendGamepad(17, axis, value);
+                    }
+                    @Override
+                    public void onGamepadButton(int button, boolean pressed) {
+                        if (!mIsEditMode && mHost != null) mHost.sendGamepad(16, button, pressed ? 1 : 0);
+                    }
                 });
                 ((TrackpointNubView) widgetView).setInEditMode(mIsEditMode);
             } else if (HudButton.WIDGET_SUPER_GESTURE.equals(b.widgetType)) {
@@ -810,6 +819,12 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                                 if (isDown) toggleModifier(btn.action.code);
                             } else if (HudAction.TYPE_KEY.equals(btn.action.type)) {
                                 if (mHost != null) mHost.sendKey(isDown ? 0 : 1, btn.action.code);
+                            } else if (HudAction.TYPE_GAMEPAD.equals(btn.action.type)) {
+                                if (mHost != null) {
+                                    int gType = btn.action.gamepadType != 0 ? btn.action.gamepadType : 16;
+                                    int val = isDown ? (btn.action.gamepadValue != 0 ? btn.action.gamepadValue : 1) : 0;
+                                    mHost.sendGamepad(gType, btn.action.code, val);
+                                }
                             } else if (isDown) {
                                 dispatchHudAction(btn.action);
                             }
@@ -1127,10 +1142,19 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 mHost.sendMouseButton(0x111, true);
                 postDelayed(() -> mHost.sendMouseButton(0x111, false), 50);
             } else if ("mouse_middle".equals(action.systemCommand)) {
-                mHost.sendMouseButton(0x112, true);
-                postDelayed(() -> mHost.sendMouseButton(0x112, false), 50);
-            }
-        }
+     mHost.sendMouseButton(0x112, true);
+     postDelayed(() -> mHost.sendMouseButton(0x112, false), 50);
+ }
+ } else if (HudAction.TYPE_GAMEPAD.equals(action.type)) {
+ if (mHost != null) {
+     int gType = action.gamepadType != 0 ? action.gamepadType : 16;
+     int val = action.gamepadValue != 0 ? action.gamepadValue : 1;
+     mHost.sendGamepad(gType, action.code, val);
+     if (gType == 16) {
+         postDelayed(() -> mHost.sendGamepad(gType, action.code, 0), 50);
+     }
+ }
+ }
     }
 
     public void applyImeBottom(int imeBottom) {

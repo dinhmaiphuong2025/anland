@@ -561,6 +561,7 @@ pub fn translate(
         ffi::INPUT_TYPE_TOUCH_FRAME => Some(I::TouchFrame {
             event: AnlandTouchFrameEvent { base: base(0., 0.) },
         }),
+        ffi::INPUT_TYPE_GAMEPAD_KEY | ffi::INPUT_TYPE_GAMEPAD_ABS => None,
         _ => None,
     }
 }

@@ -1,9 +1,13 @@
 #include "anland_niri_bridge.h"
 #include "anland_de_backend.h"
 #include "bounded_input_read.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 struct anland_niri_bridge {
     anland_de_backend *backend;
@@ -167,43 +171,102 @@ int anland_niri_dispatch(anland_niri_bridge *b, anland_niri_event *out,
     *count = n;
     return 0;
 }
+static int s_vgpad_fd = -1;
+
+static int open_vgpad(void)
+{
+    if (s_vgpad_fd >= 0) {
+        return s_vgpad_fd;
+    }
+
+    /* 1. Try unix socket /run/vgpad.sock */
+    int sock = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sock >= 0) {
+        struct sockaddr_un addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sun_family = AF_UNIX;
+        strncpy(addr.sun_path, "/run/vgpad.sock", sizeof(addr.sun_path) - 1);
+        if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+            s_vgpad_fd = sock;
+            return s_vgpad_fd;
+        }
+        close(sock);
+    }
+
+    /* 2. Try FIFO /tmp/opencode/vgpad.fifo */
+    int fifo = open("/tmp/opencode/vgpad.fifo", O_WRONLY | O_NONBLOCK);
+    if (fifo >= 0) {
+        s_vgpad_fd = fifo;
+        return s_vgpad_fd;
+    }
+
+    return -1;
+}
+
+static void forward_gamepad(uint32_t type, int32_t code, int32_t value)
+{
+    int fd = open_vgpad();
+    if (fd < 0) return;
+
+    char buf[64];
+    int len = 0;
+    if (type == ANLAND_DEVICE_IN_GAMEPAD_KEY) {
+        len = snprintf(buf, sizeof(buf), "K %d %d\nS\n", code, value ? 1 : 0);
+    } else if (type == ANLAND_DEVICE_IN_GAMEPAD_ABS) {
+        len = snprintf(buf, sizeof(buf), "A %d %d\nS\n", code, value);
+    }
+    if (len > 0) {
+        ssize_t w = write(fd, buf, (size_t)len);
+        if (w < 0) {
+            close(s_vgpad_fd);
+            s_vgpad_fd = -1;
+        }
+    }
+}
+
 int anland_niri_poll_input(anland_niri_bridge *b, anland_niri_input *out)
 {
     if (!device(b) || !out) return -1;
     anland_device_input_t ev;
-    int rc = anland_device_poll_input(device(b), &ev, 0);
-    if (rc != 1) return rc;
-    memset(out, 0, sizeof(*out));
-    out->type = ev.type;
-    switch (ev.type) {
-    case ANLAND_DEVICE_IN_KEY:
-        out->action = ev.key.action; out->code = ev.key.keycode; break;
-    case ANLAND_DEVICE_IN_TOUCH:
-        out->action = ev.touch.action; out->x = ev.touch.x;
-        out->y = ev.touch.y; out->pointer_id = ev.touch.pointer_id; break;
-    case ANLAND_DEVICE_IN_PTR_MOTION:
-        out->x = ev.pointer_motion.x; out->y = ev.pointer_motion.y;
-        out->dx = ev.pointer_motion.dx; out->dy = ev.pointer_motion.dy; break;
-    case ANLAND_DEVICE_IN_PTR_BUTTON: {
-        int32_t btn = (int32_t)ev.pointer_button.button;
-        if (btn == 1) btn = 0x110;      /* BTN_LEFT */
-        else if (btn == 2) btn = 0x111; /* BTN_RIGHT */
-        else if (btn == 3) btn = 0x112; /* BTN_MIDDLE */
-        out->code = btn;
-        out->action = ev.pointer_button.pressed; break;
+    while (1) {
+        int rc = anland_device_poll_input(device(b), &ev, 0);
+        if (rc != 1) return rc;
+        if (ev.type == ANLAND_DEVICE_IN_GAMEPAD_KEY || ev.type == ANLAND_DEVICE_IN_GAMEPAD_ABS) {
+            forward_gamepad(ev.type, ev.gamepad.code, ev.gamepad.value);
+            continue; /* Swallow gamepad event so Niri never receives it */
+        }
+        memset(out, 0, sizeof(*out));
+        out->type = ev.type;
+        switch (ev.type) {
+        case ANLAND_DEVICE_IN_KEY:
+            out->action = ev.key.action; out->code = ev.key.keycode; break;
+        case ANLAND_DEVICE_IN_TOUCH:
+            out->action = ev.touch.action; out->x = ev.touch.x;
+            out->y = ev.touch.y; out->pointer_id = ev.touch.pointer_id; break;
+        case ANLAND_DEVICE_IN_PTR_MOTION:
+            out->x = ev.pointer_motion.x; out->y = ev.pointer_motion.y;
+            out->dx = ev.pointer_motion.dx; out->dy = ev.pointer_motion.dy; break;
+        case ANLAND_DEVICE_IN_PTR_BUTTON: {
+            int32_t btn = (int32_t)ev.pointer_button.button;
+            if (btn == 1) btn = 0x110;      /* BTN_LEFT */
+            else if (btn == 2) btn = 0x111; /* BTN_RIGHT */
+            else if (btn == 3) btn = 0x112; /* BTN_MIDDLE */
+            out->code = btn;
+            out->action = ev.pointer_button.pressed; break;
+        }
+        case ANLAND_DEVICE_IN_PTR_AXIS:
+            out->code = (int32_t)ev.pointer_axis.axis;
+            out->value = ev.pointer_axis.value;
+            out->discrete = ev.pointer_axis.discrete; break;
+        case ANLAND_DEVICE_IN_CLIPBOARD: out->payload_size = ev.clipboard.size; break;
+        case ANLAND_DEVICE_IN_TEXT_INPUT: out->payload_size = ev.text_input.size; break;
+        case ANLAND_DEVICE_IN_RESOURCE:
+        case ANLAND_DEVICE_IN_RESOURCE_INVALID:
+            out->resource_type = ev.resource.type; out->fd_count = ev.resource.fdnum; break;
+        default: break;
+        }
+        return 1;
     }
-    case ANLAND_DEVICE_IN_PTR_AXIS:
-        out->code = (int32_t)ev.pointer_axis.axis;
-        out->value = ev.pointer_axis.value;
-        out->discrete = ev.pointer_axis.discrete; break;
-    case ANLAND_DEVICE_IN_CLIPBOARD: out->payload_size = ev.clipboard.size; break;
-    case ANLAND_DEVICE_IN_TEXT_INPUT: out->payload_size = ev.text_input.size; break;
-    case ANLAND_DEVICE_IN_RESOURCE:
-    case ANLAND_DEVICE_IN_RESOURCE_INVALID:
-        out->resource_type = ev.resource.type; out->fd_count = ev.resource.fdnum; break;
-    default: break;
-    }
-    return rc;
 }
 /* The common read_input() polls only before recv_all(), which can block forever
  * after a partial payload. Keep the compositor event loop bounded even when the

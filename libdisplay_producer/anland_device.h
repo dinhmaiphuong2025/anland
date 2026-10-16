@@ -91,6 +91,8 @@ enum {
     /* Consumer reports the requested service's fds were unusable. Same layout
      * as RESOURCE (type + fdnum) — matches protocol.h INPUT_TYPE_RESOURCE_INVALID. */
     ANLAND_DEVICE_IN_RESOURCE_INVALID = 12,
+    ANLAND_DEVICE_IN_GAMEPAD_KEY      = 16,
+    ANLAND_DEVICE_IN_GAMEPAD_ABS      = 17,
 };
 
 /* Touch/button action codes carried by ANLAND_DEVICE_IN_TOUCH /
@@ -132,6 +134,7 @@ typedef struct anland_device_input {
         struct { uint32_t size; } text_input;  /* payload via anland_device_read_input */
         struct { uint32_t action; int32_t value; } input_action;
         struct { uint32_t type; uint32_t fdnum; } resource; /* fds via anland_device_read_fds */
+        struct { int32_t code; int32_t value; } gamepad;
         struct { uint32_t padding[4]; };
     };
 } anland_device_input_t;

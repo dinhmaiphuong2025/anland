@@ -25,6 +25,8 @@ public final class TrackpointNubView extends View {
         // implementation in MainActivity). This is optional - hosts that
         // do not care about scroll mode can leave it empty.
         default void onPointerScroll(float dx, float dy) { /* no-op */ }
+        default void onGamepadAxis(int axis, int value) { /* no-op */ }
+        default void onGamepadButton(int button, boolean pressed) { /* no-op */ }
     }
 
     private final HudButton mModel;
@@ -98,9 +100,14 @@ public final class TrackpointNubView extends View {
 
         // Outer rim stroke - color indicates mode
         boolean isScroll = HudButton.MODE_SCROLL.equals(mModel.trackpointMode);
+        boolean isStickL = HudButton.MODE_STICK_LEFT.equals(mModel.trackpointMode);
+        boolean isStickR = HudButton.MODE_STICK_RIGHT.equals(mModel.trackpointMode);
+        boolean isStick = isStickL || isStickR;
+
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(2f * density);
-        mPaint.setColor(isScroll ? 0xAA80DEEA : 0x88FFFFFF);
+        int rimColor = isScroll ? 0xAA80DEEA : (isStick ? 0xAA81C784 : 0x88FFFFFF);
+        mPaint.setColor(rimColor);
         canvas.drawCircle(cx, cy, radius, mPaint);
 
         // Center Nub / Nipple
@@ -109,12 +116,12 @@ public final class TrackpointNubView extends View {
         float nubCy = cy + mCurrentOffsetY;
 
         mPaint.setStyle(Paint.Style.FILL);
-        int defaultNubColor = isScroll ? 0xFF00838F : 0xFFD32F2F;
+        int defaultNubColor = isScroll ? 0xFF00838F : (isStick ? 0xFF2E7D32 : 0xFFD32F2F);
         mPaint.setColor(mModel.bgColor != 0 ? mModel.bgColor : defaultNubColor);
         canvas.drawCircle(nubCx, nubCy, nubRadius, mPaint);
 
         // Nub textured grip dots
-        mPaint.setColor(isScroll ? 0xFFE0F7FA : 0xFFFFFFFF);
+        mPaint.setColor(isScroll ? 0xFFE0F7FA : (isStick ? 0xFFE8F5E9 : 0xFFFFFFFF));
         mPaint.setStyle(Paint.Style.FILL);
         float dotR = Math.max(1.5f, 2f * density);
         float dotOffset = nubRadius * 0.4f;
@@ -161,14 +168,34 @@ public final class TrackpointNubView extends View {
             case MotionEvent.ACTION_CANCEL:
                 mIsDragging = false;
                 mLoopHandler.removeCallbacks(mLoopRunnable);
-                
-                // Quick tap detection for Left Click
+
+                boolean isStickL = HudButton.MODE_STICK_LEFT.equals(mModel.trackpointMode);
+                boolean isStickR = HudButton.MODE_STICK_RIGHT.equals(mModel.trackpointMode);
+                if (mDispatcher != null) {
+                    if (isStickL) {
+                        mDispatcher.onGamepadAxis(0x00, 0); // ABS_X
+                        mDispatcher.onGamepadAxis(0x01, 0); // ABS_Y
+                    } else if (isStickR) {
+                        mDispatcher.onGamepadAxis(0x03, 0); // ABS_RX
+                        mDispatcher.onGamepadAxis(0x04, 0); // ABS_RY
+                    }
+                }
+
+                // Quick tap detection for Left Click / Stick Click
                 long duration = System.currentTimeMillis() - mTouchDownTime;
                 float dist = (float) Math.hypot(x - mCenterTouchX, y - mCenterTouchY);
                 if (duration < 250 && dist < 15) {
                     if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                     if (mDispatcher != null) {
-                        mDispatcher.onPointerClick(0x110); // BTN_LEFT (0x110 = 272)
+                        if (isStickL) {
+                            mDispatcher.onGamepadButton(317, true); // BTN_THUMBL
+                            postDelayed(() -> mDispatcher.onGamepadButton(317, false), 50);
+                        } else if (isStickR) {
+                            mDispatcher.onGamepadButton(318, true); // BTN_THUMBR
+                            postDelayed(() -> mDispatcher.onGamepadButton(318, false), 50);
+                        } else {
+                            mDispatcher.onPointerClick(0x110); // BTN_LEFT (0x110 = 272)
+                        }
                     }
                 }
 
@@ -207,11 +234,23 @@ public final class TrackpointNubView extends View {
             float normX = mCurrentOffsetX / dist;
             float normY = mCurrentOffsetY / dist;
 
-            // The TrackPoint runs in one of two modes. In mouse mode the
-            // offsets become relative pointer motion (the original
-            // behaviour). In scroll mode they become scroll-wheel deltas,
-            // letting the same on-screen nub act as a thumb-scroll pad.
-            if (HudButton.MODE_SCROLL.equals(mModel.trackpointMode)) {
+            // The TrackPoint runs in one of four modes:
+            // mouse, scroll, stick_left (ABS_X/Y), stick_right (ABS_RX/RY).
+            if (HudButton.MODE_STICK_LEFT.equals(mModel.trackpointMode)) {
+                float maxTravel = Math.max(1f, radius - nubRadius - deadzone);
+                float ratio = Math.min(1.0f, effectiveDist / maxTravel);
+                int valX = Math.round(normX * ratio * 32767);
+                int valY = Math.round(normY * ratio * 32767);
+                mDispatcher.onGamepadAxis(0x00, valX);
+                mDispatcher.onGamepadAxis(0x01, valY);
+            } else if (HudButton.MODE_STICK_RIGHT.equals(mModel.trackpointMode)) {
+                float maxTravel = Math.max(1f, radius - nubRadius - deadzone);
+                float ratio = Math.min(1.0f, effectiveDist / maxTravel);
+                int valX = Math.round(normX * ratio * 32767);
+                int valY = Math.round(normY * ratio * 32767);
+                mDispatcher.onGamepadAxis(0x03, valX);
+                mDispatcher.onGamepadAxis(0x04, valY);
+            } else if (HudButton.MODE_SCROLL.equals(mModel.trackpointMode)) {
                 mDispatcher.onPointerScroll(normX * speedFactor, normY * speedFactor);
             } else {
                 mDispatcher.onPointerMove(normX * speedFactor, normY * speedFactor);

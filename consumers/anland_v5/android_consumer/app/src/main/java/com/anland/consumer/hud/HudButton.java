@@ -55,10 +55,12 @@ public final class HudButton {
     public float trackpointSensitivity = 1.5f;
     public int trackpointDeadzoneDp = 4;
     // TrackPoint mode: "mouse" sends relative pointer motion (default),
-    // "scroll" sends scroll-wheel events instead so the same nub can be
-    // repurposed as a thumb-scroll pad.
+    // "scroll" sends scroll-wheel events, "stick_left" sends gamepad left stick (ABS_X/Y),
+    // "stick_right" sends gamepad right stick (ABS_RX/RY).
     public static final String MODE_MOUSE = "mouse";
     public static final String MODE_SCROLL = "scroll";
+    public static final String MODE_STICK_LEFT = "stick_left";
+    public static final String MODE_STICK_RIGHT = "stick_right";
     public String trackpointMode = MODE_MOUSE;
 
     public HudButton() {}

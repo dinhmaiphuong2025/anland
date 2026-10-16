@@ -71,6 +71,8 @@ struct buf_info {
 #define INPUT_TYPE_DISPLAY_ROTATION 13
 #define INPUT_TYPE_CAPS 14
 #define INPUT_TYPE_PRESENTED 15
+#define INPUT_TYPE_GAMEPAD_KEY 16
+#define INPUT_TYPE_GAMEPAD_ABS 17
 
 #define CONSUMER_CAP_CURSOR_PLANE 1
 
@@ -141,6 +143,10 @@ struct InputEvent {
             uint32_t tv_sec;
             uint32_t tv_nsec;
         } presented;
+        struct {
+            int32_t  code;
+            int32_t  value;
+        } gamepad;
         struct {
             uint32_t padding[4];
         };

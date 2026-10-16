@@ -120,10 +120,10 @@ public final class HudLayoutProfile {
         float shoulderRightX = isLandscape ? 0.87f : 0.82f;
 
         // ===== Left Gutter (D-Pad & Bumpers) =====
-        // 1. L1 (Bumper / Tab)
+        // 1. L1 (Bumper / LB)
         HudButton btnL1 = new HudButton();
         btnL1.label = "L1";
-        btnL1.action = HudAction.key(15); // TAB
+        btnL1.action = HudAction.gamepadBtn(310); // BTN_TL (LB)
         btnL1.widthDp = 52;
         btnL1.heightDp = 34;
         btnL1.cornerRadiusDp = 10;
@@ -131,10 +131,10 @@ public final class HudLayoutProfile {
         btnL1.posYPercent = 0.14f;
         layout.floatingButtons.add(btnL1);
 
-        // 2. L2 (Trigger / Esc)
+        // 2. L2 (Trigger / LT)
         HudButton btnL2 = new HudButton();
         btnL2.label = "L2";
-        btnL2.action = HudAction.key(1); // ESC
+        btnL2.action = HudAction.gamepadBtn(312); // BTN_TL2 (LT)
         btnL2.widthDp = 52;
         btnL2.heightDp = 34;
         btnL2.cornerRadiusDp = 10;
@@ -145,7 +145,7 @@ public final class HudLayoutProfile {
         // 3. D-Pad (Center at leftBaseX, Y = 0.65f) - Left margin >= 0.095f (~10%)
         HudButton dpadUp = new HudButton();
         dpadUp.label = "▲";
-        dpadUp.action = HudAction.key(103); // UP
+        dpadUp.action = HudAction.gamepadBtn(544); // BTN_DPAD_UP
         dpadUp.action.repeat = true;
         dpadUp.widthDp = 44;
         dpadUp.heightDp = 44;
@@ -156,7 +156,7 @@ public final class HudLayoutProfile {
 
         HudButton dpadDown = new HudButton();
         dpadDown.label = "▼";
-        dpadDown.action = HudAction.key(108); // DOWN
+        dpadDown.action = HudAction.gamepadBtn(545); // BTN_DPAD_DOWN
         dpadDown.action.repeat = true;
         dpadDown.widthDp = 44;
         dpadDown.heightDp = 44;
@@ -167,7 +167,7 @@ public final class HudLayoutProfile {
 
         HudButton dpadLeft = new HudButton();
         dpadLeft.label = "◀";
-        dpadLeft.action = HudAction.key(105); // LEFT
+        dpadLeft.action = HudAction.gamepadBtn(546); // BTN_DPAD_LEFT
         dpadLeft.action.repeat = true;
         dpadLeft.widthDp = 44;
         dpadLeft.heightDp = 44;
@@ -178,7 +178,7 @@ public final class HudLayoutProfile {
 
         HudButton dpadRight = new HudButton();
         dpadRight.label = "▶";
-        dpadRight.action = HudAction.key(106); // RIGHT
+        dpadRight.action = HudAction.gamepadBtn(547); // BTN_DPAD_RIGHT
         dpadRight.action.repeat = true;
         dpadRight.widthDp = 44;
         dpadRight.heightDp = 44;
@@ -190,7 +190,7 @@ public final class HudLayoutProfile {
         // 4. Utility Controls: moved to center-bottom row so area below D-Pad is 100% clear
         HudButton btnSelect = new HudButton();
         btnSelect.label = "SELECT";
-        btnSelect.action = HudAction.key(54); // Shift
+        btnSelect.action = HudAction.gamepadBtn(314); // BTN_SELECT
         btnSelect.widthDp = 50;
         btnSelect.heightDp = 30;
         btnSelect.cornerRadiusDp = 8;
@@ -220,7 +220,7 @@ public final class HudLayoutProfile {
 
         HudButton btnStart = new HudButton();
         btnStart.label = "START";
-        btnStart.action = HudAction.key(28); // Enter
+        btnStart.action = HudAction.gamepadBtn(315); // BTN_START
         btnStart.widthDp = 50;
         btnStart.heightDp = 30;
         btnStart.cornerRadiusDp = 8;
@@ -229,10 +229,10 @@ public final class HudLayoutProfile {
         layout.floatingButtons.add(btnStart);
 
         // ===== Right Gutter (Action Diamond & Bumpers) =====
-        // 1. R1 (Mouse Left)
+        // 1. R1 (Bumper / RB)
         HudButton btnR1 = new HudButton();
         btnR1.label = "R1";
-        btnR1.action = HudAction.system("mouse_left");
+        btnR1.action = HudAction.gamepadBtn(311); // BTN_TR (RB)
         btnR1.widthDp = 52;
         btnR1.heightDp = 34;
         btnR1.cornerRadiusDp = 10;
@@ -240,10 +240,10 @@ public final class HudLayoutProfile {
         btnR1.posYPercent = 0.14f;
         layout.floatingButtons.add(btnR1);
 
-        // 2. R2 (Mouse Right)
+        // 2. R2 (Trigger / RT)
         HudButton btnR2 = new HudButton();
         btnR2.label = "R2";
-        btnR2.action = HudAction.system("mouse_right");
+        btnR2.action = HudAction.gamepadBtn(313); // BTN_TR2 (RT)
         btnR2.widthDp = 52;
         btnR2.heightDp = 34;
         btnR2.cornerRadiusDp = 10;
@@ -265,7 +265,7 @@ public final class HudLayoutProfile {
         // 4. ABXY Diamond Cluster (Center at rightBaseX, Y = 0.65f) - Right margin <= 0.905f (~10%)
         HudButton btnY = new HudButton();
         btnY.label = "Y";
-        btnY.action = HudAction.key(57); // SPACE
+        btnY.action = HudAction.gamepadBtn(307); // BTN_Y
         btnY.widthDp = 44;
         btnY.heightDp = 44;
         btnY.cornerRadiusDp = 22;
@@ -275,7 +275,7 @@ public final class HudLayoutProfile {
 
         HudButton btnA = new HudButton();
         btnA.label = "A";
-        btnA.action = HudAction.key(28); // ENTER
+        btnA.action = HudAction.gamepadBtn(304); // BTN_A
         btnA.widthDp = 44;
         btnA.heightDp = 44;
         btnA.cornerRadiusDp = 22;
@@ -285,7 +285,7 @@ public final class HudLayoutProfile {
 
         HudButton btnX = new HudButton();
         btnX.label = "X";
-        btnX.action = HudAction.key(14); // BKSP
+        btnX.action = HudAction.gamepadBtn(308); // BTN_X
         btnX.widthDp = 44;
         btnX.heightDp = 44;
         btnX.cornerRadiusDp = 22;
@@ -295,7 +295,7 @@ public final class HudLayoutProfile {
 
         HudButton btnB = new HudButton();
         btnB.label = "B";
-        btnB.action = HudAction.key(1); // ESC
+        btnB.action = HudAction.gamepadBtn(305); // BTN_B
         btnB.widthDp = 44;
         btnB.heightDp = 44;
         btnB.cornerRadiusDp = 22;
@@ -306,7 +306,7 @@ public final class HudLayoutProfile {
         // 5. Home
         HudButton btnHome = new HudButton();
         btnHome.label = "HOME";
-        btnHome.action = HudAction.key(125); // Super
+        btnHome.action = HudAction.gamepadBtn(316); // BTN_MODE (Guide)
         btnHome.popupAction = HudAction.system("open_settings");
         btnHome.widthDp = 44;
         btnHome.heightDp = 30;

@@ -1256,6 +1256,20 @@ Java_com_anland_consumer_Native_nativeSendMouseButton(
 }
 
 JNIEXPORT void JNICALL
+Java_com_anland_consumer_Native_nativeSendGamepad(
+    JNIEnv *env, jclass clazz, jlong handle, jint gpType, jint code, jint value)
+{
+    struct consumer_state *s = STATE(handle);
+    if (!s || !s->ctx)
+        return;
+    struct InputEvent ev = {
+        .type = (uint32_t)gpType,
+        .gamepad = { .code = code, .value = value },
+    };
+    push_input_event(s->ctx, &ev);
+}
+
+JNIEXPORT void JNICALL
 Java_com_anland_consumer_Native_nativeSendMouseScroll(
     JNIEnv *env, jclass clazz, jlong handle, jint axis, jfloat value)
 {

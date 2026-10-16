@@ -740,6 +740,10 @@ public class MainActivity extends Activity
                 if (mNative != null) mNative.sendMouseButton(button, pressed);
             }
             @Override
+            public void sendGamepad(int gpType, int code, int value) {
+                if (mNative != null) mNative.sendGamepad(gpType, code, value);
+            }
+            @Override
             public void sendMouseScroll(int axis, float value) {
                 if (mNative != null) mNative.sendMouseScroll(axis, value);
             }
@@ -2818,6 +2822,12 @@ public class MainActivity extends Activity
     public void sendMouseButton(int button, boolean pressed) {
         if (mNative != null)
             mNative.sendMouseButton(button, pressed);
+    }
+
+    @Override
+    public void sendGamepad(int gpType, int code, int value) {
+        if (mNative != null)
+            mNative.sendGamepad(gpType, code, value);
     }
 
     @Override

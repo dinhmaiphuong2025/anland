@@ -413,11 +413,14 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mBtnTrackPointMode = createBadgeButton("MOUSE");
         mBtnTrackPointMode.setOnClickListener(v -> {
             if (mActiveButton == null) return;
-            String next = HudButton.MODE_MOUSE.equals(mActiveButton.trackpointMode)
-                    ? HudButton.MODE_SCROLL
-                    : HudButton.MODE_MOUSE;
+            String cur = mActiveButton.trackpointMode != null ? mActiveButton.trackpointMode : HudButton.MODE_MOUSE;
+            String next;
+            if (HudButton.MODE_MOUSE.equals(cur)) next = HudButton.MODE_SCROLL;
+            else if (HudButton.MODE_SCROLL.equals(cur)) next = HudButton.MODE_STICK_LEFT;
+            else if (HudButton.MODE_STICK_LEFT.equals(cur)) next = HudButton.MODE_STICK_RIGHT;
+            else next = HudButton.MODE_MOUSE;
             mActiveButton.trackpointMode = next;
-            mBtnTrackPointMode.setText(next.toUpperCase());
+            mBtnTrackPointMode.setText(next.toUpperCase().replace('_', ' '));
             if (mCallback != null) mCallback.onModelChanged(mActiveButton);
         });
         mTrackPointOptions.addView(createLabelValueRow("Mode", null, mBtnTrackPointMode));
@@ -518,7 +521,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
             mTrackPointOptions.setVisibility(isTrackpoint ? VISIBLE : GONE);
             if (isTrackpoint) {
                 String mode = b.trackpointMode != null ? b.trackpointMode : HudButton.MODE_MOUSE;
-                mBtnTrackPointMode.setText(mode.toUpperCase());
+                mBtnTrackPointMode.setText(mode.toUpperCase().replace('_', ' '));
                 syncSliderAndInput(mTrackSensitivitySeekBar, mTrackSensitivityInput, Math.round(b.trackpointSensitivity * 10), 5, 30);
                 syncSliderAndInput(mTrackDeadzoneSeekBar, mTrackDeadzoneInput, b.trackpointDeadzoneDp, 0, 16);
             }
@@ -854,8 +857,33 @@ public final class HudPropertyInspectorView extends LinearLayout {
                 return a.text != null && !a.text.isEmpty() ? ("Text " + a.text) : UNASSIGNED_LABEL;
             case HudAction.TYPE_SYSTEM:
                 return "Sys " + (a.systemCommand != null ? a.systemCommand : UNASSIGNED_LABEL);
+            case HudAction.TYPE_GAMEPAD:
+                return labelForGamepad(a.code);
             default:
                 return UNASSIGNED_LABEL;
+        }
+    }
+
+    public static String labelForGamepad(int code) {
+        switch (code) {
+            case 304: return "GP: A";
+            case 305: return "GP: B";
+            case 308: return "GP: X";
+            case 307: return "GP: Y";
+            case 310: return "GP: LB";
+            case 311: return "GP: RB";
+            case 312: return "GP: LT";
+            case 313: return "GP: RT";
+            case 314: return "GP: SELECT";
+            case 315: return "GP: START";
+            case 316: return "GP: GUIDE";
+            case 317: return "GP: L3";
+            case 318: return "GP: R3";
+            case 544: return "GP: ▲";
+            case 545: return "GP: ▼";
+            case 546: return "GP: ◀";
+            case 547: return "GP: ▶";
+            default: return "GP " + code;
         }
     }
 

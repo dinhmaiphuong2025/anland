@@ -165,10 +165,12 @@ public final class HudKeyPickerDialog {
 
         Button btnTabKeys = createTabButton(context, "KEYS");
         Button btnTabMods = createTabButton(context, "MODS & SYS");
+        Button btnTabGamepad = createTabButton(context, "GAMEPAD");
         Button btnTabCombo = createTabButton(context, "COMBO");
 
         tabRow.addView(btnTabKeys);
         tabRow.addView(btnTabMods);
+        tabRow.addView(btnTabGamepad);
         tabRow.addView(btnTabCombo);
 
         // KEYS is dense 4-column (6 in landscape); MODS & SYS is 3-column (4 in landscape)
@@ -178,7 +180,10 @@ public final class HudKeyPickerDialog {
         final int[] activeTab = {0};
         final Runnable refreshCurrentTab = () -> {
             String query = searchInput.getText() != null ? searchInput.getText().toString().trim().toLowerCase() : "";
-            List<KeyEntry> source = (activeTab[0] == 0) ? getStandardKeys() : getModsAndSystemKeys();
+            List<KeyEntry> source;
+            if (activeTab[0] == 0) source = getStandardKeys();
+            else if (activeTab[0] == 1) source = getModsAndSystemKeys();
+            else source = getGamepadKeys();
             List<KeyEntry> filtered = new ArrayList<>();
             if (query.isEmpty()) {
                 filtered.addAll(source);
@@ -196,11 +201,11 @@ public final class HudKeyPickerDialog {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
             @Override public void afterTextChanged(Editable s) {
-                if (activeTab[0] != 2) refreshCurrentTab.run();
+                if (activeTab[0] != 3) refreshCurrentTab.run();
             }
         });
 
-        Runnable[] selectTab = new Runnable[3];
+        Runnable[] selectTab = new Runnable[4];
         selectTab[0] = () -> {
             activeTab[0] = 0;
             searchInput.setVisibility(View.VISIBLE);
@@ -213,21 +218,28 @@ public final class HudKeyPickerDialog {
             highlightTab(tabRow, 1);
             refreshCurrentTab.run();
         };
+        selectTab[2] = () -> {
+            activeTab[0] = 2;
+            searchInput.setVisibility(View.VISIBLE);
+            highlightTab(tabRow, 2);
+            refreshCurrentTab.run();
+        };
         // The COMBO tab inlines the combo builder so the user does not get a
         // second nested dialog. Tapping APPLY calls onComboBuilt which
         // dismisses the outer dialog and forwards the new HudAction.combo
         // to the caller's onActionSelected (via the default in
         // OnActionSelectedListener).
-        selectTab[2] = () -> {
-            activeTab[0] = 2;
+        selectTab[3] = () -> {
+            activeTab[0] = 3;
             searchInput.setVisibility(View.GONE);
-            highlightTab(tabRow, 2);
+            highlightTab(tabRow, 3);
             showComboTab(context, contentContainer, listener, dialog);
         };
 
         btnTabKeys.setOnClickListener(v -> selectTab[0].run());
         btnTabMods.setOnClickListener(v -> selectTab[1].run());
-        btnTabCombo.setOnClickListener(v -> selectTab[2].run());
+        btnTabGamepad.setOnClickListener(v -> selectTab[2].run());
+        btnTabCombo.setOnClickListener(v -> selectTab[3].run());
 
         dialog.setOnDismissListener(d -> {
             if (onDismiss != null) onDismiss.run();
@@ -404,6 +416,38 @@ public final class HudKeyPickerDialog {
         list.add(new KeyEntry("Mouse Mid", HudAction.system("mouse_middle")));
         list.add(new KeyEntry("Scroll Up", HudAction.system("mouse_scroll_up")));
         list.add(new KeyEntry("Scroll Down", HudAction.system("mouse_scroll_down")));
+        return list;
+    }
+
+    private static List<KeyEntry> getGamepadKeys() {
+        List<KeyEntry> list = new ArrayList<>();
+        // Face buttons (Xbox 360 / XInput mapping)
+        list.add(new KeyEntry("GP: A", HudAction.gamepadBtn(304)));
+        list.add(new KeyEntry("GP: B", HudAction.gamepadBtn(305)));
+        list.add(new KeyEntry("GP: X", HudAction.gamepadBtn(308)));
+        list.add(new KeyEntry("GP: Y", HudAction.gamepadBtn(307)));
+
+        // Bumpers & Triggers
+        list.add(new KeyEntry("GP: LB (L1)", HudAction.gamepadBtn(310)));
+        list.add(new KeyEntry("GP: RB (R1)", HudAction.gamepadBtn(311)));
+        list.add(new KeyEntry("GP: LT (L2)", HudAction.gamepadBtn(312)));
+        list.add(new KeyEntry("GP: RT (R2)", HudAction.gamepadBtn(313)));
+
+        // System / Menu
+        list.add(new KeyEntry("GP: SELECT", HudAction.gamepadBtn(314)));
+        list.add(new KeyEntry("GP: START", HudAction.gamepadBtn(315)));
+        list.add(new KeyEntry("GP: GUIDE", HudAction.gamepadBtn(316)));
+
+        // Thumbstick Clicks
+        list.add(new KeyEntry("GP: L3 (Thumb)", HudAction.gamepadBtn(317)));
+        list.add(new KeyEntry("GP: R3 (Thumb)", HudAction.gamepadBtn(318)));
+
+        // D-Pad Directional Buttons
+        list.add(new KeyEntry("GP: D-PAD ▲", HudAction.gamepadBtn(544)));
+        list.add(new KeyEntry("GP: D-PAD ▼", HudAction.gamepadBtn(545)));
+        list.add(new KeyEntry("GP: D-PAD ◀", HudAction.gamepadBtn(546)));
+        list.add(new KeyEntry("GP: D-PAD ▶", HudAction.gamepadBtn(547)));
+
         return list;
     }
 
