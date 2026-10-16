@@ -773,6 +773,14 @@ public class MainActivity extends Activity
                 startActivity(buildSettingsIntent());
             }
             @Override
+            public void toggleSteamDeckMode() {
+                MainActivity.this.toggleSteamDeckMode();
+            }
+            @Override
+            public void exitSteamDeckMode() {
+                MainActivity.this.setSteamDeckMode(false);
+            }
+            @Override
             public void onLayoutSaved() {
                 // Only relayout when the native pipeline exists. In editor
                 // mode (mNative == null) there is no surface to relayout,
@@ -2433,6 +2441,39 @@ public class MainActivity extends Activity
         surfaceScale = (float) surfaceW / customScreenWidth;
     }
 
+    public void toggleSteamDeckMode() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean cur = prefs.getBoolean(KEY_STEAM_DECK_MODE, false);
+        setSteamDeckMode(!cur);
+    }
+
+    public void setSteamDeckMode(boolean enabled) {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        prefs.edit()
+                .putBoolean(KEY_STEAM_DECK_MODE, enabled)
+                .putBoolean("use_hud_overlay", enabled || prefs.getBoolean("use_hud_overlay", false))
+                .putString(KEY_LANDSCAPE_ASPECT_RATIO, enabled ? RATIO_STEAM_DECK : RATIO_AUTO)
+                .apply();
+
+        if (enabled) {
+            try {
+                String profileJson = prefs.getString("hud_layout_profile_v2", null);
+                com.anland.consumer.hud.HudLayoutProfile profile = com.anland.consumer.hud.HudLayoutProfile.fromJSON(profileJson);
+                profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
+                prefs.edit().putString("hud_layout_profile_v2", profile.toJSON().toString()).apply();
+            } catch (Exception ignored) {}
+            android.widget.Toast.makeText(this, "Đã bật Chế độ Steam Deck", android.widget.Toast.LENGTH_SHORT).show();
+        } else {
+            android.widget.Toast.makeText(this, "Đã thoát Chế độ Steam Deck", android.widget.Toast.LENGTH_SHORT).show();
+        }
+
+        if (mHudOverlay != null) {
+            mHudOverlay.loadProfile();
+            mHudOverlay.setVisibility(enabled ? View.VISIBLE : (prefs.getBoolean("use_hud_overlay", false) ? View.VISIBLE : View.GONE));
+        }
+        relayout();
+    }
+
     private void adjustSurfaceViewLayoutRatio(FrameLayout.LayoutParams lp, String ratioPref) {
         if (mRoot == null) return;
         int parentW = mRoot.getWidth();
@@ -2445,25 +2486,28 @@ public class MainActivity extends Activity
         float targetRatio;
         float baseWidth;
         if (isSteamDeck || RATIO_STEAM_DECK.equals(ratioPref)) {
-            // Steam Deck Handheld 16:10 format centered cleanly between controller grips
-            targetRatio = 16f / 10f;
+            // Steam Deck Handheld Mode:
+            // 1. Full vertical height (ZERO top/bottom letterbox margins!)
+            // 2. Width centered with comfortable gutter margins for left & right grips (~110dp each)
             int surfaceH = availH;
-            int surfaceW = Math.round(availH * targetRatio);
-            int maxW = Math.round(parentW - 2f * 200f * mDensity);
-            if (surfaceW > maxW && maxW > 400) {
-                surfaceW = maxW;
-                surfaceH = Math.round(surfaceW / targetRatio);
+            int gutterPx = Math.round(110f * mDensity);
+            int surfaceW = parentW - 2 * gutterPx;
+            // Target 16:10 aspect ratio if the phone screen is wide enough
+            int ideal1610W = Math.round(surfaceH * (16f / 10f));
+            if (ideal1610W < surfaceW && ideal1610W > 400) {
+                surfaceW = ideal1610W;
             }
+            if (surfaceW < 300) surfaceW = parentW;
 
             lp.width = surfaceW;
             lp.height = surfaceH;
-            lp.gravity = (lp.bottomMargin > 0) ? (Gravity.TOP | Gravity.CENTER_HORIZONTAL) : Gravity.CENTER;
+            lp.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
             lp.leftMargin = 0;
             lp.topMargin = 0;
             surfaceView.setLayoutParams(lp);
 
             surfaceOffsetX = (parentW - surfaceW) / 2f;
-            surfaceOffsetY = (lp.bottomMargin > 0) ? 0f : ((parentH - surfaceH) / 2f);
+            surfaceOffsetY = 0f; // ZERO vertical offset!
             customScreenWidth = surfaceW;
             customScreenHeight = surfaceH;
             if (mNative != null) {

@@ -203,10 +203,10 @@ static int open_vgpad(void)
     return -1;
 }
 
-static void forward_gamepad(uint32_t type, int32_t code, int32_t value)
+static int forward_gamepad(uint32_t type, int32_t code, int32_t value)
 {
     int fd = open_vgpad();
-    if (fd < 0) return;
+    if (fd < 0) return -1;
 
     char buf[64];
     int len = 0;
@@ -220,8 +220,11 @@ static void forward_gamepad(uint32_t type, int32_t code, int32_t value)
         if (w < 0) {
             close(s_vgpad_fd);
             s_vgpad_fd = -1;
+            return -1;
         }
+        return 0;
     }
+    return -1;
 }
 
 int anland_niri_poll_input(anland_niri_bridge *b, anland_niri_input *out)
@@ -232,8 +235,38 @@ int anland_niri_poll_input(anland_niri_bridge *b, anland_niri_input *out)
         int rc = anland_device_poll_input(device(b), &ev, 0);
         if (rc != 1) return rc;
         if (ev.type == ANLAND_DEVICE_IN_GAMEPAD_KEY || ev.type == ANLAND_DEVICE_IN_GAMEPAD_ABS) {
-            forward_gamepad(ev.type, ev.gamepad.code, ev.gamepad.value);
-            continue; /* Swallow gamepad event so Niri never receives it */
+            if (forward_gamepad(ev.type, ev.gamepad.code, ev.gamepad.value) == 0) {
+                continue; /* Successfully delivered to vgpad uinput daemon */
+            }
+            /* Fallback when vgpad daemon is not active: deliver as standard evdev keys to Niri/games */
+            if (ev.type == ANLAND_DEVICE_IN_GAMEPAD_KEY) {
+                memset(out, 0, sizeof(*out));
+                int code = ev.gamepad.code;
+                int act = ev.gamepad.value ? 0 : 1; // 0=down, 1=up
+                int key = 0;
+                switch (code) {
+                case 304: key = 28; break;  /* BTN_A -> ENTER */
+                case 305: key = 1; break;   /* BTN_B -> ESC */
+                case 308: key = 45; break;  /* BTN_X -> KEY_X */
+                case 307: key = 46; break;  /* BTN_Y -> KEY_C */
+                case 310: key = 15; break;  /* BTN_TL (L1) -> TAB */
+                case 311: key = 18; break;  /* BTN_TR (R1) -> KEY_E */
+                case 312: key = 1; break;   /* BTN_TL2 (L2) -> ESC */
+                case 313: key = 57; break;  /* BTN_TR2 (R2) -> SPACE */
+                case 314: key = 42; break;  /* BTN_SELECT -> SHIFT */
+                case 315: key = 28; break;  /* BTN_START -> ENTER */
+                case 544: key = 103; break; /* BTN_DPAD_UP -> UP */
+                case 545: key = 108; break; /* BTN_DPAD_DOWN -> DOWN */
+                case 546: key = 105; break; /* BTN_DPAD_LEFT -> LEFT */
+                case 547: key = 106; break; /* BTN_DPAD_RIGHT -> RIGHT */
+                default: key = code; break;
+                }
+                out->type = ANLAND_DEVICE_IN_KEY;
+                out->code = key;
+                out->action = act;
+                return 1;
+            }
+            continue; /* Swallow unmapped gamepad abs if vgpad is absent */
         }
         memset(out, 0, sizeof(*out));
         out->type = ev.type;

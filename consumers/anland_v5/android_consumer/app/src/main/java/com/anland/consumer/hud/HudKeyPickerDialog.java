@@ -416,6 +416,8 @@ public final class HudKeyPickerDialog {
         list.add(new KeyEntry("Mouse Mid", HudAction.system("mouse_middle")));
         list.add(new KeyEntry("Scroll Up", HudAction.system("mouse_scroll_up")));
         list.add(new KeyEntry("Scroll Down", HudAction.system("mouse_scroll_down")));
+        list.add(new KeyEntry("Steam Deck Mode", HudAction.system("toggle_steam_deck")));
+        list.add(new KeyEntry("Exit Deck Mode", HudAction.system("exit_steam_deck")));
         return list;
     }
 

@@ -384,6 +384,8 @@ public class SettingsActivity extends Activity {
                     profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
                     edit.putString("hud_layout_profile_v2", profile.toJSON().toString());
                 } catch (Exception ignored) {}
+            } else {
+                edit.putString("landscape_aspect_ratio", "auto");
             }
             edit.apply();
             showKeyboardPage();

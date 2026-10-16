@@ -44,6 +44,8 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         void toggleSystemKeyboard();
         void toggleVirtualKeyboard();
         void openSettings();
+        void toggleSteamDeckMode();
+        void exitSteamDeckMode();
         void onLayoutSaved();
         // True when the daemon socket is live and the native pipeline is
         // connected. False during editor-only mode when the daemon is offline.
@@ -1169,6 +1171,8 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             if ("toggle_ime".equals(action.systemCommand)) mHost.toggleSystemKeyboard();
             else if ("toggle_vk".equals(action.systemCommand)) mHost.toggleVirtualKeyboard();
             else if ("open_settings".equals(action.systemCommand)) mHost.openSettings();
+            else if ("toggle_steam_deck".equals(action.systemCommand)) mHost.toggleSteamDeckMode();
+            else if ("exit_steam_deck".equals(action.systemCommand)) mHost.exitSteamDeckMode();
             else if ("mouse_left".equals(action.systemCommand)) {
                 mHost.sendMouseButton(0x110, true);
                 postDelayed(() -> mHost.sendMouseButton(0x110, false), 50);
