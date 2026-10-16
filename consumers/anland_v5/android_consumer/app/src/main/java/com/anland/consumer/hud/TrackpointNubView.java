@@ -225,6 +225,8 @@ public final class TrackpointNubView extends View {
     private void dispatchContinuousMotion() {
         if (mDispatcher == null) return;
         float density = getResources().getDisplayMetrics().density;
+        float radius = Math.min(getWidth(), getHeight()) * 0.5f - 3 * density;
+        float nubRadius = radius * 0.45f;
         float deadzone = mModel.trackpointDeadzoneDp * density;
         float dist = (float) Math.hypot(mCurrentOffsetX, mCurrentOffsetY);
 

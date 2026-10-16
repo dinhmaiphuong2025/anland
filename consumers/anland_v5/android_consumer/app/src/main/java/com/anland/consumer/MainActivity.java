@@ -2824,7 +2824,6 @@ public class MainActivity extends Activity
             mNative.sendMouseButton(button, pressed);
     }
 
-    @Override
     public void sendGamepad(int gpType, int code, int value) {
         if (mNative != null)
             mNative.sendGamepad(gpType, code, value);
