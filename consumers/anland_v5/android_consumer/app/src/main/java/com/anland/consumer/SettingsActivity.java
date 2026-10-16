@@ -45,7 +45,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -319,11 +322,9 @@ public class SettingsActivity extends Activity {
             currentPage = Page.KEYBOARD;
             LinearLayout root = newPage(R.string.cat_keyboard_title);
             buildVirtualKeyboardSection(root);
-            buildImmersiveSection(root);
-            buildHudSection(root);
             buildExtraKeysSection(root);
-            buildCustomLayoutSection(root);
-            buildAccessibilitySection(root);
+            buildHudSection(root);
+            buildSystemShortcutsSection(root);
             setContent(root);
         } catch (Throwable t) {
             Log.e(TAG, "showKeyboardPage error", t);
@@ -332,58 +333,51 @@ public class SettingsActivity extends Activity {
         }
     }
 
-    // Custom HUD Control is a peer of the ExtraKeys bar and Immersive Mode:
-    // a feature of the same level on the keyboard page, not a sub-feature of
-    // the ExtraKeys row. The order is:
-    //   1. Virtual Keyboard
-    //   2. Immersive Mode
-    //   3. Custom HUD Control   <-- this section
-    //   4. ExtraKeys Bar
-    //   5. Custom Layout (ExtraKeys JSON editor)
-    //   6. Accessibility
     private void buildHudSection(LinearLayout root) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         boolean useHud = prefs.getBoolean("use_hud_overlay", false);
 
         TextView header = new TextView(this);
-        header.setText("Custom HUD Control");
+        header.setText("3. Nút nổi HUD & Gamepad điều khiển");
         header.setTextSize(16);
         header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
-        header.setPadding(0, dp(24), 0, dp(8));
+        header.setPadding(0, dp(14), 0, dp(6));
         root.addView(header);
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+        card.setPadding(dp(14), dp(12), dp(14), dp(14));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.bottomMargin = dp(16);
+        card.setLayoutParams(cardLp);
 
         Switch hudSwitch = new Switch(this);
         M3.styleSwitch(hudSwitch);
-        hudSwitch.setText("Enable Custom HUD Control (Floating Buttons)");
+        hudSwitch.setText("Bật Nút Nổi HUD (Floating Controls)");
         hudSwitch.setChecked(useHud);
-        hudSwitch.setPadding(0, dp(8), 0, dp(8));
-        // Toggling the HUD must NOT touch KEY_EXTRA_KEYS_MODE anymore. The two
-        // features are now independent peers: the user can run the floating
-        // button overlay, the legacy ExtraKeys bar, or both at the same time.
+        hudSwitch.setPadding(0, dp(4), 0, dp(4));
         hudSwitch.setOnCheckedChangeListener((v, checked) -> {
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean("use_hud_overlay", checked).apply();
             showKeyboardPage();
         });
-        root.addView(hudSwitch);
+        card.addView(hudSwitch);
+
+        TextView hudHint = new TextView(this);
+        hudHint.setText("Khi xoay ngang và bật HUD, ExtraKeysBar sẽ tự động tắt hoàn toàn để không che khuất tầm nhìn.");
+        hudHint.setTextSize(12);
+        hudHint.setTextColor(M3.COLOR_TEXT_MUTED);
+        hudHint.setPadding(0, dp(2), 0, dp(8));
+        card.addView(hudHint);
 
         if (useHud) {
-            // === Open Visual HUD Layout Editor ===
-            // Styled like the existing "Bind Soft Keyboard Toggle Key" button:
-            // a plain Material Button with just text + the default ripple, so
-            // all the bind-style controls read as a single coherent row group.
             Button btnEditHud = new Button(this);
             styleSettingsButton(btnEditHud);
-            btnEditHud.setText("Open Visual HUD Layout Editor");
+            btnEditHud.setText("Mở Visual HUD Layout Editor");
             btnEditHud.setOnClickListener(v -> {
-                // Re-enter the MainActivity that spawned us, passing the
-                // daemon it is connected to. Without these extras the
-                // editor falls back to the default socket, which is not
-                // the Droidspaces-owned daemon, so Android spawns a second
-                // task with a black screen. singleTask + SINGLE_TOP +
-                // CLEAR_TOP brings the existing instance forward so
-                // onNewIntent fires and the original task is reused.
                 Intent intent = new Intent(this, MainActivity.class);
                 intent.setAction("OPEN_HUD_EDITOR");
                 if (mCurrentSocketPath != null) {
@@ -398,25 +392,20 @@ public class SettingsActivity extends Activity {
                 startActivity(intent);
                 finish();
             });
-            root.addView(btnEditHud);
+            LinearLayout.LayoutParams ehLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            ehLp.bottomMargin = dp(8);
+            btnEditHud.setLayoutParams(ehLp);
+            card.addView(btnEditHud);
 
             Button btnPresets = new Button(this);
             styleSettingsButton(btnPresets);
-            btnPresets.setText("Select HUD Layout Preset...");
+            btnPresets.setText("Chọn Preset Bố Cục (Console Gamepad / Desktop)...");
             btnPresets.setOnClickListener(v -> showHudPresetsDialog());
-            LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            pLp.topMargin = dp(8);
-            btnPresets.setLayoutParams(pLp);
-            root.addView(btnPresets);
-
-            TextView hudHint = new TextView(this);
-            hudHint.setText("Design on-screen floating buttons. Add a TrackPoint (mouse or scroll mode) or a Super Gesture nub; each can be moved, resized and rebound to any key/combo/action with live snapping and precise numeric properties. In landscape, ExtraKeysBar is automatically hidden when HUD is enabled.");
-            hudHint.setTextSize(12);
-            hudHint.setTextColor(M3.COLOR_TEXT_MUTED);
-            hudHint.setPadding(0, dp(4), 0, dp(12));
-            root.addView(hudHint);
+            card.addView(btnPresets);
         }
+
+        root.addView(card);
     }
 
     private void showHudPresetsDialog() {
@@ -499,182 +488,142 @@ public class SettingsActivity extends Activity {
     // ============================================================
 
     private void buildVirtualKeyboardSection(LinearLayout root) {
-        addSectionHeader(root, R.string.section_virtual_keyboard, 0);
-        // Constructing the row appends it to `root`.
-        new KeyBinding(root, KEY_BOUND_KEYCODE, null, R.string.bind_key_button);
-
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        Switch raiseDesktopSwitch = new Switch(this);
-        M3.styleSwitch(raiseDesktopSwitch);
-        raiseDesktopSwitch.setText(R.string.raise_desktop_for_soft_keyboard);
-        raiseDesktopSwitch.setPadding(0, dp(8), 0, 0);
-        raiseDesktopSwitch.setChecked(!prefs.getBoolean(KEY_KEYBOARD_FLOATING, false));
-        raiseDesktopSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putBoolean(KEY_KEYBOARD_FLOATING, !checked).apply());
-        root.addView(raiseDesktopSwitch);
 
-        TextView raiseDesktopHint = new TextView(this);
-        raiseDesktopHint.setText(R.string.raise_desktop_for_soft_keyboard_hint);
-        raiseDesktopHint.setTextSize(12);
-        raiseDesktopHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        raiseDesktopHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(raiseDesktopHint);
+        TextView header = new TextView(this);
+        header.setText("1. Bàn phím chia đôi (Virtual Keyboard Split-Arc)");
+        header.setTextSize(16);
+        header.setTextColor(Color.WHITE);
+        header.setTypeface(null, Typeface.BOLD);
+        header.setPadding(0, dp(12), 0, dp(6));
+        root.addView(header);
 
-        // Portrait IME Lock
-        Switch portraitImeLockSwitch = new Switch(this);
-        M3.styleSwitch(portraitImeLockSwitch);
-        portraitImeLockSwitch.setText("Lock Soft Keyboard in Portrait");
-        portraitImeLockSwitch.setPadding(0, dp(12), 0, 0);
-        portraitImeLockSwitch.setChecked(prefs.getBoolean("portrait_ime_lock", false));
-        portraitImeLockSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putBoolean("portrait_ime_lock", checked).apply());
-        root.addView(portraitImeLockSwitch);
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+        card.setPadding(dp(14), dp(12), dp(14), dp(14));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.bottomMargin = dp(16);
+        card.setLayoutParams(cardLp);
 
-        TextView portraitImeLockHint = new TextView(this);
-        portraitImeLockHint.setText("Keeps soft keyboard open in portrait mode across app switches. Automatically scales desktop back to full screen if manually dismissed.");
-        portraitImeLockHint.setTextSize(12);
-        portraitImeLockHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        portraitImeLockHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(portraitImeLockHint);
-
-        // Landscape Split Arc Keyboard
+        // Landscape Split Arc Keyboard Switch
         Switch splitArcSwitch = new Switch(this);
         M3.styleSwitch(splitArcSwitch);
         splitArcSwitch.setText("Landscape Split Arc Keyboard");
-        splitArcSwitch.setPadding(0, dp(12), 0, 0);
         splitArcSwitch.setChecked(prefs.getBoolean("landscape_split_arc", true));
         splitArcSwitch.setOnCheckedChangeListener((v, checked) ->
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean("landscape_split_arc", checked).apply());
-        root.addView(splitArcSwitch);
+        card.addView(splitArcSwitch);
 
         TextView splitArcHint = new TextView(this);
-        splitArcHint.setText("Ergonomic dual-thumb radial keyboard with customizable beveled top wings, leaving the center desktop unobstructed.");
+        splitArcHint.setText("Bàn phím công thái học vòm cong hai bên ngón cái khi xoay ngang, để trống phần giữa màn hình.");
         splitArcHint.setTextSize(12);
         splitArcHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        splitArcHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(splitArcHint);
+        splitArcHint.setPadding(0, dp(2), 0, dp(10));
+        card.addView(splitArcHint);
 
+        // Wings Editor Button
+        Button btnWings = new Button(this);
+        M3.styleButton(btnWings, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_PRIMARY);
+        btnWings.setText("Tùy biến cánh phím phụ (Wings Editor)...");
+        btnWings.setTextSize(12.5f);
+        btnWings.setOnClickListener(v -> showWingsEditorDialog());
+        LinearLayout.LayoutParams bwLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bwLp.bottomMargin = dp(10);
+        btnWings.setLayoutParams(bwLp);
+        card.addView(btnWings);
+
+        // Collapsible Advanced Settings
+        final Button btnAdvVkb = new Button(this);
+        M3.styleButton(btnAdvVkb, M3.COLOR_SURFACE_HIGHEST, 0x33FFFFFF, M3.COLOR_TEXT_SECONDARY);
+        btnAdvVkb.setText("Cài đặt bàn phím nâng cao ▼");
+        btnAdvVkb.setTextSize(12);
+        card.addView(btnAdvVkb);
+
+        final LinearLayout advVkbContainer = new LinearLayout(this);
+        advVkbContainer.setOrientation(LinearLayout.VERTICAL);
+        advVkbContainer.setVisibility(View.GONE);
+        advVkbContainer.setPadding(0, dp(10), 0, 0);
+
+        btnAdvVkb.setOnClickListener(v -> {
+            boolean visible = (advVkbContainer.getVisibility() == View.VISIBLE);
+            advVkbContainer.setVisibility(visible ? View.GONE : View.VISIBLE);
+            btnAdvVkb.setText(visible ? "Cài đặt bàn phím nâng cao ▼" : "Cài đặt bàn phím nâng cao ▲");
+        });
+
+        // Animation Style
         TextView animLabel = new TextView(this);
-        animLabel.setText("Arc Keyboard Animation Style");
-        animLabel.setTextSize(14);
-        animLabel.setTextColor(Color.WHITE);
-        animLabel.setPadding(0, dp(8), 0, dp(4));
-        root.addView(animLabel);
-
-        LinearLayout animCard = new LinearLayout(this);
-        animCard.setOrientation(LinearLayout.VERTICAL);
-        android.graphics.drawable.GradientDrawable aBg = new android.graphics.drawable.GradientDrawable();
-        aBg.setCornerRadius(dp(8));
-        aBg.setColor(0xFF181825);
-        aBg.setStroke(dp(1), 0x22FFFFFF);
-        animCard.setBackground(aBg);
-        animCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+        animLabel.setText("Kiểu hoạt ảnh mở phím (Animation)");
+        animLabel.setTextSize(13);
+        animLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
+        animLabel.setPadding(0, dp(6), 0, dp(2));
+        advVkbContainer.addView(animLabel);
 
         Spinner animSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
-        String[] animOptions = {"Fan Open (Quạt mở - Default)", "Corner Zoom (Phóng từ góc)"};
+        String[] animOptions = {"Fan Open (Quạt mở - Mặc định)", "Corner Zoom (Phóng từ góc)"};
         setupDarkSpinner(animSpinner, animOptions);
         animSpinner.setSelection(prefs.getInt("split_arc_anim", 0));
         animSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                        .putInt("split_arc_anim", pos).apply();
+            @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putInt("split_arc_anim", pos).apply();
             }
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
+            @Override public void onNothingSelected(AdapterView<?> p) {}
         });
-        animCard.addView(animSpinner);
-        root.addView(animCard);
+        advVkbContainer.addView(animSpinner);
 
-        // Keyboard Handedness Layout
+        // Handedness
         TextView handLabel = new TextView(this);
-        handLabel.setText("Keyboard Handedness Layout");
-        handLabel.setTextSize(14);
-        handLabel.setTextColor(Color.WHITE);
-        handLabel.setPadding(0, dp(12), 0, dp(4));
-        root.addView(handLabel);
-
-        LinearLayout handCard = new LinearLayout(this);
-        handCard.setOrientation(LinearLayout.VERTICAL);
-        android.graphics.drawable.GradientDrawable hBg = new android.graphics.drawable.GradientDrawable();
-        hBg.setCornerRadius(dp(8));
-        hBg.setColor(0xFF181825);
-        hBg.setStroke(dp(1), 0x22FFFFFF);
-        handCard.setBackground(hBg);
-        handCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+        handLabel.setText("Bố cục tay thuận (Handedness)");
+        handLabel.setTextSize(13);
+        handLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
+        handLabel.setPadding(0, dp(10), 0, dp(2));
+        advVkbContainer.addView(handLabel);
 
         Spinner handSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
-        String[] handOptions = {"Left-Handed (G & V on left - Default)", "Right-Handed (G & V on right)"};
+        String[] handOptions = {"Thuận tay trái (G & V bên trái)", "Thuận tay phải (G & V bên phải)"};
         setupDarkSpinner(handSpinner, handOptions);
-        String currentHand = prefs.getString("keyboard_handedness", "left");
-        handSpinner.setSelection("right".equals(currentHand) ? 1 : 0);
+        handSpinner.setSelection("right".equals(prefs.getString("keyboard_handedness", "left")) ? 1 : 0);
         handSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                        .putString("keyboard_handedness", pos == 1 ? "right" : "left").apply();
+            @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putString("keyboard_handedness", pos == 1 ? "right" : "left").apply();
             }
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
+            @Override public void onNothingSelected(AdapterView<?> p) {}
         });
-        handCard.addView(handSpinner);
-        root.addView(handCard);
+        advVkbContainer.addView(handSpinner);
 
-        // Keyboard Theme
+        // Theme
         TextView themeLabel = new TextView(this);
-        themeLabel.setText("Keyboard Theme (Keys only, excluding Wings)");
-        themeLabel.setTextSize(14);
-        themeLabel.setTextColor(Color.WHITE);
-        themeLabel.setPadding(0, dp(12), 0, dp(4));
-        root.addView(themeLabel);
-
-        LinearLayout themeCard = new LinearLayout(this);
-        themeCard.setOrientation(LinearLayout.VERTICAL);
-        android.graphics.drawable.GradientDrawable tBg = new android.graphics.drawable.GradientDrawable();
-        tBg.setCornerRadius(dp(8));
-        tBg.setColor(0xFF181825);
-        tBg.setStroke(dp(1), 0x22FFFFFF);
-        themeCard.setBackground(tBg);
-        themeCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+        themeLabel.setText("Chủ đề bàn phím (Theme)");
+        themeLabel.setTextSize(13);
+        themeLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
+        themeLabel.setPadding(0, dp(10), 0, dp(2));
+        advVkbContainer.addView(themeLabel);
 
         Spinner themeSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
-        String[] themeOptions = {"Filled (Default M3 Surface)", "Border Only (Transparent with border)", "Transparent Full (Text only without borders)"};
+        String[] themeOptions = {"Filled (Nền tối M3)", "Border Only (Trong suốt có viền)", "Transparent Full (Chỉ chữ)"};
         setupDarkSpinner(themeSpinner, themeOptions);
         themeSpinner.setSelection(prefs.getInt("keyboard_theme", 0));
         themeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                        .putInt("keyboard_theme", pos).apply();
+            @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putInt("keyboard_theme", pos).apply();
             }
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
+            @Override public void onNothingSelected(AdapterView<?> p) {}
         });
-        themeCard.addView(themeSpinner);
-        root.addView(themeCard);
+        advVkbContainer.addView(themeSpinner);
 
-        // Keyboard Bottom Margin
+        // Bottom Margin
         TextView marginLabel = new TextView(this);
-        marginLabel.setText("Keyboard Bottom Margin (Plan A: lifts Wings synchronously)");
-        marginLabel.setTextSize(14);
-        marginLabel.setTextColor(Color.WHITE);
-        marginLabel.setPadding(0, dp(12), 0, dp(4));
-        root.addView(marginLabel);
-
-        LinearLayout marginCard = new LinearLayout(this);
-        marginCard.setOrientation(LinearLayout.VERTICAL);
-        android.graphics.drawable.GradientDrawable mBg = new android.graphics.drawable.GradientDrawable();
-        mBg.setCornerRadius(dp(8));
-        mBg.setColor(0xFF181825);
-        mBg.setStroke(dp(1), 0x22FFFFFF);
-        marginCard.setBackground(mBg);
-        marginCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+        marginLabel.setText("Khoảng cách đáy (Bottom Margin)");
+        marginLabel.setTextSize(13);
+        marginLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
+        marginLabel.setPadding(0, dp(10), 0, dp(2));
+        advVkbContainer.addView(marginLabel);
 
         Spinner marginSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
-        String[] marginOptions = {"8dp (Low - Default)", "16dp (Medium)", "24dp (High)", "32dp (Very High)"};
+        String[] marginOptions = {"8dp (Thấp - Mặc định)", "16dp (Vừa)", "24dp (Cao)", "32dp (Rất cao)"};
         setupDarkSpinner(marginSpinner, marginOptions);
         float currentMargin = prefs.getFloat("keyboard_bottom_margin_dp", 8f);
         int marginSel = 0;
@@ -683,40 +632,27 @@ public class SettingsActivity extends Activity {
         else if (currentMargin == 32f) marginSel = 3;
         marginSpinner.setSelection(marginSel);
         marginSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+            @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
                 float val = 8f;
                 if (pos == 1) val = 16f;
                 else if (pos == 2) val = 24f;
                 else if (pos == 3) val = 32f;
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                        .putFloat("keyboard_bottom_margin_dp", val).apply();
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putFloat("keyboard_bottom_margin_dp", val).apply();
             }
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
+            @Override public void onNothingSelected(AdapterView<?> p) {}
         });
-        marginCard.addView(marginSpinner);
-        root.addView(marginCard);
+        advVkbContainer.addView(marginSpinner);
 
         // Key Height
         TextView heightLabel = new TextView(this);
-        heightLabel.setText("Key Height");
-        heightLabel.setTextSize(14);
-        heightLabel.setTextColor(Color.WHITE);
-        heightLabel.setPadding(0, dp(12), 0, dp(4));
-        root.addView(heightLabel);
-
-        LinearLayout heightCard = new LinearLayout(this);
-        heightCard.setOrientation(LinearLayout.VERTICAL);
-        android.graphics.drawable.GradientDrawable htBg = new android.graphics.drawable.GradientDrawable();
-        htBg.setCornerRadius(dp(8));
-        htBg.setColor(0xFF181825);
-        htBg.setStroke(dp(1), 0x22FFFFFF);
-        heightCard.setBackground(htBg);
-        heightCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+        heightLabel.setText("Chiều cao phím (Key Height)");
+        heightLabel.setTextSize(13);
+        heightLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
+        heightLabel.setPadding(0, dp(10), 0, dp(2));
+        advVkbContainer.addView(heightLabel);
 
         Spinner heightSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
-        String[] heightOptions = {"38dp (Compact)", "42dp (Default Gboard)", "46dp (Medium)", "50dp (Large)"};
+        String[] heightOptions = {"38dp (Nhỏ gọn)", "42dp (Chuẩn)", "46dp (Lớn)", "50dp (Rất lớn)"};
         setupDarkSpinner(heightSpinner, heightOptions);
         float currentHeight = prefs.getFloat("keyboard_key_height_dp", 42f);
         int heightSel = 1;
@@ -725,38 +661,334 @@ public class SettingsActivity extends Activity {
         else if (currentHeight == 50f) heightSel = 3;
         heightSpinner.setSelection(heightSel);
         heightSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
+            @Override public void onItemSelected(AdapterView<?> p, View v, int pos, long id) {
                 float val = 42f;
                 if (pos == 0) val = 38f;
                 else if (pos == 2) val = 46f;
                 else if (pos == 3) val = 50f;
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                        .putFloat("keyboard_key_height_dp", val).apply();
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putFloat("keyboard_key_height_dp", val).apply();
             }
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
+            @Override public void onNothingSelected(AdapterView<?> p) {}
         });
-        heightCard.addView(heightSpinner);
-        root.addView(heightCard);
+        advVkbContainer.addView(heightSpinner);
 
-        // Enable Touch Scroll Pad
+        // Switches: Touch scroll pad, Raise desktop, Portrait lock, Bind key
         Switch scrollPadSwitch = new Switch(this);
         M3.styleSwitch(scrollPadSwitch);
         scrollPadSwitch.setText("Enable Touch Scroll Pad");
-        scrollPadSwitch.setPadding(0, dp(12), 0, 0);
         scrollPadSwitch.setChecked(prefs.getBoolean("enable_touch_scroll_pad", true));
         scrollPadSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putBoolean("enable_touch_scroll_pad", checked).apply());
-        root.addView(scrollPadSwitch);
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean("enable_touch_scroll_pad", checked).apply());
+        advVkbContainer.addView(scrollPadSwitch);
 
-        TextView scrollPadHint = new TextView(this);
-        scrollPadHint.setText("Adds a vertical touch drag strip in the cluster gap to scroll content with kinetic touch.");
-        scrollPadHint.setTextSize(12);
-        scrollPadHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        scrollPadHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(scrollPadHint);
+        Switch raiseDesktopSwitch = new Switch(this);
+        M3.styleSwitch(raiseDesktopSwitch);
+        raiseDesktopSwitch.setText(R.string.raise_desktop_for_soft_keyboard);
+        raiseDesktopSwitch.setChecked(!prefs.getBoolean(KEY_KEYBOARD_FLOATING, false));
+        raiseDesktopSwitch.setOnCheckedChangeListener((v, checked) ->
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean(KEY_KEYBOARD_FLOATING, !checked).apply());
+        advVkbContainer.addView(raiseDesktopSwitch);
+
+        Switch portraitImeLockSwitch = new Switch(this);
+        M3.styleSwitch(portraitImeLockSwitch);
+        portraitImeLockSwitch.setText("Lock Soft Keyboard in Portrait");
+        portraitImeLockSwitch.setChecked(prefs.getBoolean("portrait_ime_lock", false));
+        portraitImeLockSwitch.setOnCheckedChangeListener((v, checked) ->
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putBoolean("portrait_ime_lock", checked).apply());
+        advVkbContainer.addView(portraitImeLockSwitch);
+
+        new KeyBinding(advVkbContainer, KEY_BOUND_KEYCODE, null, R.string.bind_key_button);
+
+        card.addView(advVkbContainer);
+        root.addView(card);
+    }
+
+    private void showWingsEditorDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(16), dp(16), dp(16), dp(16));
+        root.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE, M3.COLOR_BORDER_STRONG, 1.0f));
+
+        AlertDialog dialog = builder.setView(root).create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+        }
+
+        TextView title = new TextView(this);
+        title.setText("CUSTOMIZE TOP WINGS (PHÍM PHỤ)");
+        title.setTextColor(M3.COLOR_TEXT_PRIMARY);
+        title.setTextSize(15);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        title.setPadding(0, 0, 0, dp(4));
+        root.addView(title);
+
+        TextView sub = new TextView(this);
+        sub.setText("Chạm vào ô phím để gán ký tự / chức năng bằng HUD Key Picker.");
+        sub.setTextSize(12);
+        sub.setTextColor(M3.COLOR_TEXT_MUTED);
+        sub.setPadding(0, 0, 0, dp(12));
+        root.addView(sub);
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(content);
+        root.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String customJson = prefs.getString("split_arc_top_wings", null);
+        Map<Integer, String> customLabels = new HashMap<>();
+        Map<Integer, HudAction> customActions = new HashMap<>();
+        if (customJson != null && !customJson.isEmpty()) {
+            try {
+                JSONArray arr = new JSONArray(customJson);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject obj = arr.getJSONObject(i);
+                    int idx = obj.optInt("index", -1);
+                    if (idx >= 0) {
+                        customLabels.put(idx, obj.optString("label", ""));
+                        if (obj.has("action")) {
+                            customActions.put(idx, HudAction.fromJSON(obj.optJSONObject("action")));
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        String[] leftDefL = {"ESC", "TAB", "CTRL", "ALT", "SHIFT", "SUPER"};
+        int[] leftDefC = {KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_TAB,
+                KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_ALT_LEFT,
+                KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_META_LEFT};
+
+        String[] rightDefL = {"DEL", "▲", "PGUP", "◀", "▼", "▶"};
+        int[] rightDefC = {KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT};
+
+        // Left Wing Card
+        TextView leftTitle = new TextView(this);
+        leftTitle.setText("LEFT WING (CÁNH TRÁI - 6 PHÍM)");
+        leftTitle.setTextColor(M3.COLOR_PRIMARY);
+        leftTitle.setTextSize(12);
+        leftTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        leftTitle.setPadding(0, dp(4), 0, dp(6));
+        content.addView(leftTitle);
+
+        LinearLayout leftGrid = buildWingGrid(0, leftDefL, leftDefC, customLabels, customActions, dialog);
+        content.addView(leftGrid);
+
+        // Right Wing Card
+        TextView rightTitle = new TextView(this);
+        rightTitle.setText("RIGHT WING (CÁNH PHẢI - 6 PHÍM)");
+        rightTitle.setTextColor(M3.COLOR_SECONDARY);
+        rightTitle.setTextSize(12);
+        rightTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        rightTitle.setPadding(0, dp(12), 0, dp(6));
+        content.addView(rightTitle);
+
+        LinearLayout rightGrid = buildWingGrid(6, rightDefL, rightDefC, customLabels, customActions, dialog);
+        content.addView(rightGrid);
+
+        // Operations: Sync from ExtraKeysBar, Reset, Done
+        LinearLayout ops = new LinearLayout(this);
+        ops.setOrientation(LinearLayout.HORIZONTAL);
+        ops.setPadding(0, dp(14), 0, dp(4));
+
+        Button btnSync = new Button(this);
+        styleSettingsButton(btnSync);
+        btnSync.setText("Sync ExtraKeys");
+        btnSync.setTextSize(11);
+        btnSync.setOnClickListener(v -> syncWingsFromExtraKeys(dialog));
+        LinearLayout.LayoutParams sLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        btnSync.setLayoutParams(sLp);
+        ops.addView(btnSync);
+
+        Button btnReset = new Button(this);
+        styleSettingsButton(btnReset);
+        btnReset.setText("Reset Default");
+        btnReset.setTextSize(11);
+        btnReset.setOnClickListener(v -> {
+            prefs.edit().remove("split_arc_top_wings").apply();
+            Toast.makeText(this, "Đã đặt lại cánh phím mặc định (Cụm mũi tên Inverted-T)", Toast.LENGTH_SHORT).show();
+            dialog.dismiss();
+            showWingsEditorDialog();
+        });
+        LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        rLp.leftMargin = dp(6);
+        btnReset.setLayoutParams(rLp);
+        ops.addView(btnReset);
+
+        Button btnDone = new Button(this);
+        M3.styleButton(btnDone, M3.COLOR_PRIMARY_CONTAINER, 0x6680DEEA, M3.COLOR_PRIMARY);
+        btnDone.setText("DONE");
+        btnDone.setTextSize(11);
+        btnDone.setOnClickListener(v -> dialog.dismiss());
+        LinearLayout.LayoutParams dLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        dLp.leftMargin = dp(6);
+        btnDone.setLayoutParams(dLp);
+        ops.addView(btnDone);
+
+        root.addView(ops);
+
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int screenH = getResources().getDisplayMetrics().heightPixels;
+        int dialogW = Math.min(dp(440), screenW - dp(24));
+        int dialogH = Math.min(dp(540), screenH - dp(32));
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(dialogW, dialogH);
+        }
+    }
+
+    private LinearLayout buildWingGrid(int baseIndex, String[] defLabels, int[] defCodes,
+                                       Map<Integer, String> customLabels,
+                                       Map<Integer, HudAction> customActions,
+                                       AlertDialog parentDialog) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+        card.setPadding(dp(8), dp(8), dp(8), dp(8));
+
+        for (int r = 0; r < 2; r++) {
+            LinearLayout rowView = new LinearLayout(this);
+            rowView.setOrientation(LinearLayout.HORIZONTAL);
+            if (r > 0) {
+                LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                rowLp.topMargin = dp(6);
+                rowView.setLayoutParams(rowLp);
+            }
+            for (int c = 0; c < 3; c++) {
+                int slot = r * 3 + c;
+                final int globalIdx = baseIndex + slot;
+                String lbl = customLabels.containsKey(globalIdx) ? customLabels.get(globalIdx) : defLabels[slot];
+
+                Button btn = new Button(this);
+                btn.setText(lbl);
+                btn.setTextColor(Color.WHITE);
+                btn.setTextSize(12.5f);
+                btn.setTypeface(Typeface.DEFAULT_BOLD);
+                btn.setBackground(M3.createRippleDrawable(this, M3.RADIUS_CHIP,
+                        M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
+                btn.setGravity(Gravity.CENTER);
+
+                LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(0, dp(42), 1f);
+                if (c > 0) btnLp.leftMargin = dp(6);
+                btn.setLayoutParams(btnLp);
+
+                btn.setOnClickListener(v -> {
+                    HudKeyPickerDialog.show(SettingsActivity.this, (action, displayLabel) -> {
+                        saveWingSlot(globalIdx, displayLabel, action);
+                        parentDialog.dismiss();
+                        showWingsEditorDialog();
+                    });
+                });
+                rowView.addView(btn);
+            }
+            card.addView(rowView);
+        }
+        return card;
+    }
+
+    private void saveWingSlot(int index, String label, HudAction action) {
+        try {
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+            String customJson = prefs.getString("split_arc_top_wings", null);
+            JSONArray arr = (customJson != null && !customJson.isEmpty()) ? new JSONArray(customJson) : new JSONArray();
+
+            boolean found = false;
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                if (o.optInt("index", -1) == index) {
+                    o.put("label", label);
+                    o.put("action", action.toJSON());
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                JSONObject o = new JSONObject();
+                o.put("index", index);
+                o.put("label", label);
+                o.put("action", action.toJSON());
+                arr.put(o);
+            }
+            prefs.edit().putString("split_arc_top_wings", arr.toString()).apply();
+        } catch (Exception e) {
+            Log.e(TAG, "saveWingSlot error", e);
+        }
+    }
+
+    private void syncWingsFromExtraKeys(AlertDialog dialog) {
+        try {
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+            String json = prefs.getString(KEY_EXTRA_KEYS_LAYOUT, "");
+            JSONObject layout = normalizeLayoutJson(json);
+            JSONArray rows = layout.optJSONArray("rows");
+            if (rows == null || rows.length() == 0) {
+                Toast.makeText(this, "Không có dữ liệu ExtraKeys", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            JSONArray wingArr = new JSONArray();
+
+            String[] defLeftL = {"ESC", "TAB", "CTRL", "ALT", "SHIFT", "SUPER"};
+            int[] defLeftC = {KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_TAB,
+                    KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_ALT_LEFT,
+                    KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_META_LEFT};
+
+            List<JSONObject> leftCandidates = new ArrayList<>();
+            for (int r = 0; r < rows.length(); r++) {
+                JSONArray row = rows.optJSONArray(r);
+                if (row == null) continue;
+                for (int c = 0; c < row.length(); c++) {
+                    Object item = row.opt(c);
+                    if (item instanceof JSONObject) {
+                        JSONObject k = (JSONObject) item;
+                        String type = k.optString("type", "key");
+                        String lbl = k.optString("label", "").toUpperCase();
+                        if ("modifier".equals(type) || "ESC".equals(lbl) || "TAB".equals(lbl) || "SUPER".equals(lbl)) {
+                            leftCandidates.add(k);
+                        }
+                    }
+                }
+            }
+
+            for (int i = 0; i < 6; i++) {
+                JSONObject wObj = new JSONObject();
+                wObj.put("index", i);
+                if (i < leftCandidates.size()) {
+                    JSONObject cand = leftCandidates.get(i);
+                    wObj.put("label", cand.optString("label", defLeftL[i]));
+                    wObj.put("action", cand);
+                } else {
+                    wObj.put("label", defLeftL[i]);
+                    wObj.put("action", HudAction.key(defLeftC[i]).toJSON());
+                }
+                wingArr.put(wObj);
+            }
+
+            // Right wing: Inverted-T Directional arrows (DEL, ▲, PGUP, ◀, ▼, ▶)
+            String[] defRightL = {"DEL", "▲", "PGUP", "◀", "▼", "▶"};
+            int[] defRightC = {KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_DPAD_UP,
+                    KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_DPAD_LEFT,
+                    KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT};
+            for (int i = 0; i < 6; i++) {
+                JSONObject wObj = new JSONObject();
+                wObj.put("index", 6 + i);
+                wObj.put("label", defRightL[i]);
+                wObj.put("action", HudAction.key(defRightC[i]).toJSON());
+                wingArr.put(wObj);
+            }
+
+            prefs.edit().putString("split_arc_top_wings", wingArr.toString()).apply();
+            Toast.makeText(this, "Đã đồng bộ cánh phím từ ExtraKeysBar!", Toast.LENGTH_SHORT).show();
+            dialog.dismiss();
+            showWingsEditorDialog();
+        } catch (Exception e) {
+            Log.e(TAG, "syncWingsFromExtraKeys error", e);
+        }
     }
 
     /**
@@ -945,47 +1177,29 @@ public class SettingsActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
         TextView header = new TextView(this);
-        header.setText(R.string.section_extra_keys);
+        header.setText("2. Thanh phím phụ đáy màn hình (ExtraKeys Bar)");
         header.setTextSize(16);
         header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
-        header.setPadding(0, dp(24), 0, dp(8));
+        header.setPadding(0, dp(14), 0, dp(6));
         root.addView(header);
 
-        // === Back key opens extra keys bar (Legacy only) ===
-        Switch backOpensExtraKeysSwitch = new Switch(this);
-        M3.styleSwitch(backOpensExtraKeysSwitch);
-        backOpensExtraKeysSwitch.setText(R.string.back_opens_switch);
-        backOpensExtraKeysSwitch.setPadding(0, dp(16), 0, 0);
-        backOpensExtraKeysSwitch.setChecked(prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true));
-        backOpensExtraKeysSwitch.setOnCheckedChangeListener((v, checked) ->
-            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                .putBoolean(KEY_BACK_OPENS_EXTRA_KEYS, checked).apply());
-        root.addView(backOpensExtraKeysSwitch);
-
-        TextView backOpensExtraKeysHint = new TextView(this);
-        backOpensExtraKeysHint.setText(R.string.back_opens_hint);
-        backOpensExtraKeysHint.setTextSize(12);
-        backOpensExtraKeysHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        backOpensExtraKeysHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(backOpensExtraKeysHint);
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+        card.setPadding(dp(14), dp(12), dp(14), dp(14));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.bottomMargin = dp(16);
+        card.setLayoutParams(cardLp);
 
         // === Extra keys bar mode selector (Shared) ===
         TextView modeLabel = new TextView(this);
         modeLabel.setText(R.string.extra_keys_mode_label);
-        modeLabel.setTextSize(14);
-        modeLabel.setTextColor(0xFFA6ADC8);
-        modeLabel.setPadding(0, dp(8), 0, dp(4));
-        root.addView(modeLabel);
-
-        LinearLayout spCard = new LinearLayout(this);
-        spCard.setOrientation(LinearLayout.VERTICAL);
-        android.graphics.drawable.GradientDrawable spBg = new android.graphics.drawable.GradientDrawable();
-        spBg.setCornerRadius(dp(8));
-        spBg.setColor(0xFF181825);
-        spBg.setStroke(dp(1), 0x22FFFFFF);
-        spCard.setBackground(spBg);
-        spCard.setPadding(dp(12), dp(4), dp(12), dp(4));
+        modeLabel.setTextSize(13);
+        modeLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
+        modeLabel.setPadding(0, 0, 0, dp(4));
+        card.addView(modeLabel);
 
         Spinner modeSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
         setupDarkSpinner(modeSpinner, getResources().getStringArray(R.array.extra_keys_mode_options));
@@ -1005,33 +1219,64 @@ public class SettingsActivity extends Activity {
             @Override
             public void onNothingSelected(android.widget.AdapterView<?> parent) {}
         });
-        spCard.addView(modeSpinner);
-        root.addView(spCard);
+        card.addView(modeSpinner);
 
         TextView modeHint = new TextView(this);
         modeHint.setText(R.string.extra_keys_mode_hint);
         modeHint.setTextSize(12);
         modeHint.setTextColor(M3.COLOR_TEXT_MUTED);
         modeHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(modeHint);
+        card.addView(modeHint);
+
+        // === Back key opens extra keys bar ===
+        Switch backOpensExtraKeysSwitch = new Switch(this);
+        M3.styleSwitch(backOpensExtraKeysSwitch);
+        backOpensExtraKeysSwitch.setText(R.string.back_opens_switch);
+        backOpensExtraKeysSwitch.setChecked(prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true));
+        backOpensExtraKeysSwitch.setOnCheckedChangeListener((v, checked) ->
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putBoolean(KEY_BACK_OPENS_EXTRA_KEYS, checked).apply());
+        card.addView(backOpensExtraKeysSwitch);
+
+        TextView backOpensExtraKeysHint = new TextView(this);
+        backOpensExtraKeysHint.setText(R.string.back_opens_hint);
+        backOpensExtraKeysHint.setTextSize(12);
+        backOpensExtraKeysHint.setTextColor(M3.COLOR_TEXT_MUTED);
+        backOpensExtraKeysHint.setPadding(0, dp(2), 0, dp(10));
+        card.addView(backOpensExtraKeysHint);
+
+        // Collapsible Visual Layout Editor Button
+        final Button btnToggleVisual = new Button(this);
+        M3.styleButton(btnToggleVisual, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_PRIMARY);
+        btnToggleVisual.setText("Tùy biến bố cục ExtraKeys (Visual Editor) ▼");
+        btnToggleVisual.setTextSize(12.5f);
+        card.addView(btnToggleVisual);
+
+        final LinearLayout editorContainer = new LinearLayout(this);
+        editorContainer.setOrientation(LinearLayout.VERTICAL);
+        editorContainer.setVisibility(View.GONE);
+        editorContainer.setPadding(0, dp(10), 0, 0);
+
+        btnToggleVisual.setOnClickListener(v -> {
+            boolean visible = (editorContainer.getVisibility() == View.VISIBLE);
+            editorContainer.setVisibility(visible ? View.GONE : View.VISIBLE);
+            btnToggleVisual.setText(visible ? "Tùy biến bố cục ExtraKeys (Visual Editor) ▼" : "Tùy biến bố cục ExtraKeys (Visual Editor) ▲");
+        });
+
+        buildVisualExtraKeysEditor(editorContainer, prefs);
+        card.addView(editorContainer);
+
+        root.addView(card);
     }
 
-    private void buildCustomLayoutSection(LinearLayout root) {
+    private void buildVisualExtraKeysEditor(LinearLayout container, SharedPreferences prefs) {
         try {
-            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-            TextView layoutHeader = new TextView(this);
-            layoutHeader.setText(R.string.section_custom_layout);
-            layoutHeader.setTextSize(16);
-            layoutHeader.setTypeface(null, Typeface.BOLD);
-            layoutHeader.setPadding(0, dp(24), 0, dp(4));
-            root.addView(layoutHeader);
-
             TextView layoutSub = new TextView(this);
-            layoutSub.setText("Tap any key to configure its action or swipe-up popup using the HUD Key Picker.");
+            layoutSub.setText("Chạm vào ô phím để gán ký tự / chức năng hoặc cử chỉ vuốt lên bằng HUD Key Picker.");
             layoutSub.setTextSize(12);
             layoutSub.setTextColor(M3.COLOR_TEXT_MUTED);
             layoutSub.setPadding(0, 0, 0, dp(8));
-            root.addView(layoutSub);
+            container.addView(layoutSub);
 
             // Visual Grid Card Container
             LinearLayout visualCard = new LinearLayout(this);
@@ -1047,7 +1292,7 @@ public class SettingsActivity extends Activity {
             mVisualGridContainer.setOrientation(LinearLayout.VERTICAL);
             visualCard.addView(mVisualGridContainer);
 
-            root.addView(visualCard);
+            container.addView(visualCard);
             renderVisualGrid();
 
             // Row Operations (Add Row, Remove Row, Reset)
@@ -1088,7 +1333,7 @@ public class SettingsActivity extends Activity {
             });
             gridOps.addView(btnReset);
 
-            root.addView(gridOps);
+            container.addView(gridOps);
 
             // Collapsible Advanced JSON Section
             final Button btnToggleJson = new Button(this);
@@ -1099,7 +1344,7 @@ public class SettingsActivity extends Activity {
             tjLp.topMargin = dp(8);
             tjLp.bottomMargin = dp(8);
             btnToggleJson.setLayoutParams(tjLp);
-            root.addView(btnToggleJson);
+            container.addView(btnToggleJson);
 
             final LinearLayout jsonSection = new LinearLayout(this);
             jsonSection.setOrientation(LinearLayout.VERTICAL);
@@ -1192,10 +1437,34 @@ public class SettingsActivity extends Activity {
             layoutHint.setPadding(0, dp(4), 0, dp(8));
             jsonSection.addView(layoutHint);
 
-            root.addView(jsonSection);
+            container.addView(jsonSection);
         } catch (Throwable t) {
-            Log.e(TAG, "buildCustomLayoutSection error", t);
+            Log.e(TAG, "buildVisualExtraKeysEditor error", t);
         }
+    }
+
+    private void buildSystemShortcutsSection(LinearLayout root) {
+        TextView header = new TextView(this);
+        header.setText("4. Phím tắt hệ thống (System & Shortcuts)");
+        header.setTextSize(16);
+        header.setTextColor(Color.WHITE);
+        header.setTypeface(null, Typeface.BOLD);
+        header.setPadding(0, dp(14), 0, dp(6));
+        root.addView(header);
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+        card.setPadding(dp(14), dp(12), dp(14), dp(14));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.bottomMargin = dp(16);
+        card.setLayoutParams(cardLp);
+
+        buildImmersiveSection(card);
+        buildAccessibilitySection(card);
+
+        root.addView(card);
     }
 
     private JSONObject normalizeLayoutJson(String json) {
@@ -1379,22 +1648,36 @@ public class SettingsActivity extends Activity {
                     keyBtn.setBackground(M3.createRippleDrawable(this, M3.RADIUS_CHIP,
                             M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
                     keyBtn.setTextColor(Color.WHITE);
-                    keyBtn.setTextSize(12);
-                    keyBtn.setTypeface(Typeface.DEFAULT_BOLD);
-                    keyBtn.setMinHeight(dp(44));
-                    keyBtn.setMinWidth(dp(42));
-                    keyBtn.setPadding(dp(8), dp(4), dp(8), dp(4));
+                    keyBtn.setGravity(Gravity.CENTER);
+                    keyBtn.setIncludeFontPadding(false);
+                    keyBtn.setPadding(dp(8), dp(2), dp(8), dp(2));
                     keyBtn.setAllCaps(false);
 
                     if (popupLabel != null && !popupLabel.isEmpty()) {
-                        keyBtn.setText(label + "\n↑" + popupLabel);
+                        android.text.SpannableStringBuilder ssb = new android.text.SpannableStringBuilder();
+                        ssb.append(label);
+                        int startSub = ssb.length();
+                        ssb.append("\n↑").append(popupLabel);
+                        ssb.setSpan(new android.text.style.AbsoluteSizeSpan(Math.round(11.5f * getResources().getDisplayMetrics().density)),
+                                0, startSub, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        ssb.setSpan(new android.text.style.StyleSpan(Typeface.BOLD),
+                                0, startSub, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        ssb.setSpan(new android.text.style.AbsoluteSizeSpan(Math.round(9.5f * getResources().getDisplayMetrics().density)),
+                                startSub, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        ssb.setSpan(new android.text.style.ForegroundColorSpan(M3.COLOR_PRIMARY),
+                                startSub, ssb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                        keyBtn.setText(ssb);
                     } else {
                         keyBtn.setText(label);
+                        keyBtn.setTextSize(12.5f);
+                        keyBtn.setTypeface(Typeface.DEFAULT_BOLD);
                     }
 
+                    // Strict uniform height and minimum width for clean keyboard appearance
                     LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                            ViewGroup.LayoutParams.WRAP_CONTENT, dp(46));
                     btnLp.setMargins(dp(2), 0, dp(2), 0);
+                    keyBtn.setMinWidth(dp(44));
                     keyBtn.setLayoutParams(btnLp);
 
                     keyBtn.setOnClickListener(v -> showKeyEditorDialog(rowIdx, colIdx));
@@ -1730,7 +2013,14 @@ public class SettingsActivity extends Activity {
             doneLp.topMargin = dp(8);
             root.addView(btnDone, doneLp);
 
+            int screenW = getResources().getDisplayMetrics().widthPixels;
+            int screenH = getResources().getDisplayMetrics().heightPixels;
+            int dialogW = Math.min(dp(460), screenW - dp(24));
+            int dialogH = Math.min(dp(540), screenH - dp(32));
             dialog.show();
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setLayout(dialogW, dialogH);
+            }
         } catch (JSONException e) {
             Log.e(TAG, "showKeyEditorDialog error", e);
         }

@@ -187,26 +187,46 @@ public final class HudLayoutProfile {
         dpadRight.posYPercent = 0.65f;
         layout.floatingButtons.add(dpadRight);
 
-        // 4. KB & Select
-        HudButton btnVk = new HudButton();
-        btnVk.label = "KB";
-        btnVk.action = HudAction.system("toggle_vk");
-        btnVk.widthDp = 44;
-        btnVk.heightDp = 30;
-        btnVk.cornerRadiusDp = 8;
-        btnVk.posXPercent = shoulderLeftX;
-        btnVk.posYPercent = 0.88f;
-        layout.floatingButtons.add(btnVk);
-
+        // 4. Utility Controls: moved to center-bottom row so area below D-Pad is 100% clear
         HudButton btnSelect = new HudButton();
         btnSelect.label = "SELECT";
         btnSelect.action = HudAction.key(54); // Shift
         btnSelect.widthDp = 50;
         btnSelect.heightDp = 30;
         btnSelect.cornerRadiusDp = 8;
-        btnSelect.posXPercent = leftBaseX + (isLandscape ? 0.12f : 0.15f);
-        btnSelect.posYPercent = 0.88f;
+        btnSelect.posXPercent = isLandscape ? 0.32f : 0.22f;
+        btnSelect.posYPercent = 0.90f;
         layout.floatingButtons.add(btnSelect);
+
+        HudButton btnVk = new HudButton();
+        btnVk.label = "KB";
+        btnVk.action = HudAction.system("toggle_vk");
+        btnVk.widthDp = 46;
+        btnVk.heightDp = 30;
+        btnVk.cornerRadiusDp = 8;
+        btnVk.posXPercent = isLandscape ? 0.42f : 0.38f;
+        btnVk.posYPercent = 0.90f;
+        layout.floatingButtons.add(btnVk);
+
+        HudButton btnSettings = new HudButton();
+        btnSettings.label = "⚙";
+        btnSettings.action = HudAction.system("open_settings");
+        btnSettings.widthDp = 46;
+        btnSettings.heightDp = 30;
+        btnSettings.cornerRadiusDp = 8;
+        btnSettings.posXPercent = isLandscape ? 0.58f : 0.62f;
+        btnSettings.posYPercent = 0.90f;
+        layout.floatingButtons.add(btnSettings);
+
+        HudButton btnStart = new HudButton();
+        btnStart.label = "START";
+        btnStart.action = HudAction.key(28); // Enter
+        btnStart.widthDp = 50;
+        btnStart.heightDp = 30;
+        btnStart.cornerRadiusDp = 8;
+        btnStart.posXPercent = isLandscape ? 0.68f : 0.78f;
+        btnStart.posYPercent = 0.90f;
+        layout.floatingButtons.add(btnStart);
 
         // ===== Right Gutter (Action Diamond & Bumpers) =====
         // 1. R1 (Mouse Left)
@@ -283,17 +303,7 @@ public final class HudLayoutProfile {
         btnB.posYPercent = 0.65f;
         layout.floatingButtons.add(btnB);
 
-        // 5. Start & Home
-        HudButton btnStart = new HudButton();
-        btnStart.label = "START";
-        btnStart.action = HudAction.key(28); // Enter
-        btnStart.widthDp = 50;
-        btnStart.heightDp = 30;
-        btnStart.cornerRadiusDp = 8;
-        btnStart.posXPercent = rightBaseX - (isLandscape ? 0.12f : 0.15f);
-        btnStart.posYPercent = 0.88f;
-        layout.floatingButtons.add(btnStart);
-
+        // 5. Home
         HudButton btnHome = new HudButton();
         btnHome.label = "HOME";
         btnHome.action = HudAction.key(125); // Super
@@ -302,7 +312,7 @@ public final class HudLayoutProfile {
         btnHome.heightDp = 30;
         btnHome.cornerRadiusDp = 8;
         btnHome.posXPercent = shoulderRightX;
-        btnHome.posYPercent = 0.88f;
+        btnHome.posYPercent = 0.90f;
         layout.floatingButtons.add(btnHome);
 
         return layout;

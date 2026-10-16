@@ -708,15 +708,17 @@ public class VirtualKeyboardView extends View {
     private void initTopWings() {
         mWingKeys.clear();
         // Nut phu nho gon 3x2 moi ben (12 nut), ha thap gan phim chu.
+        // Cánh trái: các phím bổ trợ & thao tác nhanh
         String[] leftDefLabels = {"ESC", "TAB", "CTRL", "ALT", "SHIFT", "SUPER"};
         int[] leftDefCodes = {KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_TAB,
                 KeyEvent.KEYCODE_CTRL_LEFT, KeyEvent.KEYCODE_ALT_LEFT,
                 KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_META_LEFT};
 
-        String[] rightDefLabels = {"DEL", "SHIFT", "UP", "HOME", "END", "PGDN"};
-        int[] rightDefCodes = {KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_SHIFT_RIGHT,
-                KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_MOVE_HOME,
-                KeyEvent.KEYCODE_MOVE_END, KeyEvent.KEYCODE_PAGE_DOWN};
+        // Cánh phải: cụm phím điều hướng chữ T ngược chuẩn (Inverted-T) + Del/PgUp
+        String[] rightDefLabels = {"DEL", "▲", "PGUP", "◀", "▼", "▶"};
+        int[] rightDefCodes = {KeyEvent.KEYCODE_FORWARD_DEL, KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT};
 
         SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String customJson = prefs.getString(KEY_SPLIT_ARC_TOP_WINGS, null);
@@ -910,7 +912,24 @@ public class VirtualKeyboardView extends View {
             case "N": return KeyEvent.KEYCODE_N;
             case "M": return KeyEvent.KEYCODE_M;
             case ",": return KeyEvent.KEYCODE_COMMA;
-            case "UP": return KeyEvent.KEYCODE_DPAD_UP;
+            case "UP":
+            case "▲":
+            case "↑": return KeyEvent.KEYCODE_DPAD_UP;
+            case "DN":
+            case "DOWN":
+            case "▼":
+            case "↓": return KeyEvent.KEYCODE_DPAD_DOWN;
+            case "LT":
+            case "LEFT":
+            case "◀":
+            case "←": return KeyEvent.KEYCODE_DPAD_LEFT;
+            case "RT":
+            case "RIGHT":
+            case "▶":
+            case "→": return KeyEvent.KEYCODE_DPAD_RIGHT;
+            case "PGUP": return KeyEvent.KEYCODE_PAGE_UP;
+            case "PGDN": return KeyEvent.KEYCODE_PAGE_DOWN;
+            case "DEL": return KeyEvent.KEYCODE_FORWARD_DEL;
             case ".": return KeyEvent.KEYCODE_PERIOD;
             case "Ctrl":
             case "CtrlL": return KeyEvent.KEYCODE_CTRL_LEFT;
@@ -1768,35 +1787,31 @@ public class VirtualKeyboardView extends View {
                     // 5. Modifier Wing key tap (latch modifier like ExtraKeysBar)
                     if (isLeftModifier(hitKey)) {
                         toggleLeftModifier(hitKey);
+                        if (isHapticEnabled()) {
+                            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                        }
                         return true;
                     }
 
-                    // 6. Top Wing non-modifier key (ESC, TAB, DEL, UP, HOME, etc.)
+                    // 6. Top Wing non-modifier key (ESC, TAB, DEL, ▲, ◀, ▼, ▶, etc.)
+                    // Instant response on ACTION_DOWN, smooth auto-repeat while held like ExtraKeysBar
                     if (hitKey.isWing) {
+                        activePointers.put(pointerId, hitKey);
+                        hitKey.pressed = true;
+                        if (isHapticEnabled()) {
+                            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                        }
                         if (hasAnyActiveModifier()) {
                             hitKey.comboFired = true;
                             executeCombination(hitKey);
-                            invalidate();
-                            return true;
-                        }
-                        mPendingLongPressKey = hitKey;
-                        final KeyData wingToRebind = hitKey;
-                        mLongPressHandler.postDelayed(() -> {
-                            if (mPendingLongPressKey == wingToRebind) {
-                                mPendingLongPressKey = null;
-                                if (isHapticEnabled()) {
-                                    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-                                }
-                                HudKeyPickerDialog.show(getContext(), (act, displayLabel) -> {
-                                    wingToRebind.customAction = act;
-                                    wingToRebind.currentLabel = displayLabel;
-                                    saveTopWingsCustomization();
-                                    invalidate();
-                                });
+                        } else {
+                            if (hitKey.customAction != null) {
+                                dispatchWingAction(hitKey.customAction, true);
+                            } else {
+                                sendKey(hitKey.currentKeyCode, true);
                             }
-                        }, 700);
-                        activePointers.put(pointerId, hitKey);
-                        hitKey.pressed = true;
+                            startWingRepeat(hitKey);
+                        }
                         invalidate();
                         return true;
                     }
@@ -1881,12 +1896,15 @@ public class VirtualKeyboardView extends View {
                         }
                         released.longPressFired = false;
                     } else if (released.isWing && !isLeftModifier(released)) {
-                        if (released.customAction != null) {
-                            dispatchWingAction(released.customAction, true);
-                            postDelayed(() -> dispatchWingAction(released.customAction, false), 30);
+                        stopWingRepeat();
+                        if (released.comboFired) {
+                            released.comboFired = false;
                         } else {
-                            sendKey(released.currentKeyCode, true);
-                            postDelayed(() -> sendKey(released.currentKeyCode, false), 30);
+                            if (released.customAction != null) {
+                                dispatchWingAction(released.customAction, false);
+                            } else {
+                                sendKey(released.currentKeyCode, false);
+                            }
                         }
                     } else if (released == mLeftSpaceKey || released == mRightSpaceKey) {
                         if (mSpaceSwipeActive) {
@@ -2005,6 +2023,7 @@ public class VirtualKeyboardView extends View {
                 }
 
                 case MotionEvent.ACTION_CANCEL: {
+                    stopWingRepeat();
                     mPendingLongPressKey = null;
                     mLongPressHandler.removeCallbacksAndMessages(null);
                     mIsTouchScrolling = false;
@@ -2082,6 +2101,53 @@ public class VirtualKeyboardView extends View {
                 keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
                 keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
                 keyCode == KeyEvent.KEYCODE_DPAD_RIGHT;
+    }
+
+    private Runnable mWingRepeatRunnable;
+    private static final long WING_REPEAT_INITIAL_DELAY_MS = 320L;
+    private static final long WING_REPEAT_INTERVAL_MS = 60L;
+
+    private void startWingRepeat(final KeyData key) {
+        stopWingRepeat();
+        if (key == null) return;
+        int code = key.currentKeyCode;
+        boolean repeatable = isDirectionKey(code)
+                || code == KeyEvent.KEYCODE_FORWARD_DEL
+                || code == KeyEvent.KEYCODE_DEL
+                || code == KeyEvent.KEYCODE_TAB
+                || code == KeyEvent.KEYCODE_PAGE_UP
+                || code == KeyEvent.KEYCODE_PAGE_DOWN;
+        if (!repeatable && key.customAction != null && key.customAction.repeat) {
+            repeatable = true;
+        }
+        if (!repeatable) return;
+
+        mWingRepeatRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (key.pressed) {
+                    if (isHapticEnabled()) {
+                        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                    }
+                    if (key.customAction != null) {
+                        dispatchWingAction(key.customAction, true);
+                        postDelayed(() -> dispatchWingAction(key.customAction, false), 20);
+                    } else {
+                        sendKey(key.currentKeyCode, true);
+                        postDelayed(() -> sendKey(key.currentKeyCode, false), 20);
+                    }
+                    mLongPressHandler.postDelayed(this, WING_REPEAT_INTERVAL_MS);
+                }
+            }
+        };
+        mLongPressHandler.postDelayed(mWingRepeatRunnable, WING_REPEAT_INITIAL_DELAY_MS);
+    }
+
+    private void stopWingRepeat() {
+        if (mWingRepeatRunnable != null) {
+            mLongPressHandler.removeCallbacks(mWingRepeatRunnable);
+            mWingRepeatRunnable = null;
+        }
     }
 
     private KeyData findKeyAt(float x, float y) {
