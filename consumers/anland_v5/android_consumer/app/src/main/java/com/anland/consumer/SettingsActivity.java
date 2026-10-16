@@ -3,6 +3,7 @@ package com.anland.consumer;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.graphics.Canvas;
 import android.graphics.Color;
