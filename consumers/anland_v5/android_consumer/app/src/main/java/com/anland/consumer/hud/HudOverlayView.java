@@ -479,20 +479,21 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
         final String[] options = new String[] {
                 copyOption,
-                "Load Switch Controller Preset (14:9 Gutters)",
-                "Load Niri Default Preset",
+                "Console Gamepad Preset (10% Inset - D-Pad + ABXY)",
+                "Desktop / Productivity Preset (10% Inset)",
+                "User Portrait Hotkeys Layout",
                 "Clear Active Layout"
         };
         mInspectorView.setVisibility(GONE);
         AlertDialog dialog = new AlertDialog.Builder(getContext(), AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                .setTitle("Layout Options")
+                .setTitle("Layout Options & Presets")
                 .setItems(options, (d, which) -> {
                     if (!mIsEditMode) return;
                     mHasUnsavedChanges = true;
+                    HudLayout dst = getActiveLayout();
                     if (which == 0) {
                         // Copy from opposite layout
                         HudLayout src = isLandscape ? mProfile.portraitLayout : mProfile.landscapeLayout;
-                        HudLayout dst = getActiveLayout();
                         dst.floatingButtons.clear();
                         for (HudButton b : src.floatingButtons) {
                             dst.floatingButtons.add(b.duplicate());
@@ -501,242 +502,38 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         rebuildActiveLayout();
                         Toast.makeText(getContext(), "Layout Copied", Toast.LENGTH_SHORT).show();
                     } else if (which == 1) {
-                        // Load Switch Controller Preset (RetroArch / Gamepad Layout)
-                        HudLayout dst = getActiveLayout();
+                        // Load Console Gamepad Preset (10% Inset)
                         dst.floatingButtons.clear();
-
-                        // ===== Left Gutter (Joy-Con L) =====
-                        // 1. L Shoulder (Top-left)
-                        HudButton btnL = new HudButton();
-                        btnL.label = "L";
-                        btnL.action = HudAction.key(16); // KEY_Q (RetroArch L)
-                        btnL.widthDp = 46;
-                        btnL.heightDp = 32;
-                        btnL.cornerRadiusDp = 8;
-                        btnL.posXPercent = isLandscape ? 0.05f : 0.15f;
-                        btnL.posYPercent = 0.12f;
-                        dst.floatingButtons.add(btnL);
-
-                        // 2. Select (-) button
-                        HudButton btnSelect = new HudButton();
-                        btnSelect.label = "-";
-                        btnSelect.action = HudAction.key(54); // KEY_RIGHTSHIFT (RetroArch Select)
-                        btnSelect.widthDp = 36;
-                        btnSelect.heightDp = 30;
-                        btnSelect.cornerRadiusDp = 6;
-                        btnSelect.posXPercent = isLandscape ? 0.075f : 0.22f;
-                        btnSelect.posYPercent = 0.22f;
-                        dst.floatingButtons.add(btnSelect);
-
-                        // 3. Virtual Keyboard Toggle (KB) button
-                        HudButton btnVk = new HudButton();
-                        btnVk.label = "KB";
-                        btnVk.action = HudAction.system("toggle_vk");
-                        btnVk.widthDp = 36;
-                        btnVk.heightDp = 30;
-                        btnVk.cornerRadiusDp = 6;
-                        btnVk.posXPercent = isLandscape ? 0.025f : 0.08f;
-                        btnVk.posYPercent = 0.22f;
-                        dst.floatingButtons.add(btnVk);
-
-                        // 4. D-PAD 4-way cross buttons (holdable for character movement)
-                        // Up
-                        HudButton dpadUp = new HudButton();
-                        dpadUp.label = "▲";
-                        dpadUp.action = HudAction.key(103); // KEY_UP
-                        dpadUp.widthDp = 36;
-                        dpadUp.heightDp = 36;
-                        dpadUp.cornerRadiusDp = 8;
-                        dpadUp.posXPercent = isLandscape ? 0.055f : 0.18f;
-                        dpadUp.posYPercent = 0.46f;
-                        dst.floatingButtons.add(dpadUp);
-
-                        // Down
-                        HudButton dpadDown = new HudButton();
-                        dpadDown.label = "▼";
-                        dpadDown.action = HudAction.key(108); // KEY_DOWN
-                        dpadDown.widthDp = 36;
-                        dpadDown.heightDp = 36;
-                        dpadDown.cornerRadiusDp = 8;
-                        dpadDown.posXPercent = isLandscape ? 0.055f : 0.18f;
-                        dpadDown.posYPercent = 0.68f;
-                        dst.floatingButtons.add(dpadDown);
-
-                        // Left
-                        HudButton dpadLeft = new HudButton();
-                        dpadLeft.label = "◀";
-                        dpadLeft.action = HudAction.key(105); // KEY_LEFT
-                        dpadLeft.widthDp = 36;
-                        dpadLeft.heightDp = 36;
-                        dpadLeft.cornerRadiusDp = 8;
-                        dpadLeft.posXPercent = isLandscape ? 0.025f : 0.08f;
-                        dpadLeft.posYPercent = 0.57f;
-                        dst.floatingButtons.add(dpadLeft);
-
-                        // Right
-                        HudButton dpadRight = new HudButton();
-                        dpadRight.label = "▶";
-                        dpadRight.action = HudAction.key(106); // KEY_RIGHT
-                        dpadRight.widthDp = 36;
-                        dpadRight.heightDp = 36;
-                        dpadRight.cornerRadiusDp = 8;
-                        dpadRight.posXPercent = isLandscape ? 0.085f : 0.28f;
-                        dpadRight.posYPercent = 0.57f;
-                        dst.floatingButtons.add(dpadRight);
-
-                        // 5. Menu / F1 button (RetroArch Quick Menu)
-                        HudButton btnMenu = new HudButton();
-                        btnMenu.label = "MENU";
-                        btnMenu.action = HudAction.key(59); // KEY_F1 (RetroArch Quick Menu)
-                        btnMenu.widthDp = 44;
-                        btnMenu.heightDp = 30;
-                        btnMenu.cornerRadiusDp = 6;
-                        btnMenu.posXPercent = isLandscape ? 0.055f : 0.18f;
-                        btnMenu.posYPercent = 0.82f;
-                        dst.floatingButtons.add(btnMenu);
-
-                        // ===== Right Gutter (Joy-Con R) =====
-                        // 1. R Shoulder (Top-right)
-                        HudButton btnR = new HudButton();
-                        btnR.label = "R";
-                        btnR.action = HudAction.key(17); // KEY_W (RetroArch R)
-                        btnR.widthDp = 46;
-                        btnR.heightDp = 32;
-                        btnR.cornerRadiusDp = 8;
-                        btnR.posXPercent = isLandscape ? 0.95f : 0.85f;
-                        btnR.posYPercent = 0.12f;
-                        dst.floatingButtons.add(btnR);
-
-                        // 2. Start (+) button
-                        HudButton btnStart = new HudButton();
-                        btnStart.label = "+";
-                        btnStart.action = HudAction.key(28); // KEY_ENTER (RetroArch Start)
-                        btnStart.widthDp = 36;
-                        btnStart.heightDp = 30;
-                        btnStart.cornerRadiusDp = 6;
-                        btnStart.posXPercent = isLandscape ? 0.925f : 0.78f;
-                        btnStart.posYPercent = 0.22f;
-                        dst.floatingButtons.add(btnStart);
-
-                        // 3. Home / Desktop button
-                        HudButton btnHome = new HudButton();
-                        btnHome.label = "HOME";
-                        btnHome.action = HudAction.key(125); // KEY_LEFTMETA (Super)
-                        btnHome.widthDp = 40;
-                        btnHome.heightDp = 30;
-                        btnHome.cornerRadiusDp = 6;
-                        btnHome.posXPercent = isLandscape ? 0.975f : 0.92f;
-                        btnHome.posYPercent = 0.22f;
-                        dst.floatingButtons.add(btnHome);
-
-                        // 4. ABXY Diamond Cluster (Standard Nintendo placement, RetroArch mapping)
-                        // X (Top): S
-                        HudButton btnX = new HudButton();
-                        btnX.label = "X";
-                        btnX.action = HudAction.key(31); // KEY_S (RetroArch X)
-                        btnX.widthDp = 38;
-                        btnX.heightDp = 38;
-                        btnX.cornerRadiusDp = 19;
-                        btnX.posXPercent = isLandscape ? 0.945f : 0.82f;
-                        btnX.posYPercent = 0.40f;
-                        dst.floatingButtons.add(btnX);
-
-                        // B (Bottom): Z (Jump/Cancel)
-                        HudButton btnB = new HudButton();
-                        btnB.label = "B";
-                        btnB.action = HudAction.key(44); // KEY_Z (RetroArch B)
-                        btnB.widthDp = 38;
-                        btnB.heightDp = 38;
-                        btnB.cornerRadiusDp = 19;
-                        btnB.posXPercent = isLandscape ? 0.945f : 0.82f;
-                        btnB.posYPercent = 0.62f;
-                        dst.floatingButtons.add(btnB);
-
-                        // Y (Left): A (Run/Attack)
-                        HudButton btnY = new HudButton();
-                        btnY.label = "Y";
-                        btnY.action = HudAction.key(30); // KEY_A (RetroArch Y)
-                        btnY.widthDp = 38;
-                        btnY.heightDp = 38;
-                        btnY.cornerRadiusDp = 19;
-                        btnY.posXPercent = isLandscape ? 0.915f : 0.72f;
-                        btnY.posYPercent = 0.51f;
-                        dst.floatingButtons.add(btnY);
-
-                        // A (Right): X (Action/Confirm)
-                        HudButton btnA = new HudButton();
-                        btnA.label = "A";
-                        btnA.action = HudAction.key(45); // KEY_X (RetroArch A)
-                        btnA.widthDp = 38;
-                        btnA.heightDp = 38;
-                        btnA.cornerRadiusDp = 19;
-                        btnA.posXPercent = isLandscape ? 0.975f : 0.92f;
-                        btnA.posYPercent = 0.51f;
-                        dst.floatingButtons.add(btnA);
-
-                        // 5. Mouse TrackPoint Nub
-                        HudButton rightStick = new HudButton();
-                        rightStick.widgetType = HudButton.WIDGET_TRACKPOINT;
-                        rightStick.label = "MOUSE";
-                        rightStick.widthDp = 56;
-                        rightStick.heightDp = 56;
-                        rightStick.cornerRadiusDp = 28;
-                        rightStick.posXPercent = isLandscape ? 0.945f : 0.82f;
-                        rightStick.posYPercent = 0.78f;
-                        dst.floatingButtons.add(rightStick);
-
+                        HudLayout preset = HudLayoutProfile.createConsoleGamepadLayout(isLandscape);
+                        for (HudButton b : preset.floatingButtons) {
+                            dst.floatingButtons.add(b.duplicate());
+                        }
                         selectButton(null, null);
                         rebuildActiveLayout();
-                        Toast.makeText(getContext(), "Switch Controller Preset Loaded", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), "Console Gamepad Preset (10% Inset) Loaded", Toast.LENGTH_SHORT).show();
                     } else if (which == 2) {
-                        // Load Niri Default Preset
-                        HudLayout dst = getActiveLayout();
+                        // Load Desktop / Productivity Preset (10% Inset)
                         dst.floatingButtons.clear();
-
-                        HudButton superNub = new HudButton();
-                        superNub.widgetType = HudButton.WIDGET_SUPER_GESTURE;
-                        superNub.label = "SUPER";
-                        superNub.widthDp = 58;
-                        superNub.heightDp = 58;
-                        superNub.cornerRadiusDp = 29;
-                        superNub.posXPercent = isLandscape ? 0.88f : 0.82f;
-                        superNub.posYPercent = 0.72f;
-                        dst.floatingButtons.add(superNub);
-
-                        HudButton mouseNub = new HudButton();
-                        mouseNub.widgetType = HudButton.WIDGET_TRACKPOINT;
-                        mouseNub.label = "MOUSE";
-                        mouseNub.widthDp = 60;
-                        mouseNub.heightDp = 60;
-                        mouseNub.cornerRadiusDp = 30;
-                        mouseNub.posXPercent = isLandscape ? 0.12f : 0.18f;
-                        mouseNub.posYPercent = 0.72f;
-                        dst.floatingButtons.add(mouseNub);
-
-                        HudButton btnEsc = new HudButton();
-                        btnEsc.label = "ESC";
-                        btnEsc.action = HudAction.key(1);
-                        btnEsc.widthDp = 52;
-                        btnEsc.heightDp = 38;
-                        btnEsc.posXPercent = 0.08f;
-                        btnEsc.posYPercent = 0.20f;
-                        dst.floatingButtons.add(btnEsc);
-
-                        HudButton btnTab = new HudButton();
-                        btnTab.label = "TAB";
-                        btnTab.action = HudAction.key(15);
-                        btnTab.widthDp = 52;
-                        btnTab.heightDp = 38;
-                        btnTab.posXPercent = 0.08f;
-                        btnTab.posYPercent = 0.30f;
-                        dst.floatingButtons.add(btnTab);
-
+                        HudLayout preset = HudLayoutProfile.createProductivityLayout(isLandscape);
+                        for (HudButton b : preset.floatingButtons) {
+                            dst.floatingButtons.add(b.duplicate());
+                        }
                         selectButton(null, null);
                         rebuildActiveLayout();
-                        Toast.makeText(getContext(), "Niri Preset Loaded", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(getContext(), "Desktop / Productivity Preset (10% Inset) Loaded", Toast.LENGTH_SHORT).show();
                     } else if (which == 3) {
+                        // Load User Portrait Hotkeys Layout
+                        dst.floatingButtons.clear();
+                        HudLayout preset = HudLayoutProfile.createDefaultPortraitLayout();
+                        for (HudButton b : preset.floatingButtons) {
+                            dst.floatingButtons.add(b.duplicate());
+                        }
+                        selectButton(null, null);
+                        rebuildActiveLayout();
+                        Toast.makeText(getContext(), "User Portrait Layout Loaded", Toast.LENGTH_SHORT).show();
+                    } else if (which == 4) {
                         // Clear
-                        getActiveLayout().floatingButtons.clear();
+                        dst.floatingButtons.clear();
                         selectButton(null, null);
                         rebuildActiveLayout();
                         Toast.makeText(getContext(), "Layout Cleared", Toast.LENGTH_SHORT).show();

@@ -400,13 +400,55 @@ public class SettingsActivity extends Activity {
             });
             root.addView(btnEditHud);
 
+            Button btnPresets = new Button(this);
+            styleSettingsButton(btnPresets);
+            btnPresets.setText("Select HUD Layout Preset...");
+            btnPresets.setOnClickListener(v -> showHudPresetsDialog());
+            LinearLayout.LayoutParams pLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            pLp.topMargin = dp(8);
+            btnPresets.setLayoutParams(pLp);
+            root.addView(btnPresets);
+
             TextView hudHint = new TextView(this);
-            hudHint.setText("Design on-screen floating buttons. Add a TrackPoint (mouse or scroll mode) or a Super Gesture nub; each can be moved, resized and rebound to any key/combo/action with live snapping and precise numeric properties. The bottom key row is the legacy ExtraKeys bar and is unaffected by this toggle.");
+            hudHint.setText("Design on-screen floating buttons. Add a TrackPoint (mouse or scroll mode) or a Super Gesture nub; each can be moved, resized and rebound to any key/combo/action with live snapping and precise numeric properties. In landscape, ExtraKeysBar is automatically hidden when HUD is enabled.");
             hudHint.setTextSize(12);
             hudHint.setTextColor(M3.COLOR_TEXT_MUTED);
             hudHint.setPadding(0, dp(4), 0, dp(12));
             root.addView(hudHint);
         }
+    }
+
+    private void showHudPresetsDialog() {
+        final String[] items = new String[] {
+                "Console Gamepad Preset (10% Inset - D-Pad + ABXY + L1/R1 + Mouse)",
+                "Desktop / Productivity Preset (10% Inset - Super Gesture + TrackPoint + Hotkeys)",
+                "Reset Default Layouts (Portrait User Layout + Landscape 10% Inset)"
+        };
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
+        builder.setTitle("Select HUD Layout Preset");
+        builder.setItems(items, (dialog, which) -> {
+            try {
+                SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+                String profileJson = prefs.getString("hud_layout_profile_v2", null);
+                com.anland.consumer.hud.HudLayoutProfile profile = com.anland.consumer.hud.HudLayoutProfile.fromJSON(profileJson);
+                if (which == 0) {
+                    profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createConsoleGamepadLayout(true);
+                    Toast.makeText(this, "Console Gamepad Preset Applied to Landscape", Toast.LENGTH_SHORT).show();
+                } else if (which == 1) {
+                    profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createProductivityLayout(true);
+                    Toast.makeText(this, "Productivity Preset Applied to Landscape", Toast.LENGTH_SHORT).show();
+                } else if (which == 2) {
+                    profile.portraitLayout = com.anland.consumer.hud.HudLayoutProfile.createDefaultPortraitLayout();
+                    profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createConsoleGamepadLayout(true);
+                    Toast.makeText(this, "Default Layouts Reset (Portrait User + Landscape 10% Inset)", Toast.LENGTH_SHORT).show();
+                }
+                prefs.edit().putString("hud_layout_profile_v2", profile.toJSON().toString()).apply();
+            } catch (Exception e) {
+                Log.e(TAG, "showHudPresetsDialog error", e);
+            }
+        });
+        builder.show();
     }
 
     private void showTouchpadPage() {

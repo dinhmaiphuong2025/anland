@@ -2202,6 +2202,8 @@ public class MainActivity extends Activity
                 restoreHudAfterKeyboard();
             }
         }
+        setExtraKeysBarVisible(shouldShowBar(systemIme != null && systemIme.isImeVisible()));
+        relayout();
         if (mRoot != null)
             mRoot.postDelayed(this::syncScreenSizeToSurface, 400);
     }
@@ -2305,15 +2307,18 @@ public class MainActivity extends Activity
         }
     }
 
-    // Desired extra-keys bar visibility for the current keyboard state. The
-    // single three-way preference replaces the old two-switch pair:
-    //   "always"       – bar always visible
-    //   "never"        – bar always hidden
-    //   "with_keyboard" – bar tracks the soft keyboard (default)
-    // The HUD editor is a peer feature and does NOT force the bar off.
+    // Desired extra-keys bar visibility for the current keyboard state.
+    // If HUD overlay is enabled and the screen is in landscape, ExtraKeysBar is
+    // permanently disabled to prevent screen shrinking or overlapping HUD buttons.
     private boolean shouldShowBar(boolean imeVisible) {
-        String mode = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                .getString(KEY_EXTRA_KEYS_MODE, "always");
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean useHud = prefs.getBoolean("use_hud_overlay", false);
+        int orientation = getResources().getConfiguration().orientation;
+        boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        if (useHud && isLandscape) {
+            return false;
+        }
+        String mode = prefs.getString(KEY_EXTRA_KEYS_MODE, "always");
         switch (mode) {
             case "always":   return true;
             case "never":    return false;
@@ -2479,10 +2484,17 @@ public class MainActivity extends Activity
     }
 
     // Show/hide the extra-keys bar and re-apply the layout so the display area
-    // is compressed (shown) or restored (hidden). The HUD editor is a peer
-    // feature and does NOT force the bar off here.
+    // is compressed (shown) or restored (hidden).
+    // In landscape with HUD on, the bar is permanently suppressed.
     private void setExtraKeysBarVisible(boolean visible) {
         if (extraKeysBar == null) return;
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean useHud = prefs.getBoolean("use_hud_overlay", false);
+        int orientation = getResources().getConfiguration().orientation;
+        boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        if (useHud && isLandscape) {
+            visible = false;
+        }
         if (visible && virtualKeyboardView != null
                 && virtualKeyboardView.getVisibility() == View.VISIBLE
                 && virtualKeyboardView.isSplitArcMode()) {
@@ -2630,6 +2642,13 @@ public class MainActivity extends Activity
     // Toggle the extra-keys bar on its own (e.g. from the Back key), independent of
     // the soft keyboard. Showing it just compresses the display area above the bar.
     private void toggleExtraKeysBar() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean useHud = prefs.getBoolean("use_hud_overlay", false);
+        int orientation = getResources().getConfiguration().orientation;
+        if (useHud && orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            setExtraKeysBarVisible(false);
+            return;
+        }
         boolean visible = extraKeysBar != null
             && extraKeysBar.getVisibility() == View.VISIBLE;
         setExtraKeysBarVisible(!visible);
