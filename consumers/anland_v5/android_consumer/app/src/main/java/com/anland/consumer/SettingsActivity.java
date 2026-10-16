@@ -366,8 +366,39 @@ public class SettingsActivity extends Activity {
         });
         card.addView(hudSwitch);
 
+        boolean useSteamDeck = prefs.getBoolean("steam_deck_mode", false);
+        Switch steamDeckSwitch = new Switch(this);
+        M3.styleSwitch(steamDeckSwitch);
+        steamDeckSwitch.setText("Chế độ Steam Deck (Handheld Console Mode)");
+        steamDeckSwitch.setChecked(useSteamDeck);
+        steamDeckSwitch.setPadding(0, dp(8), 0, dp(4));
+        steamDeckSwitch.setOnCheckedChangeListener((v, checked) -> {
+            SharedPreferences.Editor edit = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+            edit.putBoolean("steam_deck_mode", checked);
+            if (checked) {
+                edit.putBoolean("use_hud_overlay", true);
+                edit.putString("landscape_aspect_ratio", "steam_deck_16_10");
+                try {
+                    String profileJson = prefs.getString("hud_layout_profile_v2", null);
+                    com.anland.consumer.hud.HudLayoutProfile profile = com.anland.consumer.hud.HudLayoutProfile.fromJSON(profileJson);
+                    profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
+                    edit.putString("hud_layout_profile_v2", profile.toJSON().toString());
+                } catch (Exception ignored) {}
+            }
+            edit.apply();
+            showKeyboardPage();
+        });
+        card.addView(steamDeckSwitch);
+
+        TextView deckHint = new TextView(this);
+        deckHint.setText("Tách biệt hoàn toàn: Tự động co màn hình 16:10 giữa 2 tay cầm, tắt cảm ứng full màn hình (chống cấn D-Pad), và dùng ô Trackpad cảm ứng riêng để di chuột.");
+        deckHint.setTextSize(12);
+        deckHint.setTextColor(0xFF80DEEA);
+        deckHint.setPadding(0, dp(2), 0, dp(8));
+        card.addView(deckHint);
+
         TextView hudHint = new TextView(this);
-        hudHint.setText("Khi xoay ngang và bật HUD, ExtraKeysBar sẽ tự động tắt hoàn toàn để không che khuất tầm nhìn.");
+        hudHint.setText("Khi xoay ngang và bật HUD / Steam Deck, ExtraKeysBar sẽ tự động tắt hoàn toàn để không che khuất tầm nhìn.");
         hudHint.setTextSize(12);
         hudHint.setTextColor(M3.COLOR_TEXT_MUTED);
         hudHint.setPadding(0, dp(2), 0, dp(8));
@@ -410,9 +441,10 @@ public class SettingsActivity extends Activity {
 
     private void showHudPresetsDialog() {
         final String[] items = new String[] {
-                "Console Gamepad Preset (10% Inset - D-Pad + ABXY + L1/R1 + Mouse)",
+                "🎮 Steam Deck Handheld Preset (16:10 Viewport + Dedicated Trackpad)",
+                "Console Gamepad Preset (10% Inset - D-Pad + ABXY + Sticks)",
                 "Desktop / Productivity Preset (10% Inset - Super Gesture + TrackPoint + Hotkeys)",
-                "Reset Default Layouts (Portrait User Layout + Landscape 10% Inset)"
+                "Reset Default Layouts (Steam Deck Handheld + Portrait)"
         };
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
         builder.setTitle("Select HUD Layout Preset");
@@ -422,15 +454,21 @@ public class SettingsActivity extends Activity {
                 String profileJson = prefs.getString("hud_layout_profile_v2", null);
                 com.anland.consumer.hud.HudLayoutProfile profile = com.anland.consumer.hud.HudLayoutProfile.fromJSON(profileJson);
                 if (which == 0) {
+                    profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
+                    prefs.edit().putBoolean("steam_deck_mode", true)
+                                .putString("landscape_aspect_ratio", "steam_deck_16_10")
+                                .apply();
+                    Toast.makeText(this, "Steam Deck Handheld Preset Applied", Toast.LENGTH_SHORT).show();
+                } else if (which == 1) {
                     profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createConsoleGamepadLayout(true);
                     Toast.makeText(this, "Console Gamepad Preset Applied to Landscape", Toast.LENGTH_SHORT).show();
-                } else if (which == 1) {
+                } else if (which == 2) {
                     profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createProductivityLayout(true);
                     Toast.makeText(this, "Productivity Preset Applied to Landscape", Toast.LENGTH_SHORT).show();
-                } else if (which == 2) {
+                } else if (which == 3) {
                     profile.portraitLayout = com.anland.consumer.hud.HudLayoutProfile.createDefaultPortraitLayout();
-                    profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createConsoleGamepadLayout(true);
-                    Toast.makeText(this, "Default Layouts Reset (Portrait User + Landscape 10% Inset)", Toast.LENGTH_SHORT).show();
+                    profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
+                    Toast.makeText(this, "Default Layouts Reset (Steam Deck)", Toast.LENGTH_SHORT).show();
                 }
                 prefs.edit().putString("hud_layout_profile_v2", profile.toJSON().toString()).apply();
             } catch (Exception e) {
@@ -2747,6 +2785,7 @@ public class SettingsActivity extends Activity {
     Spinner ratioSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
     String[] ratioOptions = {
             "Auto Stretch (Fullscreen)",
+            "🎮 Steam Deck Handheld 16:10 (Nằm gọn giữa hai tay cầm)",
             "Fit Between Keyboards (Nằm gọn giữa hai phím)",
             "16:9 Letterbox (1920x1080)",
             "14:9 Letterbox (1680x1080)",
@@ -2755,21 +2794,23 @@ public class SettingsActivity extends Activity {
     setupDarkSpinner(ratioSpinner, ratioOptions);
     String currentRatio = prefs.getString("landscape_aspect_ratio", null);
     int sel = 0;
-    if ("fit_between".equals(currentRatio)) sel = 1;
-    else if ("16_9".equals(currentRatio)) sel = 2;
-    else if ("14_9".equals(currentRatio)) sel = 3;
-    else if ("4_3".equals(currentRatio)) sel = 4;
-    else if (prefs.getBoolean("landscape_16_9_letterbox", false)) sel = 2;
+    if ("steam_deck_16_10".equals(currentRatio)) sel = 1;
+    else if ("fit_between".equals(currentRatio)) sel = 2;
+    else if ("16_9".equals(currentRatio)) sel = 3;
+    else if ("14_9".equals(currentRatio)) sel = 4;
+    else if ("4_3".equals(currentRatio)) sel = 5;
+    else if (prefs.getBoolean("landscape_16_9_letterbox", false)) sel = 3;
 
     ratioSpinner.setSelection(sel);
     ratioSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
         @Override
         public void onItemSelected(AdapterView<?> parent, View v, int pos, long id) {
             String val = "auto";
-            if (pos == 1) val = "fit_between";
-            else if (pos == 2) val = "16_9";
-            else if (pos == 3) val = "14_9";
-            else if (pos == 4) val = "4_3";
+            if (pos == 1) val = "steam_deck_16_10";
+            else if (pos == 2) val = "fit_between";
+            else if (pos == 3) val = "16_9";
+            else if (pos == 4) val = "14_9";
+            else if (pos == 5) val = "4_3";
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putString("landscape_aspect_ratio", val)
                     .putBoolean("landscape_16_9_letterbox", pos != 0)

@@ -319,6 +319,236 @@ public final class HudLayoutProfile {
     }
 
     /**
+     * Authentic Steam Deck Handheld Console Preset:
+     * - Screen is letterboxed at 16:10 centered between gutters.
+     * - Left Grip: L1/L2, View (Select), Left Thumbstick (stick_left), D-Pad Cross (▲▼◀▶), KB toggle.
+     * - Right Grip: R1/R2, Menu (Start), ABXY Diamond cluster, Right Thumbstick (stick_right),
+     *   Dedicated Steam Deck Haptic Trackpad (Touchpad for mouse look & tap click), Settings.
+     */
+    public static HudLayout createSteamDeckLayout(boolean isLandscape) {
+        HudLayout layout = new HudLayout();
+        layout.dockEnabled = false;
+
+        // ===== Left Grip =====
+        // 1. L1 (Bumper / LB) & L2 (Trigger / LT)
+        HudButton btnL1 = new HudButton();
+        btnL1.label = "L1";
+        btnL1.action = HudAction.gamepadBtn(310); // BTN_TL
+        btnL1.widthDp = 50;
+        btnL1.heightDp = 32;
+        btnL1.cornerRadiusDp = 10;
+        btnL1.posXPercent = isLandscape ? 0.08f : 0.12f;
+        btnL1.posYPercent = 0.08f;
+        layout.floatingButtons.add(btnL1);
+
+        HudButton btnL2 = new HudButton();
+        btnL2.label = "L2";
+        btnL2.action = HudAction.gamepadBtn(312); // BTN_TL2
+        btnL2.widthDp = 50;
+        btnL2.heightDp = 32;
+        btnL2.cornerRadiusDp = 10;
+        btnL2.posXPercent = isLandscape ? 0.08f : 0.12f;
+        btnL2.posYPercent = 0.17f;
+        layout.floatingButtons.add(btnL2);
+
+        // 2. View / Select button (⧉)
+        HudButton btnView = new HudButton();
+        btnView.label = "VIEW";
+        btnView.action = HudAction.gamepadBtn(314); // BTN_SELECT
+        btnView.widthDp = 42;
+        btnView.heightDp = 28;
+        btnView.cornerRadiusDp = 8;
+        btnView.posXPercent = isLandscape ? 0.17f : 0.22f;
+        btnView.posYPercent = 0.10f;
+        layout.floatingButtons.add(btnView);
+
+        // 3. Left Analog Thumbstick (ABS_X / ABS_Y)
+        HudButton leftStick = new HudButton();
+        leftStick.widgetType = HudButton.WIDGET_TRACKPOINT;
+        leftStick.trackpointMode = HudButton.MODE_STICK_LEFT;
+        leftStick.label = "L-STICK";
+        leftStick.widthDp = 56;
+        leftStick.heightDp = 56;
+        leftStick.cornerRadiusDp = 28;
+        leftStick.posXPercent = isLandscape ? 0.09f : 0.14f;
+        leftStick.posYPercent = 0.35f;
+        layout.floatingButtons.add(leftStick);
+
+        // 4. D-Pad 4-Way Cross
+        float dpadCx = isLandscape ? 0.11f : 0.16f;
+        float dpadCy = 0.65f;
+
+        HudButton dpadUp = new HudButton();
+        dpadUp.label = "▲";
+        dpadUp.action = HudAction.gamepadBtn(544);
+        dpadUp.action.repeat = true;
+        dpadUp.widthDp = 42;
+        dpadUp.heightDp = 42;
+        dpadUp.cornerRadiusDp = 10;
+        dpadUp.posXPercent = dpadCx;
+        dpadUp.posYPercent = dpadCy - 0.12f;
+        layout.floatingButtons.add(dpadUp);
+
+        HudButton dpadDown = new HudButton();
+        dpadDown.label = "▼";
+        dpadDown.action = HudAction.gamepadBtn(545);
+        dpadDown.action.repeat = true;
+        dpadDown.widthDp = 42;
+        dpadDown.heightDp = 42;
+        dpadDown.cornerRadiusDp = 10;
+        dpadDown.posXPercent = dpadCx;
+        dpadDown.posYPercent = dpadCy + 0.12f;
+        layout.floatingButtons.add(dpadDown);
+
+        HudButton dpadLeft = new HudButton();
+        dpadLeft.label = "◀";
+        dpadLeft.action = HudAction.gamepadBtn(546);
+        dpadLeft.action.repeat = true;
+        dpadLeft.widthDp = 42;
+        dpadLeft.heightDp = 42;
+        dpadLeft.cornerRadiusDp = 10;
+        dpadLeft.posXPercent = dpadCx - (isLandscape ? 0.055f : 0.08f);
+        dpadLeft.posYPercent = dpadCy;
+        layout.floatingButtons.add(dpadLeft);
+
+        HudButton dpadRight = new HudButton();
+        dpadRight.label = "▶";
+        dpadRight.action = HudAction.gamepadBtn(547);
+        dpadRight.action.repeat = true;
+        dpadRight.widthDp = 42;
+        dpadRight.heightDp = 42;
+        dpadRight.cornerRadiusDp = 10;
+        dpadRight.posXPercent = dpadCx + (isLandscape ? 0.055f : 0.08f);
+        dpadRight.posYPercent = dpadCy;
+        layout.floatingButtons.add(dpadRight);
+
+        // 5. KB Toggle
+        HudButton btnVk = new HudButton();
+        btnVk.label = "KB";
+        btnVk.action = HudAction.system("toggle_vk");
+        btnVk.widthDp = 44;
+        btnVk.heightDp = 28;
+        btnVk.cornerRadiusDp = 8;
+        btnVk.posXPercent = isLandscape ? 0.11f : 0.16f;
+        btnVk.posYPercent = 0.92f;
+        layout.floatingButtons.add(btnVk);
+
+        // ===== Right Grip =====
+        // 1. R1 (Bumper / RB) & R2 (Trigger / RT)
+        HudButton btnR1 = new HudButton();
+        btnR1.label = "R1";
+        btnR1.action = HudAction.gamepadBtn(311); // BTN_TR
+        btnR1.widthDp = 50;
+        btnR1.heightDp = 32;
+        btnR1.cornerRadiusDp = 10;
+        btnR1.posXPercent = isLandscape ? 0.92f : 0.88f;
+        btnR1.posYPercent = 0.08f;
+        layout.floatingButtons.add(btnR1);
+
+        HudButton btnR2 = new HudButton();
+        btnR2.label = "R2";
+        btnR2.action = HudAction.gamepadBtn(313); // BTN_TR2
+        btnR2.widthDp = 50;
+        btnR2.heightDp = 32;
+        btnR2.cornerRadiusDp = 10;
+        btnR2.posXPercent = isLandscape ? 0.92f : 0.88f;
+        btnR2.posYPercent = 0.17f;
+        layout.floatingButtons.add(btnR2);
+
+        // 2. Menu / Start button (☰)
+        HudButton btnMenu = new HudButton();
+        btnMenu.label = "MENU";
+        btnMenu.action = HudAction.gamepadBtn(315); // BTN_START
+        btnMenu.widthDp = 44;
+        btnMenu.heightDp = 28;
+        btnMenu.cornerRadiusDp = 8;
+        btnMenu.posXPercent = isLandscape ? 0.83f : 0.78f;
+        btnMenu.posYPercent = 0.10f;
+        layout.floatingButtons.add(btnMenu);
+
+        // 3. ABXY Diamond Cluster (Right Top)
+        float abxyCx = isLandscape ? 0.91f : 0.86f;
+        float abxyCy = 0.33f;
+
+        HudButton btnY = new HudButton();
+        btnY.label = "Y";
+        btnY.action = HudAction.gamepadBtn(307); // BTN_Y
+        btnY.widthDp = 40;
+        btnY.heightDp = 40;
+        btnY.cornerRadiusDp = 20;
+        btnY.posXPercent = abxyCx;
+        btnY.posYPercent = abxyCy - 0.10f;
+        layout.floatingButtons.add(btnY);
+
+        HudButton btnA = new HudButton();
+        btnA.label = "A";
+        btnA.action = HudAction.gamepadBtn(304); // BTN_A
+        btnA.widthDp = 40;
+        btnA.heightDp = 40;
+        btnA.cornerRadiusDp = 20;
+        btnA.posXPercent = abxyCx;
+        btnA.posYPercent = abxyCy + 0.10f;
+        layout.floatingButtons.add(btnA);
+
+        HudButton btnX = new HudButton();
+        btnX.label = "X";
+        btnX.action = HudAction.gamepadBtn(308); // BTN_X
+        btnX.widthDp = 40;
+        btnX.heightDp = 40;
+        btnX.cornerRadiusDp = 20;
+        btnX.posXPercent = abxyCx - (isLandscape ? 0.055f : 0.08f);
+        btnX.posYPercent = abxyCy;
+        layout.floatingButtons.add(btnX);
+
+        HudButton btnB = new HudButton();
+        btnB.label = "B";
+        btnB.action = HudAction.gamepadBtn(305); // BTN_B
+        btnB.widthDp = 40;
+        btnB.heightDp = 40;
+        btnB.cornerRadiusDp = 20;
+        btnB.posXPercent = abxyCx + (isLandscape ? 0.055f : 0.08f);
+        btnB.posYPercent = abxyCy;
+        layout.floatingButtons.add(btnB);
+
+        // 4. Right Analog Thumbstick (ABS_RX / ABS_RY)
+        HudButton rightStick = new HudButton();
+        rightStick.widgetType = HudButton.WIDGET_TRACKPOINT;
+        rightStick.trackpointMode = HudButton.MODE_STICK_RIGHT;
+        rightStick.label = "R-STICK";
+        rightStick.widthDp = 52;
+        rightStick.heightDp = 52;
+        rightStick.cornerRadiusDp = 26;
+        rightStick.posXPercent = isLandscape ? 0.80f : 0.74f;
+        rightStick.posYPercent = 0.46f;
+        layout.floatingButtons.add(rightStick);
+
+        // 5. Steam Deck Dedicated Trackpad (Touchpad for Mouse look & Tap Left Click)
+        HudButton deckTrackpad = new HudButton();
+        deckTrackpad.widgetType = HudButton.WIDGET_TOUCHPAD;
+        deckTrackpad.label = "TRACKPAD";
+        deckTrackpad.widthDp = 74;
+        deckTrackpad.heightDp = 74;
+        deckTrackpad.cornerRadiusDp = 16;
+        deckTrackpad.trackpointSensitivity = 1.4f;
+        deckTrackpad.posXPercent = isLandscape ? 0.89f : 0.84f;
+        deckTrackpad.posYPercent = 0.70f;
+        layout.floatingButtons.add(deckTrackpad);
+
+        // 6. Settings / Quick Access (...)
+        HudButton btnSettings = new HudButton();
+        btnSettings.label = "⚙";
+        btnSettings.action = HudAction.system("open_settings");
+        btnSettings.widthDp = 44;
+        btnSettings.heightDp = 28;
+        btnSettings.cornerRadiusDp = 8;
+        btnSettings.posXPercent = isLandscape ? 0.89f : 0.84f;
+        btnSettings.posYPercent = 0.92f;
+        layout.floatingButtons.add(btnSettings);
+
+        return layout;
+    }
+
+    /**
      * Ergonomic Productivity & Niri Desktop Preset (10% Margin):
      * - Left side: TrackPoint Mouse Nub, ESC, TAB, CTRL, ALT.
      * - Right side: Super Gesture Bar, Q (Super+Q), OV (Super+O), CP (Copy-Paste), ENTER, BKSP, KB, Settings.

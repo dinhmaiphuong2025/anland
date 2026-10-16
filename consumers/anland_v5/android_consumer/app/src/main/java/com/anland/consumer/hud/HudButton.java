@@ -12,13 +12,15 @@ public final class HudButton {
     public static final String WIDGET_STANDARD = "button";
     public static final String WIDGET_SUPER_GESTURE = "super_gesture";
     public static final String WIDGET_TRACKPOINT = "trackpoint";
+    public static final String WIDGET_TOUCHPAD = "touchpad";
 
     // Strongly-typed mirror of WIDGET_* above, used by code that switches
     // over the widget kind (e.g. the toolbar's add-widget chooser).
     public enum WidgetKind {
         KEY,           // WIDGET_STANDARD
         SUPER_GESTURE, // WIDGET_SUPER_GESTURE
-        TRACKPOINT     // WIDGET_TRACKPOINT
+        TRACKPOINT,    // WIDGET_TRACKPOINT
+        TOUCHPAD       // WIDGET_TOUCHPAD
     }
 
     public String id = UUID.randomUUID().toString();
@@ -90,7 +92,7 @@ public final class HudButton {
             obj.put("swipe_up", swipeUpAction.toJSON());
             obj.put("swipe_down", swipeDownAction.toJSON());
             obj.put("swipe_threshold_dp", swipeThresholdDp);
-        } else if (WIDGET_TRACKPOINT.equals(widgetType)) {
+        } else if (WIDGET_TRACKPOINT.equals(widgetType) || WIDGET_TOUCHPAD.equals(widgetType)) {
             obj.put("trackpoint_sensitivity", trackpointSensitivity);
             obj.put("trackpoint_deadzone_dp", trackpointDeadzoneDp);
             obj.put("trackpoint_mode", trackpointMode != null ? trackpointMode : MODE_MOUSE);

@@ -517,9 +517,11 @@ public final class HudPropertyInspectorView extends LinearLayout {
             mSuperGestureOptions.setVisibility(GONE);
         }
         boolean isTrackpoint = HudButton.WIDGET_TRACKPOINT.equals(b.widgetType);
+        boolean isTouchpad = HudButton.WIDGET_TOUCHPAD.equals(b.widgetType);
         if (mTrackPointOptions != null) {
-            mTrackPointOptions.setVisibility(isTrackpoint ? VISIBLE : GONE);
-            if (isTrackpoint) {
+            mTrackPointOptions.setVisibility((isTrackpoint || isTouchpad) ? VISIBLE : GONE);
+            if (isTrackpoint || isTouchpad) {
+                mBtnTrackPointMode.setVisibility(isTouchpad ? GONE : VISIBLE);
                 String mode = b.trackpointMode != null ? b.trackpointMode : HudButton.MODE_MOUSE;
                 mBtnTrackPointMode.setText(mode.toUpperCase().replace('_', ' '));
                 syncSliderAndInput(mTrackSensitivitySeekBar, mTrackSensitivityInput, Math.round(b.trackpointSensitivity * 10), 5, 30);

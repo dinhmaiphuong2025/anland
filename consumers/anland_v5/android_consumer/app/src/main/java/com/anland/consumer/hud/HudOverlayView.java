@@ -558,12 +558,14 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         final String[] labels = new String[] {
                 "Standard Key Button",
                 "Super Gesture Nub",
-                "TrackPoint (Mouse / Scroll)"
+                "TrackPoint (Mouse / Scroll)",
+                "Steam Deck Trackpad (Touchpad / Mouse)"
         };
         final HudButton.WidgetKind[] kinds = new HudButton.WidgetKind[] {
                 HudButton.WidgetKind.KEY,
                 HudButton.WidgetKind.SUPER_GESTURE,
-                HudButton.WidgetKind.TRACKPOINT
+                HudButton.WidgetKind.TRACKPOINT,
+                HudButton.WidgetKind.TOUCHPAD
         };
         mInspectorView.setVisibility(GONE);
         AlertDialog dialog = new android.app.AlertDialog.Builder(getContext(),
@@ -609,6 +611,15 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 b.cornerRadiusDp = 30;
                 b.posXPercent = 0.2f;
                 b.posYPercent = 0.5f;
+                break;
+            case TOUCHPAD:
+                b.widgetType = HudButton.WIDGET_TOUCHPAD;
+                b.label = "TRACKPAD";
+                b.widthDp = 76;
+                b.heightDp = 76;
+                b.cornerRadiusDp = 14;
+                b.posXPercent = 0.85f;
+                b.posYPercent = 0.70f;
                 break;
         }
         getActiveLayout().floatingButtons.add(b);
@@ -810,6 +821,29 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     }
                 });
                 ((SuperGestureButtonView) widgetView).setInEditMode(mIsEditMode);
+            } else if (HudButton.WIDGET_TOUCHPAD.equals(b.widgetType)) {
+                widgetView = new HudTouchpadView(getContext(), b, new HudTouchpadView.TouchpadDispatcher() {
+                    @Override
+                    public void onPointerMove(float dx, float dy) {
+                        if (!mIsEditMode && mHost != null) mHost.sendMouseMotion(dx, dy);
+                    }
+                    @Override
+                    public void onPointerClick(int button) {
+                        if (!mIsEditMode && mHost != null) {
+                            int code = (button == 2) ? 0x111 : (button == 3 ? 0x112 : 0x110);
+                            mHost.sendMouseButton(code, true);
+                            postDelayed(() -> mHost.sendMouseButton(code, false), 50);
+                        }
+                    }
+                    @Override
+                    public void onPointerScroll(float dx, float dy) {
+                        if (!mIsEditMode && mHost != null) {
+                            if (Math.abs(dy) > 0.01f) mHost.sendMouseScroll(0, -dy);
+                            if (Math.abs(dx) > 0.01f) mHost.sendMouseScroll(1, dx);
+                        }
+                    }
+                });
+                ((HudTouchpadView) widgetView).setInEditMode(mIsEditMode);
             } else {
                 widgetView = new HudFreeformButtonView(getContext(), b, new HudFreeformButtonView.ButtonActionListener() {
                     @Override

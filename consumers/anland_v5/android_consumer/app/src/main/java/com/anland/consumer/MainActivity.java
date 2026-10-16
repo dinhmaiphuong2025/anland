@@ -173,6 +173,8 @@ public class MainActivity extends Activity
     public static final String RATIO_14_9 = "14_9";
     public static final String RATIO_4_3 = "4_3";
     public static final String RATIO_FIT_BETWEEN = "fit_between";
+    public static final String RATIO_STEAM_DECK = "steam_deck_16_10";
+    public static final String KEY_STEAM_DECK_MODE = "steam_deck_mode";
     public static final String KEY_LANDSCAPE_SPLIT_ARC = "landscape_split_arc";
     private boolean mUserDismissedImeInForeground = false;
 
@@ -425,7 +427,12 @@ public class MainActivity extends Activity
             boolean legacy169 = prefs.getBoolean(KEY_LANDSCAPE_16_9, false);
             ratioPref = legacy169 ? RATIO_16_9 : RATIO_AUTO;
         }
-        if (isLandscape && RATIO_FIT_BETWEEN.equals(ratioPref)) {
+        boolean isSteamDeck = prefs.getBoolean(KEY_STEAM_DECK_MODE, false);
+        if (isLandscape && (isSteamDeck || RATIO_STEAM_DECK.equals(ratioPref))) {
+            if (customScreenWidth > 0 && customScreenHeight > 0) {
+                mNative.setCustomResolution(customScreenWidth, customScreenHeight);
+            }
+        } else if (isLandscape && RATIO_FIT_BETWEEN.equals(ratioPref)) {
             if (customScreenWidth > 0 && customScreenHeight > 0) {
                 mNative.setCustomResolution(customScreenWidth, customScreenHeight);
             }
@@ -2432,10 +2439,39 @@ public class MainActivity extends Activity
         int parentH = mRoot.getHeight();
         if (parentW <= 0 || parentH <= 0) return;
 
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean isSteamDeck = prefs.getBoolean(KEY_STEAM_DECK_MODE, false);
         int availH = Math.max(100, parentH - lp.bottomMargin);
         float targetRatio;
         float baseWidth;
-        if (RATIO_FIT_BETWEEN.equals(ratioPref)) {
+        if (isSteamDeck || RATIO_STEAM_DECK.equals(ratioPref)) {
+            // Steam Deck Handheld 16:10 format centered cleanly between controller grips
+            targetRatio = 16f / 10f;
+            int surfaceH = availH;
+            int surfaceW = Math.round(availH * targetRatio);
+            int maxW = Math.round(parentW - 2f * 200f * mDensity);
+            if (surfaceW > maxW && maxW > 400) {
+                surfaceW = maxW;
+                surfaceH = Math.round(surfaceW / targetRatio);
+            }
+
+            lp.width = surfaceW;
+            lp.height = surfaceH;
+            lp.gravity = (lp.bottomMargin > 0) ? (Gravity.TOP | Gravity.CENTER_HORIZONTAL) : Gravity.CENTER;
+            lp.leftMargin = 0;
+            lp.topMargin = 0;
+            surfaceView.setLayoutParams(lp);
+
+            surfaceOffsetX = (parentW - surfaceW) / 2f;
+            surfaceOffsetY = (lp.bottomMargin > 0) ? 0f : ((parentH - surfaceH) / 2f);
+            customScreenWidth = surfaceW;
+            customScreenHeight = surfaceH;
+            if (mNative != null) {
+                mNative.setCustomResolution(surfaceW, surfaceH);
+            }
+            surfaceScale = 1.0f;
+            return;
+        } else if (RATIO_FIT_BETWEEN.equals(ratioPref)) {
             float clusterWidthPx = (8f + 5 * 38f + 4 * 5f + 16f) * mDensity;
             int surfaceW = Math.round(parentW - 2f * clusterWidthPx);
             if (surfaceW < 300) surfaceW = parentW;
@@ -2494,9 +2530,10 @@ public class MainActivity extends Activity
         if (extraKeysBar == null) return;
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         boolean useHud = prefs.getBoolean("use_hud_overlay", false);
+        boolean isSteamDeck = prefs.getBoolean(KEY_STEAM_DECK_MODE, false);
         int orientation = getResources().getConfiguration().orientation;
         boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
-        if (useHud && isLandscape) {
+        if ((useHud || isSteamDeck) && isLandscape) {
             visible = false;
         }
         if (visible && virtualKeyboardView != null
@@ -2967,6 +3004,18 @@ public class MainActivity extends Activity
             // A Back-key release leaves the pointer free long enough for the user
             // to move/click normally; the next click starts a new capture session.
             requestPointerCaptureAfterClick();
+        }
+
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        int orientation = getResources().getConfiguration().orientation;
+        boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        boolean isSteamDeck = prefs.getBoolean(KEY_STEAM_DECK_MODE, false);
+
+        // ===== Steam Deck Mode: Disable fullscreen touch on game surface =====
+        // Prevents thumb/palm misclicks on the game screen when using D-Pad or buttons.
+        // Mouse pointer is operated exclusively through the dedicated on-screen Trackpad.
+        if (isLandscape && isSteamDeck && !mouseEvent) {
+            return true;
         }
 
         // ===== 触摸板模式优先处理（仅针对非鼠标触摸事件） =====
