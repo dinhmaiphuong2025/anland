@@ -38,29 +38,6 @@
  * per-instance -> consumer_state.clipboard_obj. */
 static JavaVM *g_jvm = NULL;
 
-/* Trace sizing events into the app's external-files debug log (MIUI suppresses
- * logcat, and the rotation-size mismatch is invisible without ground truth). */
-#include <stdarg.h>
-static void dbg_file(const char *fmt, ...)
-{
-    FILE *f = fopen("/storage/emulated/0/Android/data/com.anland.consumer/files/anland_debug.log", "a");
-    if (!f)
-        return;
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    struct tm tm_buf;
-    struct tm *tm = localtime_r(&ts.tv_sec, &tm_buf);
-    fprintf(f, "%02d-%02d %02d:%02d:%02d.%03ld C: ",
-            tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec,
-            ts.tv_nsec / 1000000);
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(f, fmt, ap);
-    va_end(ap);
-    fputc('\n', f);
-    fclose(f);
-}
-
 /* ANativeWindow hidden-API function pointers: loaded once, read-only afterwards, so
  * safe to share across instances. */
 static struct anw_api api;
@@ -157,13 +134,8 @@ static int collect_dmabufs(struct consumer_state *s)
     ANativeWindow *win = s->window;
     int target = s->buf_count;
     int found = 0;
-    static int collect_seq = 0;
-    int my_seq = collect_seq++;
-    int stale_queued = 0;
-    int queued = 0;
 
-    LOGI("collect #%d: collecting %d dma-bufs via dequeue/queue", my_seq, target);
-    dbg_file("collect #%d: collecting %d dma-bufs", my_seq, target);
+    LOGI("collecting %d dma-bufs via dequeue/queue", target);
 
     for (int attempt = 0; attempt < target * 4 && found < target; attempt++) {
         ANativeWindowBuffer *anb = NULL;
@@ -196,11 +168,7 @@ static int collect_dmabufs(struct consumer_state *s)
         }
 
         /* post it back so the next dequeue rotates to another slot */
-        stale_queued++;
-        LOGI("  collect #%d attempt %d: queueBuffer anb=%p (stale-frame candidate %d)",
-             my_seq, attempt, (void *)anb, stale_queued);
         api.queueBuffer(win, anb, -1);
-        queued++;
 
         if (dup_found)
             continue;
@@ -222,42 +190,6 @@ static int collect_dmabufs(struct consumer_state *s)
         found++;
     }
 
-    /* Drain the stale frames just queued during enumeration so SurfaceFlinger
-     * never presents unrendered (possibly garbage) buffer content. Dequeued
-     * buffers are cancelled back to the free list without presentation; slot
-     * pointer identity is preserved so later render-loop matching still works.
-     * Retry briefly on failure: any queued stale frame left behind would be
-     * presented as a garbage flash. */
-    {
-        int drained = 0;
-        for (int i = 0; i < queued; i++) {
-            ANativeWindowBuffer *danb = NULL;
-            int dfence = -1;
-            int rc = -1;
-            for (int retry = 0; retry < 5; retry++) {
-                rc = api.dequeueBuffer(win, &danb, &dfence);
-                if (rc == 0 && danb)
-                    break;
-                if (dfence >= 0) {
-                    close(dfence);
-                    dfence = -1;
-                }
-                danb = NULL;
-                usleep(2000);
-            }
-            if (rc != 0 || !danb) {
-                LOGE("drain dequeueBuffer failed at %d/%d", i, queued);
-                break;
-            }
-            if (dfence >= 0)
-                close(dfence);
-            api.cancelBuffer(win, danb, -1);
-            drained++;
-        }
-        LOGI("collect #%d drain: cancelled %d/%d stale slots", my_seq, drained, queued);
-        dbg_file("collect #%d drain: cancelled %d/%d stale slots", my_seq, drained, queued);
-    }
-
     if (found < target) {
         LOGE("only collected %d/%d", found, target);
         for (int i = 0; i < found; i++) {
@@ -268,8 +200,7 @@ static int collect_dmabufs(struct consumer_state *s)
     }
 
     s->buf_count = found;
-    LOGI("collect #%d done: found=%d, stale-frames-queued=%d", my_seq, found, stale_queued);
-    dbg_file("collect #%d done: found=%d stale_queued=%d", my_seq, found, stale_queued);
+    LOGI("collected %d dma-bufs", found);
     return 0;
 }
 
@@ -658,9 +589,6 @@ static int do_connect(struct consumer_state *s)
        s->screen_w = ANativeWindow_getWidth(win);
        s->screen_h = ANativeWindow_getHeight(win);
     }
-    dbg_file("do_connect custom=%dx%d cfg=%dx%d -> screen=%dx%d anw_before=%dx%d",
-             cw, ch, sw, sh, s->screen_w, s->screen_h,
-             ANativeWindow_getWidth(win), ANativeWindow_getHeight(win));
 
     /* dequeueBuffer needs the window connected to an API first (ANativeWindow_lock
      * did this internally). Disconnect first so reconnect is idempotent. */
@@ -672,9 +600,6 @@ static int do_connect(struct consumer_state *s)
 
     ANativeWindow_setBuffersGeometry(win, s->screen_w, s->screen_h,
                                      AHARDWAREBUFFER_FORMAT_R8G8B8A8_UNORM);
-    dbg_file("setBuffersGeometry(%dx%d) -> anw_now=%dx%d",
-             s->screen_w, s->screen_h,
-             ANativeWindow_getWidth(win), ANativeWindow_getHeight(win));
 
     int min_undequeued = 0;
     api.query(win, ANATIVEWINDOW_QUERY_MIN_UNDEQUEUED_BUFFERS, &min_undequeued);
@@ -842,9 +767,6 @@ static void *render_thread_func(void *arg)
             usleep(1000);
             continue;
         }
-        if (anb->width != s->screen_w || anb->height != s->screen_h)
-            dbg_file("dequeued buffer %dx%d != screen %dx%d",
-                     anb->width, anb->height, s->screen_w, s->screen_h);
         /* Emulate ANativeWindow_lock: CPU-wait the acquire fence so the buffer is
          * already safe to write (SurfaceFlinger done reading the previous frame)
          * before we hand it to the producer. A sync_file fd signals POLLIN. */
@@ -892,21 +814,12 @@ static void *render_thread_func(void *arg)
             continue;
         }
 
-        /* The producer renders into the buffer and hands back a render-done fence.
-         * Queue with it so SurfaceFlinger waits GPU-side before scanout.
-         * If the producer reports NoDamage (0) or error (<0), cancel the buffer
-         * immediately so SurfaceFlinger never shows stale or un-rendered frames. */
-        int rfence = -1;
-        int status = refresh_done_status(s->ctx, &rfence);
-        if (status == 1) {
-            api.queueBuffer(s->window, anb, rfence);
-        } else if (status == 0) {
-            api.cancelBuffer(s->window, anb, -1);
-            usleep(8000);
-        } else {
-            api.cancelBuffer(s->window, anb, -1);
-            usleep(16000);
-        }
+        /* The producer renders into the buffer and hands back a render-done fence
+         * over data_fd (reverse). Queue with it so SurfaceFlinger waits GPU-side
+         * before scanout -- this lets the producer submit before its GPU render
+         * completes (no glFinish stall). rfence == -1 falls back to "ready now". */
+        int rfence = refresh_done(s->ctx);
+        api.queueBuffer(s->window, anb, rfence);
     }
 
     LOGI("render thread stopped");
@@ -1074,7 +987,6 @@ Java_com_anland_consumer_Native_nativeSetScreenSize(
     s->cfg_screen_height = height;
     pthread_mutex_unlock(&s->cfg_lock);
     LOGI("screen size set from Java: %dx%d", width, height);
-    dbg_file("jni setScreenSize %dx%d", width, height);
 }
 
 /* Attach/detach the cursor overlay surface. Passing NULL detaches. On attach

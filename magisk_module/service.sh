@@ -11,11 +11,3 @@ while true; do
     "$MODDIR/display_daemon" "$SOCK"
     sleep 1
 done &
-
-# Hardware info daemon (battery/wifi/bt/cpu snapshot over a JSON socket)
-HSOCK=/data/local/tmp/hwinfo.sock
-while true; do
-    rm -f "$HSOCK"
-    "$MODDIR/hwinfo_daemon" "$HSOCK"
-    sleep 1
-done &

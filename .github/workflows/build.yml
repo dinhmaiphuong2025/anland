@@ -2,7 +2,7 @@ name: Build APK and Daemon
 
 on:
   push:
-    branches: [ niri, niri-v2, main ]
+    branches: [ '**' ]
   workflow_dispatch:
 
 jobs:
