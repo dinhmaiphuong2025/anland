@@ -2,6 +2,8 @@ package com.anland.consumer;
 
 import android.content.Context;
 import android.graphics.Matrix;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
@@ -427,6 +429,13 @@ public final class Touchpad {
         return false;
     }
 
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
+
+    private void sendButtonTap(int button, long holdMs) {
+        sendButton(button, true);
+        mHandler.postDelayed(() -> sendButton(button, false), holdMs);
+    }
+
     private void sendButton(int button, boolean pressed) {
         if (output != null)
             output.onButton(button, pressed);
@@ -686,8 +695,7 @@ public final class Touchpad {
                 }
 
                 if (isTwoFingerTapCandidate && isQuickTap) {
-                    sendButton(0x111, true);
-                    sendButton(0x111, false);
+                    sendButtonTap(0x111, 50);
                     resetTouchpadState();
                     resetSmoothing();
                     return true;
@@ -699,15 +707,12 @@ public final class Touchpad {
                     if (synthesizeDoubleTap && gap < 300 && dist < touchSlop
                             && !isDoubleTapPending) {
                         isDoubleTapPending = true;
-                        sendButton(0x110, true);
-                        sendButton(0x110, false);
-                        sendButton(0x110, true);
-                        sendButton(0x110, false);
+                        sendButtonTap(0x110, 30);
+                        mHandler.postDelayed(() -> sendButtonTap(0x110, 30), 60);
                         isDoubleTapPending = false;
                         lastTapTime = 0;
                     } else {
-                        sendButton(0x110, true);
-                        sendButton(0x110, false);
+                        sendButtonTap(0x110, 50);
                         lastTapTime = event.getEventTime();
                         lastTapX = lastX1;
                         lastTapY = lastY1;

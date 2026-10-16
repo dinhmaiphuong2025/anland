@@ -184,9 +184,14 @@ int anland_niri_poll_input(anland_niri_bridge *b, anland_niri_input *out)
     case ANLAND_DEVICE_IN_PTR_MOTION:
         out->x = ev.pointer_motion.x; out->y = ev.pointer_motion.y;
         out->dx = ev.pointer_motion.dx; out->dy = ev.pointer_motion.dy; break;
-    case ANLAND_DEVICE_IN_PTR_BUTTON:
-        out->code = (int32_t)ev.pointer_button.button;
+    case ANLAND_DEVICE_IN_PTR_BUTTON: {
+        int32_t btn = (int32_t)ev.pointer_button.button;
+        if (btn == 1) btn = 0x110;      /* BTN_LEFT */
+        else if (btn == 2) btn = 0x111; /* BTN_RIGHT */
+        else if (btn == 3) btn = 0x112; /* BTN_MIDDLE */
+        out->code = btn;
         out->action = ev.pointer_button.pressed; break;
+    }
     case ANLAND_DEVICE_IN_PTR_AXIS:
         out->code = (int32_t)ev.pointer_axis.axis;
         out->value = ev.pointer_axis.value;

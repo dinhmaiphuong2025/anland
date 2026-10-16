@@ -760,8 +760,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     @Override
                     public void onPointerClick(int button) {
                         if (!mIsEditMode && mHost != null) {
-                            mHost.sendMouseButton(button, true);
-                            postDelayed(() -> mHost.sendMouseButton(button, false), 50);
+                            int code = (button == 2) ? 0x111 : (button == 3 ? 0x112 : 0x110);
+                            mHost.sendMouseButton(code, true);
+                            postDelayed(() -> mHost.sendMouseButton(code, false), 50);
                         }
                     }
                     @Override
@@ -1120,11 +1121,14 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             else if ("toggle_vk".equals(action.systemCommand)) mHost.toggleVirtualKeyboard();
             else if ("open_settings".equals(action.systemCommand)) mHost.openSettings();
             else if ("mouse_left".equals(action.systemCommand)) {
-                mHost.sendMouseButton(1, true);
-                postDelayed(() -> mHost.sendMouseButton(1, false), 40);
+                mHost.sendMouseButton(0x110, true);
+                postDelayed(() -> mHost.sendMouseButton(0x110, false), 50);
             } else if ("mouse_right".equals(action.systemCommand)) {
-                mHost.sendMouseButton(2, true);
-                postDelayed(() -> mHost.sendMouseButton(2, false), 40);
+                mHost.sendMouseButton(0x111, true);
+                postDelayed(() -> mHost.sendMouseButton(0x111, false), 50);
+            } else if ("mouse_middle".equals(action.systemCommand)) {
+                mHost.sendMouseButton(0x112, true);
+                postDelayed(() -> mHost.sendMouseButton(0x112, false), 50);
             }
         }
     }

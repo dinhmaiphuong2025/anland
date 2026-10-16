@@ -507,17 +507,25 @@ pub fn translate(
                 },
             })
         }
-        ffi::INPUT_TYPE_POINTER_BUTTON => Some(I::PointerButton {
-            event: AnlandPointerButtonEvent {
-                base: base(0., 0.),
-                button: raw.code as u32,
-                state: if raw.action != 0 {
-                    ButtonState::Pressed
-                } else {
-                    ButtonState::Released
+        ffi::INPUT_TYPE_POINTER_BUTTON => {
+            let button = match raw.code {
+                1 => 0x110,      // BTN_LEFT
+                2 => 0x111,      // BTN_RIGHT
+                3 => 0x112,      // BTN_MIDDLE
+                code => code as u32,
+            };
+            Some(I::PointerButton {
+                event: AnlandPointerButtonEvent {
+                    base: base(0., 0.),
+                    button,
+                    state: if raw.action != 0 {
+                        ButtonState::Pressed
+                    } else {
+                        ButtonState::Released
+                    },
                 },
-            },
-        }),
+            })
+        }
         ffi::INPUT_TYPE_POINTER_AXIS => Some(I::PointerAxis {
             event: AnlandPointerAxisEvent {
                 base: base(0., 0.),

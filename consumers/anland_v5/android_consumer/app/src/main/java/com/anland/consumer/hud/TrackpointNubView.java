@@ -168,7 +168,7 @@ public final class TrackpointNubView extends View {
                 if (duration < 250 && dist < 15) {
                     if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                     if (mDispatcher != null) {
-                        mDispatcher.onPointerClick(1); // Left Click
+                        mDispatcher.onPointerClick(0x110); // BTN_LEFT (0x110 = 272)
                     }
                 }
 
