@@ -64,6 +64,7 @@ public class MainActivity extends Activity
     // re-queues stale buffers (flicker) and restarts niri's damage sweep.
     // Coalesce rapid changes into a single reconnect at the latest size.
     private static final long RECONNECT_DEBOUNCE_MS = 350;
+    private final Handler mMainHandler = new Handler(Looper.getMainLooper());
     private Runnable pendingReconnect = null;
     // Reconnect storm guard: onResume() + surfaceChanged() + syncScreenSizeToSurface()
     // can each trigger a full stop/start within ~1s when returning to the app.
@@ -431,10 +432,14 @@ public class MainActivity extends Activity
         if (isLandscape && (isSteamDeck || RATIO_STEAM_DECK.equals(ratioPref))) {
             if (customScreenWidth > 0 && customScreenHeight > 0) {
                 mNative.setCustomResolution(customScreenWidth, customScreenHeight);
+            } else {
+                mNative.setCustomResolution(0, 0);
             }
         } else if (isLandscape && RATIO_FIT_BETWEEN.equals(ratioPref)) {
             if (customScreenWidth > 0 && customScreenHeight > 0) {
                 mNative.setCustomResolution(customScreenWidth, customScreenHeight);
+            } else {
+                mNative.setCustomResolution(0, 0);
             }
         } else if (isLandscape && (RATIO_16_9.equals(ratioPref) || RATIO_14_9.equals(ratioPref) || RATIO_4_3.equals(ratioPref))) {
             int w = 1920, h = 1080;
@@ -457,12 +462,41 @@ public class MainActivity extends Activity
     // both the native connection target and this window's dedup key.
     private String resolveSocketPath() {
         String sock = mSocketOverride;
-        if (sock == null || sock.trim().isEmpty())
+        if (sock == null || sock.trim().isEmpty()) {
             sock = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                    .getString(KEY_SOCKET_PATH, DEFAULT_SOCKET_PATH);
-        if (sock == null || sock.trim().isEmpty())
-            sock = DEFAULT_SOCKET_PATH;
-        return sock.trim();
+                    .getString(KEY_SOCKET_PATH, null);
+        }
+        if (sock != null && isSocketFile(sock.trim())) {
+            return sock.trim();
+        }
+
+        // Auto-detect active Droidspaces Anland socket if the configured socket is missing
+        try {
+            java.io.File netDir = new java.io.File("/data/local/Droidspaces/Net");
+            if (netDir.exists() && netDir.isDirectory()) {
+                java.io.File[] files = netDir.listFiles((dir, name) -> name.startsWith("anland-") && name.endsWith(".sock"));
+                if (files != null && files.length > 0) {
+                    java.io.File newest = files[0];
+                    for (java.io.File f : files) {
+                        if (f.lastModified() > newest.lastModified()) newest = f;
+                    }
+                    String found = newest.getAbsolutePath();
+                    if (isSocketFile(found)) {
+                        mSocketOverride = found;
+                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                                .putString(KEY_SOCKET_PATH, found).apply();
+                        Log.i(TAG, "auto-detected Droidspaces socket: " + found);
+                        return found;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "error scanning Droidspaces socket: " + e.getMessage());
+        }
+
+        if (sock != null && !sock.trim().isEmpty())
+            return sock.trim();
+        return DEFAULT_SOCKET_PATH;
     }
 
     // Build an Intent that opens SettingsActivity while preserving the current
@@ -593,8 +627,11 @@ public class MainActivity extends Activity
                 mForceSettings = false;
             }
             String sock = launch.getStringExtra(EXTRA_SOCKET_PATH);
-            if (sock != null && !sock.trim().isEmpty())
+            if (sock != null && !sock.trim().isEmpty()) {
                 mSocketOverride = sock.trim();
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putString(KEY_SOCKET_PATH, mSocketOverride).apply();
+            }
             String name = launch.getStringExtra(EXTRA_WINDOW_NAME);
             if (name != null && !name.trim().isEmpty())
                 mWindowName = name.trim();
@@ -2153,12 +2190,9 @@ public class MainActivity extends Activity
     /** Coalesce rapid surfaceChanged bursts into one reconnect at latest size. */
     private void scheduleReconnect(SurfaceHolder holder) {
         final android.view.Surface surface = holder.getSurface();
-        if (mRoot == null) {
-            doReconnectNow(surface);
-            return;
-        }
+        if (surface == null || !surface.isValid()) return;
         if (pendingReconnect != null)
-            mRoot.removeCallbacks(pendingReconnect);
+            mMainHandler.removeCallbacks(pendingReconnect);
         Log.i(TAG, "surfaceChanged coalescing reconnect");
         dbg("reconnect coalesced, waiting " + RECONNECT_DEBOUNCE_MS + "ms");
         pendingReconnect = () -> {
@@ -2166,7 +2200,11 @@ public class MainActivity extends Activity
             if (mNative == null) return;
             doReconnectNow(surface);
         };
-        mRoot.postDelayed(pendingReconnect, RECONNECT_DEBOUNCE_MS);
+        if (connectedW == 0 && connectedH == 0) {
+            mMainHandler.post(pendingReconnect);
+        } else {
+            mMainHandler.postDelayed(pendingReconnect, RECONNECT_DEBOUNCE_MS);
+        }
     }
 
     private void doReconnectNow(android.view.Surface surface) {
@@ -2250,8 +2288,8 @@ public class MainActivity extends Activity
     public void surfaceDestroyed(SurfaceHolder holder) {
         surfaceReady = false;
         dbg("surfaceDestroyed");
-        if (pendingReconnect != null && mRoot != null) {
-            mRoot.removeCallbacks(pendingReconnect);
+        if (pendingReconnect != null) {
+            mMainHandler.removeCallbacks(pendingReconnect);
             pendingReconnect = null;
         }
         if (immersive != null) immersive.stop();

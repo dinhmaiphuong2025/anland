@@ -388,10 +388,11 @@ public class SettingsActivity extends Activity {
                 edit.apply();
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
                 Toast.makeText(this, "Đang chuyển sang màn hình ngang Steam Deck...", Toast.LENGTH_SHORT).show();
-                Intent intent = new Intent(this, MainActivity.class);
-                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                if (mCurrentSocketPath != null) intent.putExtra(MainActivity.EXTRA_SOCKET_PATH, mCurrentSocketPath);
-                startActivity(intent);
+                if (isTaskRoot()) {
+                    Intent intent = new Intent(this, SecondaryActivity.class);
+                    if (mCurrentSocketPath != null) intent.putExtra(MainActivity.EXTRA_SOCKET_PATH, mCurrentSocketPath);
+                    startActivity(intent);
+                }
                 finish();
             } else {
                 edit.putString("landscape_aspect_ratio", "auto");
@@ -474,10 +475,11 @@ public class SettingsActivity extends Activity {
                                 .apply();
                     setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
                     Toast.makeText(this, "Đang vào Chế độ Steam Deck (Xoay ngang)...", Toast.LENGTH_SHORT).show();
-                    Intent intent = new Intent(this, MainActivity.class);
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                    if (mCurrentSocketPath != null) intent.putExtra(MainActivity.EXTRA_SOCKET_PATH, mCurrentSocketPath);
-                    startActivity(intent);
+                    if (isTaskRoot()) {
+                        Intent intent = new Intent(this, SecondaryActivity.class);
+                        if (mCurrentSocketPath != null) intent.putExtra(MainActivity.EXTRA_SOCKET_PATH, mCurrentSocketPath);
+                        startActivity(intent);
+                    }
                     finish();
                     return;
                 } else if (which == 1) {
