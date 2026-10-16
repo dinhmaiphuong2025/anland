@@ -149,27 +149,34 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mBannerStrokePaint.setStrokeWidth(1.5f);
 
         setWillNotDraw(false);
-        initViews();
         loadProfile();
+        initViews();
     }
 
     public void loadProfile() {
         String json = mPrefs.getString(PREF_KEY_PROFILE, null);
         mProfile = HudLayoutProfile.fromJSON(json);
+        if (mProfile == null) {
+            mProfile = new HudLayoutProfile();
+        }
         boolean isSteamDeck = mPrefs.getBoolean("steam_deck_mode", false);
         if (isSteamDeck) {
             ensureSteamDeckLayout();
         }
-        rebuildActiveLayout();
+        if (mFloatingContainer != null) {
+            rebuildActiveLayout();
+        }
     }
 
     public void ensureSteamDeckLayout() {
         if (mProfile != null) {
             boolean hasTouchpad = false;
-            for (HudButton b : mProfile.landscapeLayout.floatingButtons) {
-                if (HudButton.WIDGET_TOUCHPAD.equals(b.widgetType)) {
-                    hasTouchpad = true;
-                    break;
+            if (mProfile.landscapeLayout != null && mProfile.landscapeLayout.floatingButtons != null) {
+                for (HudButton b : mProfile.landscapeLayout.floatingButtons) {
+                    if (HudButton.WIDGET_TOUCHPAD.equals(b.widgetType)) {
+                        hasTouchpad = true;
+                        break;
+                    }
                 }
             }
             if (!hasTouchpad) {
@@ -289,9 +296,27 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     }
 
     public HudLayout getActiveLayout() {
+        if (mProfile == null) {
+            String json = mPrefs.getString(PREF_KEY_PROFILE, null);
+            mProfile = HudLayoutProfile.fromJSON(json);
+            if (mProfile == null) {
+                mProfile = new HudLayoutProfile();
+            }
+        }
         int orientation = getResources().getConfiguration().orientation;
-        return (orientation == Configuration.ORIENTATION_LANDSCAPE)
+        HudLayout layout = (orientation == Configuration.ORIENTATION_LANDSCAPE)
                 ? mProfile.landscapeLayout : mProfile.portraitLayout;
+        if (layout == null) {
+            layout = (orientation == Configuration.ORIENTATION_LANDSCAPE)
+                    ? HudLayoutProfile.createSteamDeckLayout(true)
+                    : HudLayoutProfile.createDefaultPortraitLayout();
+            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                mProfile.landscapeLayout = layout;
+            } else {
+                mProfile.portraitLayout = layout;
+            }
+        }
+        return layout;
     }
 
     public static int getSystemStatusBarHeight(Context ctx) {
