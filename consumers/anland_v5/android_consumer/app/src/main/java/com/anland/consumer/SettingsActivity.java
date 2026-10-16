@@ -315,15 +315,21 @@ public class SettingsActivity extends Activity {
     }
 
     private void showKeyboardPage() {
-        currentPage = Page.KEYBOARD;
-        LinearLayout root = newPage(R.string.cat_keyboard_title);
-        buildVirtualKeyboardSection(root);
-        buildImmersiveSection(root);
-        buildHudSection(root);
-        buildExtraKeysSection(root);
-        buildCustomLayoutSection(root);
-        buildAccessibilitySection(root);
-        setContent(root);
+        try {
+            currentPage = Page.KEYBOARD;
+            LinearLayout root = newPage(R.string.cat_keyboard_title);
+            buildVirtualKeyboardSection(root);
+            buildImmersiveSection(root);
+            buildHudSection(root);
+            buildExtraKeysSection(root);
+            buildCustomLayoutSection(root);
+            buildAccessibilitySection(root);
+            setContent(root);
+        } catch (Throwable t) {
+            Log.e(TAG, "showKeyboardPage error", t);
+            Toast.makeText(this, "Error loading keyboard settings: " + t.getMessage(), Toast.LENGTH_LONG).show();
+            showHome();
+        }
     }
 
     // Custom HUD Control is a peer of the ExtraKeys bar and Immersive Mode:
@@ -969,205 +975,281 @@ public class SettingsActivity extends Activity {
     }
 
     private void buildCustomLayoutSection(LinearLayout root) {
-        // Always show the ExtraKeys JSON editor, regardless of whether the
-        // HUD editor is enabled. The two features are peers; hiding the
-        // ExtraKeys editor just because HUD is on prevented the user from
-        // re-binding the bottom key row, which is the bug that surfaced
-        // as "bảng JSON chỉnh sửa ExtraKeys biến mất khi bật HUD".
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        TextView layoutHeader = new TextView(this);
-        layoutHeader.setText(R.string.section_custom_layout);
-        layoutHeader.setTextSize(16);
-        layoutHeader.setTypeface(null, Typeface.BOLD);
-        layoutHeader.setPadding(0, dp(24), 0, dp(4));
-        root.addView(layoutHeader);
+        try {
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+            TextView layoutHeader = new TextView(this);
+            layoutHeader.setText(R.string.section_custom_layout);
+            layoutHeader.setTextSize(16);
+            layoutHeader.setTypeface(null, Typeface.BOLD);
+            layoutHeader.setPadding(0, dp(24), 0, dp(4));
+            root.addView(layoutHeader);
 
-        TextView layoutSub = new TextView(this);
-        layoutSub.setText("Tap any key to configure its action or swipe-up popup using the HUD Key Picker.");
-        layoutSub.setTextSize(12);
-        layoutSub.setTextColor(M3.COLOR_TEXT_MUTED);
-        layoutSub.setPadding(0, 0, 0, dp(8));
-        root.addView(layoutSub);
+            TextView layoutSub = new TextView(this);
+            layoutSub.setText("Tap any key to configure its action or swipe-up popup using the HUD Key Picker.");
+            layoutSub.setTextSize(12);
+            layoutSub.setTextColor(M3.COLOR_TEXT_MUTED);
+            layoutSub.setPadding(0, 0, 0, dp(8));
+            root.addView(layoutSub);
 
-        // Visual Grid Card Container
-        LinearLayout visualCard = new LinearLayout(this);
-        visualCard.setOrientation(LinearLayout.VERTICAL);
-        visualCard.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
-        visualCard.setPadding(dp(12), dp(10), dp(12), dp(12));
-        LinearLayout.LayoutParams vcLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        vcLp.bottomMargin = dp(10);
-        visualCard.setLayoutParams(vcLp);
+            // Visual Grid Card Container
+            LinearLayout visualCard = new LinearLayout(this);
+            visualCard.setOrientation(LinearLayout.VERTICAL);
+            visualCard.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+            visualCard.setPadding(dp(12), dp(10), dp(12), dp(12));
+            LinearLayout.LayoutParams vcLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            vcLp.bottomMargin = dp(10);
+            visualCard.setLayoutParams(vcLp);
 
-        mVisualGridContainer = new LinearLayout(this);
-        mVisualGridContainer.setOrientation(LinearLayout.VERTICAL);
-        visualCard.addView(mVisualGridContainer);
+            mVisualGridContainer = new LinearLayout(this);
+            mVisualGridContainer.setOrientation(LinearLayout.VERTICAL);
+            visualCard.addView(mVisualGridContainer);
 
-        root.addView(visualCard);
-        renderVisualGrid();
+            root.addView(visualCard);
+            renderVisualGrid();
 
-        // Row Operations (Add Row, Remove Row, Reset)
-        LinearLayout gridOps = new LinearLayout(this);
-        gridOps.setOrientation(LinearLayout.HORIZONTAL);
-        gridOps.setPadding(0, dp(4), 0, dp(8));
+            // Row Operations (Add Row, Remove Row, Reset)
+            LinearLayout gridOps = new LinearLayout(this);
+            gridOps.setOrientation(LinearLayout.HORIZONTAL);
+            gridOps.setPadding(0, dp(4), 0, dp(8));
 
-        Button btnAddRow = new Button(this);
-        styleSettingsButton(btnAddRow);
-        btnAddRow.setText("+ Add Row");
-        LinearLayout.LayoutParams arLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        btnAddRow.setLayoutParams(arLp);
-        btnAddRow.setOnClickListener(v -> addRowToLayout());
-        gridOps.addView(btnAddRow);
+            Button btnAddRow = new Button(this);
+            styleSettingsButton(btnAddRow);
+            btnAddRow.setText("+ Add Row");
+            LinearLayout.LayoutParams arLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            btnAddRow.setLayoutParams(arLp);
+            btnAddRow.setOnClickListener(v -> addRowToLayout());
+            gridOps.addView(btnAddRow);
 
-        Button btnRemRow = new Button(this);
-        styleSettingsButton(btnRemRow);
-        btnRemRow.setText("- Remove Row");
-        LinearLayout.LayoutParams rrLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        rrLp.leftMargin = dp(6);
-        btnRemRow.setLayoutParams(rrLp);
-        btnRemRow.setOnClickListener(v -> removeRowFromLayout());
-        gridOps.addView(btnRemRow);
+            Button btnRemRow = new Button(this);
+            styleSettingsButton(btnRemRow);
+            btnRemRow.setText("- Remove Row");
+            LinearLayout.LayoutParams rrLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            rrLp.leftMargin = dp(6);
+            btnRemRow.setLayoutParams(rrLp);
+            btnRemRow.setOnClickListener(v -> removeRowFromLayout());
+            gridOps.addView(btnRemRow);
 
-        Button btnReset = new Button(this);
-        styleSettingsButton(btnReset);
-        btnReset.setText("Reset Default");
-        LinearLayout.LayoutParams rstLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        rstLp.leftMargin = dp(6);
-        btnReset.setLayoutParams(rstLp);
-        btnReset.setOnClickListener(v -> {
-            try {
-                mLayoutJson = new JSONObject(ExtraKeysBar.defaultLayoutJson());
-                saveLayoutJson(true);
-                renderVisualGrid();
-                Toast.makeText(this, "ExtraKeys layout reset to default", Toast.LENGTH_SHORT).show();
-            } catch (JSONException ignored) {}
-        });
-        gridOps.addView(btnReset);
+            Button btnReset = new Button(this);
+            styleSettingsButton(btnReset);
+            btnReset.setText("Reset Default");
+            LinearLayout.LayoutParams rstLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            rstLp.leftMargin = dp(6);
+            btnReset.setLayoutParams(rstLp);
+            btnReset.setOnClickListener(v -> {
+                try {
+                    mLayoutJson = normalizeLayoutJson(ExtraKeysBar.defaultLayoutJson());
+                    saveLayoutJson(true);
+                    renderVisualGrid();
+                    Toast.makeText(this, "ExtraKeys layout reset to default", Toast.LENGTH_SHORT).show();
+                } catch (Throwable ignored) {}
+            });
+            gridOps.addView(btnReset);
 
-        root.addView(gridOps);
+            root.addView(gridOps);
 
-        // Collapsible Advanced JSON Section
-        final Button btnToggleJson = new Button(this);
-        M3.styleButton(btnToggleJson, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_TEXT_SECONDARY);
-        btnToggleJson.setText("Advanced: Raw JSON Editor ▼");
-        btnToggleJson.setTextSize(12);
-        LinearLayout.LayoutParams tjLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tjLp.topMargin = dp(8);
-        tjLp.bottomMargin = dp(8);
-        btnToggleJson.setLayoutParams(tjLp);
-        root.addView(btnToggleJson);
+            // Collapsible Advanced JSON Section
+            final Button btnToggleJson = new Button(this);
+            M3.styleButton(btnToggleJson, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_TEXT_SECONDARY);
+            btnToggleJson.setText("Advanced: Raw JSON Editor ▼");
+            btnToggleJson.setTextSize(12);
+            LinearLayout.LayoutParams tjLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            tjLp.topMargin = dp(8);
+            tjLp.bottomMargin = dp(8);
+            btnToggleJson.setLayoutParams(tjLp);
+            root.addView(btnToggleJson);
 
-        final LinearLayout jsonSection = new LinearLayout(this);
-        jsonSection.setOrientation(LinearLayout.VERTICAL);
-        jsonSection.setVisibility(View.GONE);
+            final LinearLayout jsonSection = new LinearLayout(this);
+            jsonSection.setOrientation(LinearLayout.VERTICAL);
+            jsonSection.setVisibility(View.GONE);
 
-        btnToggleJson.setOnClickListener(v -> {
-            boolean visible = (jsonSection.getVisibility() == View.VISIBLE);
-            jsonSection.setVisibility(visible ? View.GONE : View.VISIBLE);
-            btnToggleJson.setText(visible ? "Advanced: Raw JSON Editor ▼" : "Advanced: Raw JSON Editor ▲");
-        });
+            btnToggleJson.setOnClickListener(v -> {
+                boolean visible = (jsonSection.getVisibility() == View.VISIBLE);
+                jsonSection.setVisibility(visible ? View.GONE : View.VISIBLE);
+                btnToggleJson.setText(visible ? "Advanced: Raw JSON Editor ▼" : "Advanced: Raw JSON Editor ▲");
+            });
 
-        layoutInput = new EditText(this);
-        layoutInput.setTypeface(Typeface.MONOSPACE);
-        layoutInput.setTextSize(12);
-        layoutInput.setTextColor(M3.COLOR_TEXT_PRIMARY);
-        layoutInput.setGravity(Gravity.TOP | Gravity.START);
-        layoutInput.setInputType(InputType.TYPE_CLASS_TEXT
-            | InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        layoutInput.setHorizontallyScrolling(false);
-        layoutInput.setMinLines(6);
-        layoutInput.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
-        layoutInput.setPadding(dp(14), dp(12), dp(14), dp(12));
-        LinearLayout.LayoutParams layoutLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        layoutLp.setMargins(0, dp(4), 0, dp(8));
-        layoutInput.setLayoutParams(layoutLp);
-        String savedLayout = prefs.getString(KEY_EXTRA_KEYS_LAYOUT, "");
-        if (savedLayout.isEmpty()) savedLayout = ExtraKeysBar.defaultLayoutJson();
-        layoutInput.setText(savedLayout);
-        jsonSection.addView(layoutInput);
+            layoutInput = new EditText(this);
+            layoutInput.setTypeface(Typeface.MONOSPACE);
+            layoutInput.setTextSize(12);
+            layoutInput.setTextColor(M3.COLOR_TEXT_PRIMARY);
+            layoutInput.setGravity(Gravity.TOP | Gravity.START);
+            layoutInput.setInputType(InputType.TYPE_CLASS_TEXT
+                | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+            layoutInput.setHorizontallyScrolling(false);
+            layoutInput.setMinLines(6);
+            layoutInput.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+            layoutInput.setPadding(dp(14), dp(12), dp(14), dp(12));
+            LinearLayout.LayoutParams layoutLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            layoutLp.setMargins(0, dp(4), 0, dp(8));
+            layoutInput.setLayoutParams(layoutLp);
+            String savedLayout = prefs.getString(KEY_EXTRA_KEYS_LAYOUT, "");
+            if (savedLayout.isEmpty()) savedLayout = ExtraKeysBar.defaultLayoutJson();
+            layoutInput.setText(savedLayout);
+            jsonSection.addView(layoutInput);
 
-        final TextView layoutStatus = new TextView(this);
-        layoutStatus.setTextSize(12);
-        layoutStatus.setPadding(0, dp(4), 0, dp(4));
-        jsonSection.addView(layoutStatus);
-        updateLayoutStatus(layoutStatus, layoutInput.getText().toString());
+            final TextView layoutStatus = new TextView(this);
+            layoutStatus.setTextSize(12);
+            layoutStatus.setPadding(0, dp(4), 0, dp(4));
+            jsonSection.addView(layoutStatus);
+            updateLayoutStatus(layoutStatus, layoutInput.getText().toString());
 
-        layoutInput.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
-            @Override public void afterTextChanged(Editable s) {
-                String str = s.toString();
-                getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                    .putString(KEY_EXTRA_KEYS_LAYOUT, str).apply();
-                updateLayoutStatus(layoutStatus, str);
-                if (ExtraKeysBar.validateLayout(str) == null) {
-                    try {
-                        mLayoutJson = new JSONObject(str);
-                        renderVisualGrid();
-                    } catch (JSONException ignored) {}
+            layoutInput.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+                @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
+                @Override public void afterTextChanged(Editable s) {
+                    String str = s.toString();
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                        .putString(KEY_EXTRA_KEYS_LAYOUT, str).apply();
+                    updateLayoutStatus(layoutStatus, str);
+                    if (ExtraKeysBar.validateLayout(str) == null) {
+                        try {
+                            mLayoutJson = normalizeLayoutJson(str);
+                            renderVisualGrid();
+                        } catch (Throwable ignored) {}
+                    }
+                }
+            });
+
+            LinearLayout layoutButtons = new LinearLayout(this);
+            layoutButtons.setOrientation(LinearLayout.HORIZONTAL);
+            layoutButtons.setPadding(0, dp(4), 0, dp(4));
+
+            Button loadDefaultBtn = new Button(this);
+            styleSettingsButton(loadDefaultBtn);
+            loadDefaultBtn.setText("Load Default JSON");
+            loadDefaultBtn.setOnClickListener(v -> {
+                String def = ExtraKeysBar.defaultLayoutJson();
+                layoutInput.setText(def);
+                try {
+                    mLayoutJson = normalizeLayoutJson(def);
+                    renderVisualGrid();
+                } catch (Throwable ignored) {}
+            });
+            LinearLayout.LayoutParams defLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            loadDefaultBtn.setLayoutParams(defLp);
+            layoutButtons.addView(loadDefaultBtn);
+
+            Button loadFileBtn = new Button(this);
+            styleSettingsButton(loadFileBtn);
+            loadFileBtn.setText("Load File...");
+            loadFileBtn.setOnClickListener(v -> pickLayoutFile());
+            LinearLayout.LayoutParams fileLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            fileLp.leftMargin = dp(10);
+            loadFileBtn.setLayoutParams(fileLp);
+            layoutButtons.addView(loadFileBtn);
+
+            jsonSection.addView(layoutButtons);
+
+            TextView layoutHint = new TextView(this);
+            layoutHint.setText(R.string.layout_hint);
+            layoutHint.setTextSize(12);
+            layoutHint.setTextColor(M3.COLOR_TEXT_MUTED);
+            layoutHint.setPadding(0, dp(4), 0, dp(8));
+            jsonSection.addView(layoutHint);
+
+            root.addView(jsonSection);
+        } catch (Throwable t) {
+            Log.e(TAG, "buildCustomLayoutSection error", t);
+        }
+    }
+
+    private JSONObject normalizeLayoutJson(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            json = ExtraKeysBar.defaultLayoutJson();
+        }
+        try {
+            JSONObject root;
+            if (json.trim().startsWith("[")) {
+                JSONArray rowsArr = new JSONArray(json);
+                root = new JSONObject();
+                root.put("rows", rowsArr);
+            } else {
+                root = new JSONObject(json);
+            }
+
+            if (!root.has("rows") || !(root.opt("rows") instanceof JSONArray)) {
+                root = new JSONObject(ExtraKeysBar.defaultLayoutJson());
+            }
+
+            JSONArray rows = root.optJSONArray("rows");
+            JSONArray normalizedRows = new JSONArray();
+
+            for (int r = 0; r < rows.length(); r++) {
+                Object rowObj = rows.opt(r);
+                if (!(rowObj instanceof JSONArray)) continue;
+                JSONArray row = (JSONArray) rowObj;
+                JSONArray normRow = new JSONArray();
+
+                for (int c = 0; c < row.length(); c++) {
+                    Object item = row.opt(c);
+                    if (item instanceof JSONObject) {
+                        JSONObject k = (JSONObject) item;
+                        JSONObject normKey = new JSONObject();
+
+                        String label = k.optString("label", k.optString("key", k.optString("display", "?")));
+                        normKey.put("label", label);
+
+                        String type = k.optString("type", "key");
+                        normKey.put("type", type);
+
+                        if (k.has("code")) normKey.put("code", k.optInt("code", 0));
+                        if (k.has("repeat")) normKey.put("repeat", k.optBoolean("repeat", false));
+                        if (k.has("text")) normKey.put("text", k.optString("text", ""));
+                        if (k.has("combo_keys")) normKey.put("combo_keys", k.optJSONArray("combo_keys"));
+
+                        if (k.has("popup") && !k.isNull("popup")) {
+                            Object pop = k.opt("popup");
+                            if (pop instanceof JSONObject) {
+                                JSONObject pObj = (JSONObject) pop;
+                                JSONObject normPop = new JSONObject();
+                                normPop.put("label", pObj.optString("label", pObj.optString("key", pObj.optString("display", ""))));
+                                normPop.put("type", pObj.optString("type", "key"));
+                                if (pObj.has("code")) normPop.put("code", pObj.optInt("code", 0));
+                                if (pObj.has("text")) normPop.put("text", pObj.optString("text", ""));
+                                normKey.put("popup", normPop);
+                            } else if (pop instanceof String) {
+                                JSONObject normPop = new JSONObject();
+                                normPop.put("label", (String) pop);
+                                normPop.put("type", "key");
+                                normKey.put("popup", normPop);
+                            }
+                        }
+                        normRow.put(normKey);
+                    } else if (item instanceof String) {
+                        JSONObject normKey = new JSONObject();
+                        normKey.put("label", (String) item);
+                        normKey.put("type", "key");
+                        normRow.put(normKey);
+                    }
+                }
+                if (normRow.length() > 0) {
+                    normalizedRows.put(normRow);
                 }
             }
-        });
 
-        LinearLayout layoutButtons = new LinearLayout(this);
-        layoutButtons.setOrientation(LinearLayout.HORIZONTAL);
-        layoutButtons.setPadding(0, dp(4), 0, dp(4));
-
-        Button loadDefaultBtn = new Button(this);
-        styleSettingsButton(loadDefaultBtn);
-        loadDefaultBtn.setText("Load Default JSON");
-        loadDefaultBtn.setOnClickListener(v -> {
-            String def = ExtraKeysBar.defaultLayoutJson();
-            layoutInput.setText(def);
+            if (normalizedRows.length() == 0) {
+                return new JSONObject(ExtraKeysBar.defaultLayoutJson());
+            }
+            root.put("rows", normalizedRows);
+            return root;
+        } catch (Throwable t) {
+            Log.e(TAG, "normalizeLayoutJson error", t);
             try {
-                mLayoutJson = new JSONObject(def);
-                renderVisualGrid();
-            } catch (JSONException ignored) {}
-        });
-        LinearLayout.LayoutParams defLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        loadDefaultBtn.setLayoutParams(defLp);
-        layoutButtons.addView(loadDefaultBtn);
-
-        Button loadFileBtn = new Button(this);
-        styleSettingsButton(loadFileBtn);
-        loadFileBtn.setText("Load File...");
-        loadFileBtn.setOnClickListener(v -> pickLayoutFile());
-        LinearLayout.LayoutParams fileLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        fileLp.leftMargin = dp(10);
-        loadFileBtn.setLayoutParams(fileLp);
-        layoutButtons.addView(loadFileBtn);
-
-        jsonSection.addView(layoutButtons);
-
-        TextView layoutHint = new TextView(this);
-        layoutHint.setText(R.string.layout_hint);
-        layoutHint.setTextSize(12);
-        layoutHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        layoutHint.setPadding(0, dp(4), 0, dp(8));
-        jsonSection.addView(layoutHint);
-
-        root.addView(jsonSection);
+                return new JSONObject(ExtraKeysBar.defaultLayoutJson());
+            } catch (JSONException ignored) {
+                return new JSONObject();
+            }
+        }
     }
 
     private JSONObject getOrLoadLayoutJson() {
         if (mLayoutJson != null) return mLayoutJson;
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String json = prefs.getString(KEY_EXTRA_KEYS_LAYOUT, "");
-        if (json == null || json.trim().isEmpty()) {
-            json = ExtraKeysBar.defaultLayoutJson();
-        }
-        try {
-            mLayoutJson = new JSONObject(json);
-            if (!mLayoutJson.has("rows")) {
-                mLayoutJson = new JSONObject(ExtraKeysBar.defaultLayoutJson());
-            }
-        } catch (JSONException e) {
-            try {
-                mLayoutJson = new JSONObject(ExtraKeysBar.defaultLayoutJson());
-            } catch (JSONException ignored) {}
-        }
+        mLayoutJson = normalizeLayoutJson(json);
         return mLayoutJson;
     }
 
@@ -1180,8 +1262,8 @@ public class SettingsActivity extends Activity {
             if (updateTextEditor && layoutInput != null) {
                 layoutInput.setText(jsonStr);
             }
-        } catch (JSONException e) {
-            Log.e(TAG, "saveLayoutJson error", e);
+        } catch (Throwable t) {
+            Log.e(TAG, "saveLayoutJson error", t);
         }
     }
 
@@ -1192,10 +1274,13 @@ public class SettingsActivity extends Activity {
         if (layout == null) return;
 
         try {
-            JSONArray rows = layout.getJSONArray("rows");
+            JSONArray rows = layout.optJSONArray("rows");
+            if (rows == null) return;
+
             for (int r = 0; r < rows.length(); r++) {
                 final int rowIdx = r;
-                final JSONArray row = rows.getJSONArray(r);
+                final JSONArray row = rows.optJSONArray(r);
+                if (row == null) continue;
 
                 // Row Header
                 LinearLayout rowHeader = new LinearLayout(this);
@@ -1233,11 +1318,19 @@ public class SettingsActivity extends Activity {
 
                 for (int c = 0; c < row.length(); c++) {
                     final int colIdx = c;
-                    JSONObject keyObj = row.getJSONObject(c);
+                    Object item = row.opt(c);
+                    if (!(item instanceof JSONObject)) continue;
+                    JSONObject keyObj = (JSONObject) item;
+
                     String label = keyObj.optString("label", "?");
                     String popupLabel = null;
-                    if (keyObj.has("popup")) {
-                        popupLabel = keyObj.optJSONObject("popup").optString("label", "");
+                    if (keyObj.has("popup") && !keyObj.isNull("popup")) {
+                        Object pop = keyObj.opt("popup");
+                        if (pop instanceof JSONObject) {
+                            popupLabel = ((JSONObject) pop).optString("label", "");
+                        } else if (pop instanceof String) {
+                            popupLabel = (String) pop;
+                        }
                     }
 
                     Button keyBtn = new Button(this);
@@ -1269,8 +1362,8 @@ public class SettingsActivity extends Activity {
                 hScroll.addView(rowLayout);
                 mVisualGridContainer.addView(hScroll);
             }
-        } catch (JSONException e) {
-            Log.e(TAG, "renderVisualGrid error", e);
+        } catch (Throwable t) {
+            Log.e(TAG, "renderVisualGrid error", t);
         }
     }
 
@@ -1436,7 +1529,13 @@ public class SettingsActivity extends Activity {
             popupCard.addView(popTitle);
 
             final TextView tvPopup = new TextView(this);
-            tvPopup.setText(keyObj.has("popup") ? formatActionSummary(keyObj.optJSONObject("popup")) : "None");
+            String pSummary = "None";
+            if (keyObj.has("popup") && !keyObj.isNull("popup")) {
+                Object pop = keyObj.opt("popup");
+                if (pop instanceof JSONObject) pSummary = formatActionSummary((JSONObject) pop);
+                else if (pop instanceof String) pSummary = "Popup: " + pop;
+            }
+            tvPopup.setText(pSummary);
             tvPopup.setTextColor(Color.WHITE);
             tvPopup.setTextSize(13);
             tvPopup.setPadding(0, dp(4), 0, dp(8));
@@ -1506,8 +1605,12 @@ public class SettingsActivity extends Activity {
             Runnable updatePreview = () -> {
                 String lbl = etLabel.getText().toString();
                 if (lbl.isEmpty()) lbl = keyObj.optString("label", "?");
-                if (keyObj.has("popup")) {
-                    lbl += " [↑" + keyObj.optJSONObject("popup").optString("label", "") + "]";
+                if (keyObj.has("popup") && !keyObj.isNull("popup")) {
+                    Object pop = keyObj.opt("popup");
+                    String pLbl = "";
+                    if (pop instanceof JSONObject) pLbl = ((JSONObject) pop).optString("label", "");
+                    else if (pop instanceof String) pLbl = (String) pop;
+                    if (!pLbl.isEmpty()) lbl += " [↑" + pLbl + "]";
                 }
                 previewBtn.setText(lbl);
             };
