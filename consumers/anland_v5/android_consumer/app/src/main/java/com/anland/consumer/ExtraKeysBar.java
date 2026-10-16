@@ -74,6 +74,7 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
     private static final int TYPE_KEYBOARD = 3;   // toggle system IME
     private static final int TYPE_SETTINGS = 4;   // open settings
     private static final int TYPE_VKEYBOARD = 5;  // toggle floating virtual keyboard
+    private static final int TYPE_COMBO = 6;      // key combo macro (e.g. CTRL+C)
 
     // Glyphs for icon-style keys.
     private static final String GLYPH_KEYBOARD = "⌨";  // ⌨
@@ -133,14 +134,20 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
         final String text;    // for TYPE_TEXT
         final boolean repeatable;
         final Key popup;      // swipe-up secondary key (may be null)
+        final int[] comboKeys; // evdev codes for TYPE_COMBO
 
-        Key(String display, int type, int evdev, String text, boolean repeatable, Key popup) {
+        Key(String display, int type, int evdev, String text, boolean repeatable, Key popup, int[] comboKeys) {
             this.display = display;
             this.type = type;
             this.evdev = evdev;
             this.text = text;
             this.repeatable = repeatable;
             this.popup = popup;
+            this.comboKeys = comboKeys;
+        }
+
+        Key(String display, int type, int evdev, String text, boolean repeatable, Key popup) {
+            this(display, type, evdev, text, repeatable, popup, null);
         }
 
         static Key key(String d, int evdev) { return new Key(d, TYPE_KEY, evdev, null, false, null); }
@@ -293,6 +300,15 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
                 return new Key(label, TYPE_VKEYBOARD, 0, null, false, popup);
             case "settings":
                 return new Key(label, TYPE_SETTINGS, 0, null, false, popup);
+            case "combo": {
+                JSONArray arr = o.optJSONArray("combo_keys");
+                int[] combos = null;
+                if (arr != null && arr.length() > 0) {
+                    combos = new int[arr.length()];
+                    for (int i = 0; i < arr.length(); i++) combos[i] = arr.optInt(i);
+                }
+                return new Key(label, TYPE_COMBO, 0, null, false, popup, combos);
+            }
             case "key":
             default: {
                 return new Key(label, TYPE_KEY, o.optInt(J_CODE, 0), null,
@@ -420,6 +436,14 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
                 return;
             case TYPE_MODIFIER:
                 toggleModifier(key.display);
+                return;
+            case TYPE_COMBO:
+                if (key.comboKeys != null && key.comboKeys.length > 0) {
+                    sendWithModifiers(() -> {
+                        for (int c : key.comboKeys) mSender.key(0, c);
+                        for (int i = key.comboKeys.length - 1; i >= 0; i--) mSender.key(1, key.comboKeys[i]);
+                    });
+                }
                 return;
             case TYPE_TEXT:
                 sendWithModifiers(() -> mSender.text(key.text));

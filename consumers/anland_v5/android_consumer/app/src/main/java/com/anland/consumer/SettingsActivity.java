@@ -36,12 +36,19 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.anland.consumer.theme.M3;
+import com.anland.consumer.hud.HudAction;
+import com.anland.consumer.hud.HudKeyPickerDialog;
+import com.anland.consumer.hud.HudPropertyInspectorView;
+import android.app.AlertDialog;
+import android.widget.HorizontalScrollView;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.Map;
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 
@@ -102,6 +109,8 @@ public class SettingsActivity extends Activity {
 
     // Custom extra-keys layout editor (JSON), and the SAF file-picker request code.
     private EditText layoutInput;
+    private LinearLayout mVisualGridContainer;
+    private JSONObject mLayoutJson;
     private static final int REQ_PICK_LAYOUT = 2001;
     private static final int REQ_BACKUP_SETTINGS = 2002;
     private static final int REQ_RESTORE_SETTINGS = 2003;
@@ -970,8 +979,93 @@ public class SettingsActivity extends Activity {
         layoutHeader.setText(R.string.section_custom_layout);
         layoutHeader.setTextSize(16);
         layoutHeader.setTypeface(null, Typeface.BOLD);
-        layoutHeader.setPadding(0, dp(24), 0, dp(8));
+        layoutHeader.setPadding(0, dp(24), 0, dp(4));
         root.addView(layoutHeader);
+
+        TextView layoutSub = new TextView(this);
+        layoutSub.setText("Tap any key to configure its action or swipe-up popup using the HUD Key Picker.");
+        layoutSub.setTextSize(12);
+        layoutSub.setTextColor(M3.COLOR_TEXT_MUTED);
+        layoutSub.setPadding(0, 0, 0, dp(8));
+        root.addView(layoutSub);
+
+        // Visual Grid Card Container
+        LinearLayout visualCard = new LinearLayout(this);
+        visualCard.setOrientation(LinearLayout.VERTICAL);
+        visualCard.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+        visualCard.setPadding(dp(12), dp(10), dp(12), dp(12));
+        LinearLayout.LayoutParams vcLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        vcLp.bottomMargin = dp(10);
+        visualCard.setLayoutParams(vcLp);
+
+        mVisualGridContainer = new LinearLayout(this);
+        mVisualGridContainer.setOrientation(LinearLayout.VERTICAL);
+        visualCard.addView(mVisualGridContainer);
+
+        root.addView(visualCard);
+        renderVisualGrid();
+
+        // Row Operations (Add Row, Remove Row, Reset)
+        LinearLayout gridOps = new LinearLayout(this);
+        gridOps.setOrientation(LinearLayout.HORIZONTAL);
+        gridOps.setPadding(0, dp(4), 0, dp(8));
+
+        Button btnAddRow = new Button(this);
+        styleSettingsButton(btnAddRow);
+        btnAddRow.setText("+ Add Row");
+        LinearLayout.LayoutParams arLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        btnAddRow.setLayoutParams(arLp);
+        btnAddRow.setOnClickListener(v -> addRowToLayout());
+        gridOps.addView(btnAddRow);
+
+        Button btnRemRow = new Button(this);
+        styleSettingsButton(btnRemRow);
+        btnRemRow.setText("- Remove Row");
+        LinearLayout.LayoutParams rrLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        rrLp.leftMargin = dp(6);
+        btnRemRow.setLayoutParams(rrLp);
+        btnRemRow.setOnClickListener(v -> removeRowFromLayout());
+        gridOps.addView(btnRemRow);
+
+        Button btnReset = new Button(this);
+        styleSettingsButton(btnReset);
+        btnReset.setText("Reset Default");
+        LinearLayout.LayoutParams rstLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        rstLp.leftMargin = dp(6);
+        btnReset.setLayoutParams(rstLp);
+        btnReset.setOnClickListener(v -> {
+            try {
+                mLayoutJson = new JSONObject(ExtraKeysBar.defaultLayoutJson());
+                saveLayoutJson(true);
+                renderVisualGrid();
+                Toast.makeText(this, "ExtraKeys layout reset to default", Toast.LENGTH_SHORT).show();
+            } catch (JSONException ignored) {}
+        });
+        gridOps.addView(btnReset);
+
+        root.addView(gridOps);
+
+        // Collapsible Advanced JSON Section
+        final Button btnToggleJson = new Button(this);
+        M3.styleButton(btnToggleJson, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_TEXT_SECONDARY);
+        btnToggleJson.setText("Advanced: Raw JSON Editor ▼");
+        btnToggleJson.setTextSize(12);
+        LinearLayout.LayoutParams tjLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tjLp.topMargin = dp(8);
+        tjLp.bottomMargin = dp(8);
+        btnToggleJson.setLayoutParams(tjLp);
+        root.addView(btnToggleJson);
+
+        final LinearLayout jsonSection = new LinearLayout(this);
+        jsonSection.setOrientation(LinearLayout.VERTICAL);
+        jsonSection.setVisibility(View.GONE);
+
+        btnToggleJson.setOnClickListener(v -> {
+            boolean visible = (jsonSection.getVisibility() == View.VISIBLE);
+            jsonSection.setVisibility(visible ? View.GONE : View.VISIBLE);
+            btnToggleJson.setText(visible ? "Advanced: Raw JSON Editor ▼" : "Advanced: Raw JSON Editor ▲");
+        });
 
         layoutInput = new EditText(this);
         layoutInput.setTypeface(Typeface.MONOSPACE);
@@ -992,21 +1086,28 @@ public class SettingsActivity extends Activity {
         String savedLayout = prefs.getString(KEY_EXTRA_KEYS_LAYOUT, "");
         if (savedLayout.isEmpty()) savedLayout = ExtraKeysBar.defaultLayoutJson();
         layoutInput.setText(savedLayout);
-        root.addView(layoutInput);
+        jsonSection.addView(layoutInput);
 
         final TextView layoutStatus = new TextView(this);
         layoutStatus.setTextSize(12);
         layoutStatus.setPadding(0, dp(4), 0, dp(4));
-        root.addView(layoutStatus);
+        jsonSection.addView(layoutStatus);
         updateLayoutStatus(layoutStatus, layoutInput.getText().toString());
 
         layoutInput.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void onTextChanged(CharSequence s, int a, int b, int c) {}
             @Override public void afterTextChanged(Editable s) {
+                String str = s.toString();
                 getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
-                    .putString(KEY_EXTRA_KEYS_LAYOUT, s.toString()).apply();
-                updateLayoutStatus(layoutStatus, s.toString());
+                    .putString(KEY_EXTRA_KEYS_LAYOUT, str).apply();
+                updateLayoutStatus(layoutStatus, str);
+                if (ExtraKeysBar.validateLayout(str) == null) {
+                    try {
+                        mLayoutJson = new JSONObject(str);
+                        renderVisualGrid();
+                    } catch (JSONException ignored) {}
+                }
             }
         });
 
@@ -1016,9 +1117,15 @@ public class SettingsActivity extends Activity {
 
         Button loadDefaultBtn = new Button(this);
         styleSettingsButton(loadDefaultBtn);
-        loadDefaultBtn.setText("Load Default");
-        loadDefaultBtn.setOnClickListener(v ->
-            layoutInput.setText(ExtraKeysBar.defaultLayoutJson()));
+        loadDefaultBtn.setText("Load Default JSON");
+        loadDefaultBtn.setOnClickListener(v -> {
+            String def = ExtraKeysBar.defaultLayoutJson();
+            layoutInput.setText(def);
+            try {
+                mLayoutJson = new JSONObject(def);
+                renderVisualGrid();
+            } catch (JSONException ignored) {}
+        });
         LinearLayout.LayoutParams defLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         loadDefaultBtn.setLayoutParams(defLp);
         layoutButtons.addView(loadDefaultBtn);
@@ -1032,14 +1139,544 @@ public class SettingsActivity extends Activity {
         loadFileBtn.setLayoutParams(fileLp);
         layoutButtons.addView(loadFileBtn);
 
-        root.addView(layoutButtons);
+        jsonSection.addView(layoutButtons);
 
         TextView layoutHint = new TextView(this);
         layoutHint.setText(R.string.layout_hint);
         layoutHint.setTextSize(12);
         layoutHint.setTextColor(M3.COLOR_TEXT_MUTED);
         layoutHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(layoutHint);
+        jsonSection.addView(layoutHint);
+
+        root.addView(jsonSection);
+    }
+
+    private JSONObject getOrLoadLayoutJson() {
+        if (mLayoutJson != null) return mLayoutJson;
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String json = prefs.getString(KEY_EXTRA_KEYS_LAYOUT, "");
+        if (json == null || json.trim().isEmpty()) {
+            json = ExtraKeysBar.defaultLayoutJson();
+        }
+        try {
+            mLayoutJson = new JSONObject(json);
+            if (!mLayoutJson.has("rows")) {
+                mLayoutJson = new JSONObject(ExtraKeysBar.defaultLayoutJson());
+            }
+        } catch (JSONException e) {
+            try {
+                mLayoutJson = new JSONObject(ExtraKeysBar.defaultLayoutJson());
+            } catch (JSONException ignored) {}
+        }
+        return mLayoutJson;
+    }
+
+    private void saveLayoutJson(boolean updateTextEditor) {
+        if (mLayoutJson == null) return;
+        try {
+            String jsonStr = mLayoutJson.toString(2);
+            getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
+                .putString(KEY_EXTRA_KEYS_LAYOUT, jsonStr).apply();
+            if (updateTextEditor && layoutInput != null) {
+                layoutInput.setText(jsonStr);
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "saveLayoutJson error", e);
+        }
+    }
+
+    private void renderVisualGrid() {
+        if (mVisualGridContainer == null) return;
+        mVisualGridContainer.removeAllViews();
+        JSONObject layout = getOrLoadLayoutJson();
+        if (layout == null) return;
+
+        try {
+            JSONArray rows = layout.getJSONArray("rows");
+            for (int r = 0; r < rows.length(); r++) {
+                final int rowIdx = r;
+                final JSONArray row = rows.getJSONArray(r);
+
+                // Row Header
+                LinearLayout rowHeader = new LinearLayout(this);
+                rowHeader.setOrientation(LinearLayout.HORIZONTAL);
+                rowHeader.setGravity(Gravity.CENTER_VERTICAL);
+                rowHeader.setPadding(0, r > 0 ? dp(12) : dp(2), 0, dp(4));
+
+                TextView tvRow = new TextView(this);
+                tvRow.setText("ROW " + (r + 1) + "  (" + row.length() + " keys)");
+                tvRow.setTextSize(11);
+                tvRow.setTypeface(Typeface.DEFAULT_BOLD);
+                tvRow.setTextColor(M3.COLOR_TEXT_MUTED);
+                rowHeader.addView(tvRow, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+                Button btnAddKey = new Button(this);
+                M3.styleButton(btnAddKey, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_PRIMARY);
+                btnAddKey.setText("+ Add Key");
+                btnAddKey.setTextSize(11);
+                btnAddKey.setMinHeight(dp(32));
+                btnAddKey.setPadding(dp(10), dp(2), dp(10), dp(2));
+                btnAddKey.setOnClickListener(v -> promptAddKey(rowIdx));
+                rowHeader.addView(btnAddKey);
+
+                mVisualGridContainer.addView(rowHeader);
+
+                // Horizontal scrollable container for row buttons
+                HorizontalScrollView hScroll = new HorizontalScrollView(this);
+                hScroll.setHorizontalScrollBarEnabled(false);
+                hScroll.setFillViewport(true);
+
+                LinearLayout rowLayout = new LinearLayout(this);
+                rowLayout.setOrientation(LinearLayout.HORIZONTAL);
+                rowLayout.setGravity(Gravity.CENTER_VERTICAL);
+                rowLayout.setPadding(0, dp(2), 0, dp(4));
+
+                for (int c = 0; c < row.length(); c++) {
+                    final int colIdx = c;
+                    JSONObject keyObj = row.getJSONObject(c);
+                    String label = keyObj.optString("label", "?");
+                    String popupLabel = null;
+                    if (keyObj.has("popup")) {
+                        popupLabel = keyObj.optJSONObject("popup").optString("label", "");
+                    }
+
+                    Button keyBtn = new Button(this);
+                    keyBtn.setBackground(M3.createRippleDrawable(this, M3.RADIUS_CHIP,
+                            M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
+                    keyBtn.setTextColor(Color.WHITE);
+                    keyBtn.setTextSize(12);
+                    keyBtn.setTypeface(Typeface.DEFAULT_BOLD);
+                    keyBtn.setMinHeight(dp(44));
+                    keyBtn.setMinWidth(dp(42));
+                    keyBtn.setPadding(dp(8), dp(4), dp(8), dp(4));
+                    keyBtn.setAllCaps(false);
+
+                    if (popupLabel != null && !popupLabel.isEmpty()) {
+                        keyBtn.setText(label + "\n↑" + popupLabel);
+                    } else {
+                        keyBtn.setText(label);
+                    }
+
+                    LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    btnLp.setMargins(dp(2), 0, dp(2), 0);
+                    keyBtn.setLayoutParams(btnLp);
+
+                    keyBtn.setOnClickListener(v -> showKeyEditorDialog(rowIdx, colIdx));
+                    rowLayout.addView(keyBtn);
+                }
+
+                hScroll.addView(rowLayout);
+                mVisualGridContainer.addView(hScroll);
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "renderVisualGrid error", e);
+        }
+    }
+
+    private void promptAddKey(final int rowIdx) {
+        HudKeyPickerDialog.show(this, (action, displayLabel) -> {
+            try {
+                JSONObject newKey = createKeyFromHudAction(action, displayLabel);
+                getOrLoadLayoutJson().getJSONArray("rows").getJSONArray(rowIdx).put(newKey);
+                saveLayoutJson(true);
+                renderVisualGrid();
+            } catch (JSONException e) {
+                Log.e(TAG, "promptAddKey error", e);
+            }
+        });
+    }
+
+    private void addRowToLayout() {
+        try {
+            JSONArray rows = getOrLoadLayoutJson().getJSONArray("rows");
+            JSONArray newRow = new JSONArray();
+            newRow.put(createKeyFromHudAction(HudAction.key(59), "F1"));
+            newRow.put(createKeyFromHudAction(HudAction.key(60), "F2"));
+            newRow.put(createKeyFromHudAction(HudAction.key(61), "F3"));
+            newRow.put(createKeyFromHudAction(HudAction.key(62), "F4"));
+            rows.put(newRow);
+            saveLayoutJson(true);
+            renderVisualGrid();
+        } catch (JSONException e) {
+            Log.e(TAG, "addRow error", e);
+        }
+    }
+
+    private void removeRowFromLayout() {
+        try {
+            JSONArray rows = getOrLoadLayoutJson().getJSONArray("rows");
+            if (rows.length() > 1) {
+                rows.remove(rows.length() - 1);
+                saveLayoutJson(true);
+                renderVisualGrid();
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "removeRow error", e);
+        }
+    }
+
+    private void swapKeysInRow(JSONArray row, int i, int j) {
+        if (row == null || i < 0 || j < 0 || i >= row.length() || j >= row.length() || i == j) return;
+        try {
+            Object objI = row.get(i);
+            Object objJ = row.get(j);
+            row.put(i, objJ);
+            row.put(j, objI);
+        } catch (JSONException e) {
+            Log.e(TAG, "swap error", e);
+        }
+    }
+
+    private void showKeyEditorDialog(final int rowIdx, final int colIdx) {
+        if (mLayoutJson == null) return;
+        try {
+            JSONArray rows = mLayoutJson.getJSONArray("rows");
+            if (rowIdx >= rows.length()) return;
+            final JSONArray row = rows.getJSONArray(rowIdx);
+            if (colIdx >= row.length()) return;
+            final JSONObject keyObj = row.getJSONObject(colIdx);
+
+            AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
+            LinearLayout root = new LinearLayout(this);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setPadding(dp(16), dp(16), dp(16), dp(16));
+            root.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE, M3.COLOR_BORDER_STRONG, 1.0f));
+
+            AlertDialog dialog = builder.setView(root).create();
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
+            }
+
+            TextView title = new TextView(this);
+            title.setText("CONFIGURE KEY (R" + (rowIdx + 1) + " : C" + (colIdx + 1) + ")");
+            title.setTextColor(M3.COLOR_TEXT_PRIMARY);
+            title.setTextSize(15);
+            title.setTypeface(Typeface.DEFAULT_BOLD);
+            title.setPadding(0, 0, 0, dp(12));
+            root.addView(title);
+
+            ScrollView scroll = new ScrollView(this);
+            LinearLayout form = new LinearLayout(this);
+            form.setOrientation(LinearLayout.VERTICAL);
+            scroll.addView(form);
+            root.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+            final Button previewBtn = new Button(this);
+            styleSettingsButton(previewBtn);
+            previewBtn.setClickable(false);
+            LinearLayout.LayoutParams prevLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            prevLp.gravity = Gravity.CENTER_HORIZONTAL;
+            prevLp.bottomMargin = dp(14);
+            previewBtn.setLayoutParams(prevLp);
+            form.addView(previewBtn);
+
+            TextView labelHeader = new TextView(this);
+            labelHeader.setText("Display Label");
+            labelHeader.setTextSize(12);
+            labelHeader.setTextColor(M3.COLOR_TEXT_MUTED);
+            form.addView(labelHeader);
+
+            final EditText etLabel = new EditText(this);
+            M3.styleInput(etLabel);
+            etLabel.setText(keyObj.optString("label", ""));
+            LinearLayout.LayoutParams etLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            etLp.topMargin = dp(4);
+            etLp.bottomMargin = dp(14);
+            etLabel.setLayoutParams(etLp);
+            form.addView(etLabel);
+
+            // Main Action Card
+            LinearLayout actionCard = new LinearLayout(this);
+            actionCard.setOrientation(LinearLayout.VERTICAL);
+            actionCard.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+            actionCard.setPadding(dp(12), dp(10), dp(12), dp(10));
+            LinearLayout.LayoutParams actCardLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            actCardLp.bottomMargin = dp(12);
+            actionCard.setLayoutParams(actCardLp);
+
+            TextView actTitle = new TextView(this);
+            actTitle.setText("PRIMARY ACTION");
+            actTitle.setTextSize(11);
+            actTitle.setTypeface(Typeface.DEFAULT_BOLD);
+            actTitle.setTextColor(M3.COLOR_PRIMARY);
+            actionCard.addView(actTitle);
+
+            final TextView tvAction = new TextView(this);
+            tvAction.setText(formatActionSummary(keyObj));
+            tvAction.setTextColor(Color.WHITE);
+            tvAction.setTextSize(13);
+            tvAction.setPadding(0, dp(4), 0, dp(8));
+            actionCard.addView(tvAction);
+
+            Button btnPickAction = new Button(this);
+            styleSettingsButton(btnPickAction);
+            btnPickAction.setText("Pick Action (HUD Key Picker)");
+            actionCard.addView(btnPickAction);
+            form.addView(actionCard);
+
+            // Swipe-up Popup Card
+            LinearLayout popupCard = new LinearLayout(this);
+            popupCard.setOrientation(LinearLayout.VERTICAL);
+            popupCard.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+            popupCard.setPadding(dp(12), dp(10), dp(12), dp(10));
+            LinearLayout.LayoutParams popCardLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            popCardLp.bottomMargin = dp(12);
+            popupCard.setLayoutParams(popCardLp);
+
+            TextView popTitle = new TextView(this);
+            popTitle.setText("SWIPE-UP POPUP ACTION (OPTIONAL)");
+            popTitle.setTextSize(11);
+            popTitle.setTypeface(Typeface.DEFAULT_BOLD);
+            popTitle.setTextColor(M3.COLOR_SECONDARY);
+            popupCard.addView(popTitle);
+
+            final TextView tvPopup = new TextView(this);
+            tvPopup.setText(keyObj.has("popup") ? formatActionSummary(keyObj.optJSONObject("popup")) : "None");
+            tvPopup.setTextColor(Color.WHITE);
+            tvPopup.setTextSize(13);
+            tvPopup.setPadding(0, dp(4), 0, dp(8));
+            popupCard.addView(tvPopup);
+
+            LinearLayout popupButtons = new LinearLayout(this);
+            popupButtons.setOrientation(LinearLayout.HORIZONTAL);
+
+            Button btnPickPopup = new Button(this);
+            styleSettingsButton(btnPickPopup);
+            btnPickPopup.setText("Set Popup");
+            LinearLayout.LayoutParams bpLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            btnPickPopup.setLayoutParams(bpLp);
+            popupButtons.addView(btnPickPopup);
+
+            Button btnClearPopup = new Button(this);
+            styleSettingsButton(btnClearPopup);
+            btnClearPopup.setText("Clear");
+            LinearLayout.LayoutParams bcLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            bcLp.leftMargin = dp(8);
+            btnClearPopup.setLayoutParams(bcLp);
+            popupButtons.addView(btnClearPopup);
+
+            popupCard.addView(popupButtons);
+            form.addView(popupCard);
+
+            // Repeat switch
+            final Switch swRepeat = new Switch(this);
+            M3.styleSwitch(swRepeat);
+            swRepeat.setText("Auto-repeat while held");
+            swRepeat.setChecked(keyObj.optBoolean("repeat", false));
+            swRepeat.setPadding(0, dp(4), 0, dp(12));
+            form.addView(swRepeat);
+
+            // Move & Delete Row
+            LinearLayout reorderRow = new LinearLayout(this);
+            reorderRow.setOrientation(LinearLayout.HORIZONTAL);
+            reorderRow.setPadding(0, dp(8), 0, dp(12));
+
+            Button btnMoveLeft = new Button(this);
+            styleSettingsButton(btnMoveLeft);
+            btnMoveLeft.setText("← Move");
+            btnMoveLeft.setEnabled(colIdx > 0);
+            LinearLayout.LayoutParams bmlLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            btnMoveLeft.setLayoutParams(bmlLp);
+            reorderRow.addView(btnMoveLeft);
+
+            Button btnMoveRight = new Button(this);
+            styleSettingsButton(btnMoveRight);
+            btnMoveRight.setText("Move →");
+            btnMoveRight.setEnabled(colIdx < row.length() - 1);
+            LinearLayout.LayoutParams bmrLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            bmrLp.leftMargin = dp(8);
+            btnMoveRight.setLayoutParams(bmrLp);
+            reorderRow.addView(btnMoveRight);
+
+            Button btnDelete = new Button(this);
+            M3.styleButton(btnDelete, 0xFF491825, 0x66F38BA8, M3.COLOR_ERROR);
+            btnDelete.setText("Delete");
+            LinearLayout.LayoutParams bdelLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            bdelLp.leftMargin = dp(8);
+            btnDelete.setLayoutParams(bdelLp);
+            reorderRow.addView(btnDelete);
+
+            form.addView(reorderRow);
+
+            Runnable updatePreview = () -> {
+                String lbl = etLabel.getText().toString();
+                if (lbl.isEmpty()) lbl = keyObj.optString("label", "?");
+                if (keyObj.has("popup")) {
+                    lbl += " [↑" + keyObj.optJSONObject("popup").optString("label", "") + "]";
+                }
+                previewBtn.setText(lbl);
+            };
+            updatePreview.run();
+            etLabel.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+                @Override public void afterTextChanged(Editable s) { updatePreview.run(); }
+            });
+
+            btnPickAction.setOnClickListener(v -> {
+                HudKeyPickerDialog.show(SettingsActivity.this, (action, displayLabel) -> {
+                    applyHudActionToKey(keyObj, action, displayLabel);
+                    etLabel.setText(keyObj.optString("label", displayLabel));
+                    tvAction.setText(formatActionSummary(keyObj));
+                    updatePreview.run();
+                });
+            });
+
+            btnPickPopup.setOnClickListener(v -> {
+                HudKeyPickerDialog.show(SettingsActivity.this, (action, displayLabel) -> {
+                    JSONObject popupObj = createKeyFromHudAction(action, displayLabel);
+                    try {
+                        keyObj.put("popup", popupObj);
+                    } catch (JSONException ignored) {}
+                    tvPopup.setText(formatActionSummary(popupObj));
+                    updatePreview.run();
+                });
+            });
+
+            btnClearPopup.setOnClickListener(v -> {
+                keyObj.remove("popup");
+                tvPopup.setText("None");
+                updatePreview.run();
+            });
+
+            btnMoveLeft.setOnClickListener(v -> {
+                swapKeysInRow(row, colIdx, colIdx - 1);
+                saveLayoutJson(true);
+                dialog.dismiss();
+                renderVisualGrid();
+            });
+
+            btnMoveRight.setOnClickListener(v -> {
+                swapKeysInRow(row, colIdx, colIdx + 1);
+                saveLayoutJson(true);
+                dialog.dismiss();
+                renderVisualGrid();
+            });
+
+            btnDelete.setOnClickListener(v -> {
+                row.remove(colIdx);
+                saveLayoutJson(true);
+                dialog.dismiss();
+                renderVisualGrid();
+            });
+
+            Button btnDone = new Button(this);
+            M3.styleButton(btnDone, M3.COLOR_PRIMARY_CONTAINER, 0x6680DEEA, M3.COLOR_PRIMARY);
+            btnDone.setText("DONE");
+            btnDone.setOnClickListener(v -> {
+                try {
+                    String lbl = etLabel.getText().toString().trim();
+                    if (!lbl.isEmpty()) keyObj.put("label", lbl);
+                    if ("key".equals(keyObj.optString("type", "key"))) {
+                        keyObj.put("repeat", swRepeat.isChecked());
+                    }
+                } catch (JSONException ignored) {}
+                saveLayoutJson(true);
+                dialog.dismiss();
+                renderVisualGrid();
+            });
+            LinearLayout.LayoutParams doneLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            doneLp.topMargin = dp(8);
+            root.addView(btnDone, doneLp);
+
+            dialog.show();
+        } catch (JSONException e) {
+            Log.e(TAG, "showKeyEditorDialog error", e);
+        }
+    }
+
+    private void applyHudActionToKey(JSONObject keyObj, HudAction action, String displayLabel) {
+        try {
+            keyObj.put("type", action.type);
+            keyObj.remove("code");
+            keyObj.remove("combo_keys");
+            keyObj.remove("text");
+            keyObj.remove("repeat");
+
+            if (HudAction.TYPE_KEY.equals(action.type)) {
+                keyObj.put("type", "key");
+                keyObj.put("code", action.code);
+                if (action.repeat) keyObj.put("repeat", true);
+            } else if (HudAction.TYPE_MODIFIER.equals(action.type)) {
+                keyObj.put("type", "modifier");
+                keyObj.put("code", action.code);
+            } else if (HudAction.TYPE_COMBO.equals(action.type)) {
+                keyObj.put("type", "combo");
+                JSONArray arr = new JSONArray();
+                if (action.comboKeys != null) {
+                    for (int k : action.comboKeys) arr.put(k);
+                }
+                keyObj.put("combo_keys", arr);
+            } else if (HudAction.TYPE_TEXT.equals(action.type)) {
+                keyObj.put("type", "text");
+                keyObj.put("text", action.text != null && !action.text.isEmpty() ? action.text : displayLabel);
+            } else if (HudAction.TYPE_SYSTEM.equals(action.type)) {
+                if ("toggle_ime".equals(action.systemCommand)) {
+                    keyObj.put("type", "keyboard");
+                    displayLabel = "⌨";
+                } else if ("toggle_vk".equals(action.systemCommand)) {
+                    keyObj.put("type", "vkeyboard");
+                    displayLabel = "VK";
+                } else if ("open_settings".equals(action.systemCommand)) {
+                    keyObj.put("type", "settings");
+                    displayLabel = "⚙";
+                } else {
+                    keyObj.put("type", "key");
+                }
+            }
+            keyObj.put("label", displayLabel);
+        } catch (JSONException e) {
+            Log.e(TAG, "applyHudActionToKey error", e);
+        }
+    }
+
+    private JSONObject createKeyFromHudAction(HudAction action, String displayLabel) {
+        JSONObject o = new JSONObject();
+        applyHudActionToKey(o, action, displayLabel);
+        return o;
+    }
+
+    private String formatActionSummary(JSONObject o) {
+        if (o == null) return "None";
+        String type = o.optString("type", "key");
+        switch (type) {
+            case "key": {
+                int code = o.optInt("code", 0);
+                return "Key: " + HudPropertyInspectorView.labelForEvdev(code) + " (code " + code + ")";
+            }
+            case "modifier": {
+                int mCode = o.optInt("code", 0);
+                return "Modifier: " + HudPropertyInspectorView.labelForEvdev(mCode);
+            }
+            case "combo": {
+                JSONArray arr = o.optJSONArray("combo_keys");
+                if (arr != null && arr.length() > 0) {
+                    StringBuilder sb = new StringBuilder("Combo: ");
+                    for (int i = 0; i < arr.length(); i++) {
+                        if (i > 0) sb.append(" + ");
+                        sb.append(HudPropertyInspectorView.labelForEvdev(arr.optInt(i)));
+                    }
+                    return sb.toString();
+                }
+                return "Combo";
+            }
+            case "text":
+                return "Text: \"" + o.optString("text", "") + "\"";
+            case "keyboard":
+                return "Soft Keyboard Toggle (⌨)";
+            case "vkeyboard":
+                return "Virtual Keyboard Toggle (VK)";
+            case "settings":
+                return "Settings (⚙)";
+            default:
+                return type;
+        }
     }
 
     // ============================================================
@@ -1871,6 +2508,10 @@ public class SettingsActivity extends Activity {
                 return;
             }
             if (layoutInput != null) layoutInput.setText(text);
+            try {
+                mLayoutJson = new JSONObject(text);
+                renderVisualGrid();
+            } catch (JSONException ignored) {}
         } else if (requestCode == REQ_BACKUP_SETTINGS) {
             exportSettingsToUri(uri);
         } else if (requestCode == REQ_RESTORE_SETTINGS) {
