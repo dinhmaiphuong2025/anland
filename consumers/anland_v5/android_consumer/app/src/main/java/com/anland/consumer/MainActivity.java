@@ -729,6 +729,7 @@ public class MainActivity extends Activity
 
         // HUD Overlay View (Floating custom buttons, TrackPoint, Super Gesture & Pinned Dock)
         boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
+        boolean isDeckOnCreate = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_STEAM_DECK_MODE, false);
         mHudOverlay = new com.anland.consumer.hud.HudOverlayView(this, getSharedPreferences(PREFS_NAME, MODE_PRIVATE), new com.anland.consumer.hud.HudOverlayView.HudHost() {
             @Override
             public void sendKey(int action, int evdevCode) {
@@ -807,7 +808,7 @@ public class MainActivity extends Activity
                 cancelPendingFinish();
             }
         });
-        mHudOverlay.setVisibility(useHud ? View.VISIBLE : View.GONE);
+        mHudOverlay.setVisibility((useHud || isDeckOnCreate) ? View.VISIBLE : View.GONE);
         root.addView(mHudOverlay, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT
@@ -1896,13 +1897,15 @@ public class MainActivity extends Activity
             }
         }
         if (mHudOverlay != null && !mHudOverlay.isEditMode()) {
+            mHudOverlay.loadProfile();
             boolean vkbOpen = (virtualKeyboardView != null && virtualKeyboardView.getVisibility() == View.VISIBLE);
             if (vkbOpen) {
                 mHudAutoHidden = true;
                 mHudOverlay.setVisibility(View.GONE);
             } else {
                 boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
-                mHudOverlay.setVisibility(useHud ? View.VISIBLE : View.GONE);
+                boolean isSteamDeck = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_STEAM_DECK_MODE, false);
+                mHudOverlay.setVisibility((useHud || isSteamDeck) ? View.VISIBLE : View.GONE);
             }
         }
         mKeyboardFloating = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
@@ -3058,7 +3061,10 @@ public class MainActivity extends Activity
         // ===== Steam Deck Mode: Disable fullscreen touch on game surface =====
         // Prevents thumb/palm misclicks on the game screen when using D-Pad or buttons.
         // Mouse pointer is operated exclusively through the dedicated on-screen Trackpad.
-        if (isLandscape && isSteamDeck && !mouseEvent) {
+        // Khi bàn phím đang mở (Virtual Keyboard hoặc Soft Keyboard IME): Bật lại cảm ứng bình thường!
+        boolean isKeyboardOpen = (virtualKeyboardView != null && virtualKeyboardView.getVisibility() == View.VISIBLE)
+                || mImeBottom > 0;
+        if (isLandscape && isSteamDeck && !mouseEvent && !isKeyboardOpen) {
             return true;
         }
 

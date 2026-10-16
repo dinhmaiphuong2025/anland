@@ -82,46 +82,53 @@ public final class HudTouchpadView extends View {
         float density = getResources().getDisplayMetrics().density;
         float w = getWidth();
         float h = getHeight();
-        float corner = mModel.cornerRadiusDp > 0 ? mModel.cornerRadiusDp * density : 14f * density;
+        float corner = (mModel.cornerRadiusDp > 0 ? mModel.cornerRadiusDp : 18f) * density;
         mBounds.set(2, 2, w - 2, h - 2);
 
-        // 1. Outer rounded container background (Steam Deck dark slate)
+        // 1. Steam Deck Square Matte Surface with Rounded Corners
         mPaint.setStyle(Paint.Style.FILL);
-        int baseBg = mModel.bgColor != 0 ? mModel.bgColor : 0xE61E1F29;
-        mPaint.setColor(mIsTouching ? 0xE62A2B3D : baseBg);
+        int baseBg = mModel.bgColor != 0 ? mModel.bgColor : 0xF0161822;
+        mPaint.setColor(mIsTouching ? 0xF024283A : baseBg);
         mPaint.setAlpha(Math.round(mModel.opacity * 255));
         canvas.drawRoundRect(mBounds, corner, corner, mPaint);
 
-        // 2. Outer border stroke
+        // 2. Outer Steam Deck Border Stroke (Accent Glow on touch)
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(Math.max(1, Math.round(1.5f * density)));
         int activeAccent = mModel.activeColor != 0 ? mModel.activeColor : 0xFF80DEEA;
-        mPaint.setColor(mIsTouching ? activeAccent : 0x4480DEEA);
+        mPaint.setColor(mIsTouching ? activeAccent : 0x7780DEEA);
         canvas.drawRoundRect(mBounds, corner, corner, mPaint);
 
-        // 3. Inner Haptic Surface Ring (Steam Deck circular tactile outline)
-        float cx = w * 0.5f;
-        float cy = h * 0.5f;
-        float innerRadius = Math.min(w, h) * 0.38f;
+        // 3. Inner Tactile Recessed Boundary (authentic Steam Deck recessed bevel)
+        float inset = 6f * density;
+        RectF innerBounds = new RectF(mBounds.left + inset, mBounds.top + inset, mBounds.right - inset, mBounds.bottom - inset);
+        float innerCorner = Math.max(4f * density, corner - inset * 0.7f);
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(Math.max(1, Math.round(1.0f * density)));
-        mPaint.setColor(mIsTouching ? 0x6680DEEA : 0x22FFFFFF);
-        canvas.drawCircle(cx, cy, innerRadius, mPaint);
+        mPaint.setColor(mIsTouching ? 0x5580DEEA : 0x2280DEEA);
+        canvas.drawRoundRect(innerBounds, innerCorner, innerCorner, mPaint);
 
-        // 4. Center Crosshair / Precision dot
-        mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mIsTouching ? activeAccent : 0x55FFFFFF);
-        float dotRadius = 2.5f * density;
-        canvas.drawCircle(cx, cy, dotRadius, mPaint);
+        // 4. Center Precision Tactile Crosshair
+        float cx = w * 0.5f;
+        float cy = h * 0.5f;
+        float armLen = 7f * density;
+        float gap = 2.5f * density;
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(1.2f * density);
+        mPaint.setColor(mIsTouching ? activeAccent : 0x8880DEEA);
+        canvas.drawLine(cx - armLen, cy, cx - gap, cy, mPaint);
+        canvas.drawLine(cx + gap, cy, cx + armLen, cy, mPaint);
+        canvas.drawLine(cx, cy - armLen, cx, cy - gap, mPaint);
+        canvas.drawLine(cx, cy + gap, cx, cy + armLen, mPaint);
 
-        // 5. Minimal Bottom Label
-        mTextPaint.setColor(mIsTouching ? 0xEE80DEEA : 0x66FFFFFF);
-        mTextPaint.setTextSize(Math.max(8 * density, 9 * density));
+        // 5. Center Touchpad Label
+        mTextPaint.setColor(mIsTouching ? 0xFF80DEEA : 0xAA80DEEA);
+        mTextPaint.setTextSize(Math.max(8 * density, 9.5f * density));
         mTextPaint.setTextAlign(Paint.Align.CENTER);
         mTextPaint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         String label = (mModel.label != null && !mModel.label.isEmpty() && !"BTN".equals(mModel.label))
-                ? mModel.label : "TRACKPAD";
-        canvas.drawText(label, cx, h - 8 * density, mTextPaint);
+                ? mModel.label : "TOUCHPAD";
+        canvas.drawText(label, cx, h - 10 * density, mTextPaint);
     }
 
     @Override

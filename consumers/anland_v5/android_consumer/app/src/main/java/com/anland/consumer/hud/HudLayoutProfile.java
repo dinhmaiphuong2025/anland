@@ -501,13 +501,13 @@ public final class HudLayoutProfile {
         btnB.posYPercent = abxyCy;
         layout.floatingButtons.add(btnB);
 
-        // 4. Dedicated Steam Deck Haptic Trackpad (Large Touchpad for mouse look & tap click, NO ANALOG NUB!)
+        // 4. Dedicated Steam Deck Haptic Trackpad (Square Rounded Touchpad for mouse look & tap click, NO ANALOG NUB!)
         HudButton deckTrackpad = new HudButton();
         deckTrackpad.widgetType = HudButton.WIDGET_TOUCHPAD;
-        deckTrackpad.label = "TRACKPAD";
-        deckTrackpad.widthDp = 86;
-        deckTrackpad.heightDp = 86;
-        deckTrackpad.cornerRadiusDp = 16;
+        deckTrackpad.label = "TOUCHPAD";
+        deckTrackpad.widthDp = 92;
+        deckTrackpad.heightDp = 92;
+        deckTrackpad.cornerRadiusDp = 18;
         deckTrackpad.trackpointSensitivity = 1.4f;
         deckTrackpad.posXPercent = isLandscape ? 0.90f : 0.85f;
         deckTrackpad.posYPercent = 0.65f;
