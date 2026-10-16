@@ -717,13 +717,8 @@ public class MainActivity extends Activity
 
         mRoot = root;
         mDensity = getResources().getDisplayMetrics().density;
-        if (mHudOverlay != null) {
-            boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
-            mHudOverlay.setVisibility(useHud ? View.VISIBLE : View.GONE);
-        }
         mKeyboardFloating = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getBoolean(KEY_KEYBOARD_FLOATING, false);
-        buildExtraKeysBar();
 
         // HUD Overlay View (Floating custom buttons, TrackPoint, Super Gesture & Pinned Dock)
         boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
@@ -799,6 +794,9 @@ public class MainActivity extends Activity
             FrameLayout.LayoutParams.MATCH_PARENT
         ));
 
+        // Bottom extra-keys bar (Termux-style) placed above HUD overlay
+        buildExtraKeysBar();
+
         if (mPendingOpenHudEditor) {
             mPendingOpenHudEditor = false;
             mRoot.post(() -> mHudOverlay.setEditMode(true));
@@ -832,7 +830,10 @@ public class MainActivity extends Activity
                 }
             }
         });
-        virtualKeyboardView.setOnDismissListener(this::restoreHudAfterKeyboard);
+        virtualKeyboardView.setOnDismissListener(() -> {
+            restoreHudAfterKeyboard();
+            setExtraKeysBarVisible(shouldShowBar(systemIme != null && systemIme.isImeVisible()));
+        });
         // Add to root with no gravity – we will position manually.
         root.addView(virtualKeyboardView, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -2512,8 +2513,8 @@ public class MainActivity extends Activity
         if (virtualKeyboardView == null) return;
         if (virtualKeyboardView.getVisibility() == View.VISIBLE) {
             virtualKeyboardView.hideWithAnimation(() -> {
-                // Tat ban phim: chi hien lai HUD, bo qua ExtraKeys.
                 restoreHudAfterKeyboard();
+                setExtraKeysBarVisible(shouldShowBar(systemIme != null && systemIme.isImeVisible()));
             });
         } else {
             hideFloatingForKeyboard();
@@ -2674,10 +2675,16 @@ public class MainActivity extends Activity
 
     @Override
     public com.anland.consumer.hud.IModifierProvider getActiveModifierProvider() {
+        if (extraKeysBar != null && extraKeysBar.hasActiveModifier()) {
+            return extraKeysBar;
+        }
+        if (mHudOverlay != null && mHudOverlay.hasActiveModifier()) {
+            return mHudOverlay;
+        }
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         boolean useHud = prefs.getBoolean("use_hud_overlay", false);
         if (useHud && mHudOverlay != null) {
-            return mHudOverlay; // Assuming mHudOverlay implements IModifierProvider
+            return mHudOverlay;
         }
         return extraKeysBar;
     }
@@ -3053,14 +3060,25 @@ public class MainActivity extends Activity
             mHudOverlay.requestExit();
             return;
         }
-        // 2. Release an active pointer capture (Xiaomi/HyperOS back gesture).
+        // 2. If the floating virtual keyboard is visible, close it.
+        if (virtualKeyboardView != null && virtualKeyboardView.getVisibility() == View.VISIBLE) {
+            toggleVirtualKeyboard();
+            return;
+        }
+        // 3. Release an active pointer capture (Xiaomi/HyperOS back gesture).
         if (mRoot != null && mRoot.hasPointerCapture()) {
             releasePointerCapture(true);
             trackPointerCaptureBack(null);
             showPointerCaptureReleasedToast();
             return;
         }
-        // 3. Editor-only mode (daemon offline) - the activity is useless
+        // 4. Back key toggles the extra-keys bar (Xiaomi/HyperOS & gesture navigation).
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        if (prefs.getBoolean(KEY_BACK_OPENS_EXTRA_KEYS, true)) {
+            toggleExtraKeysBar();
+            return;
+        }
+        // 5. Editor-only mode (daemon offline) - the activity is useless
         //    without a native pipeline. Remove from Recents entirely so
         //    the user does not have to manually clear a black tile.
         if (mNative == null) {

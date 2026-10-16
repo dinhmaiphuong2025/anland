@@ -1981,13 +1981,16 @@ public class SettingsActivity extends Activity {
     private String getExtraKeysMode(SharedPreferences prefs) {
         String mode = prefs.getString(KEY_EXTRA_KEYS_MODE, null);
         if (mode != null) return mode;
-        // Migrate from legacy boolean keys
-        boolean autoShow = prefs.getBoolean("auto_show_extra_keys", true);
-        boolean enabled = prefs.getBoolean("extra_keys_bar", false);
-        mode = autoShow ? MODE_WITH_KEYBOARD : (enabled ? MODE_ALWAYS : MODE_NEVER);
-        prefs.edit().putString(KEY_EXTRA_KEYS_MODE, mode)
-              .remove("auto_show_extra_keys").remove("extra_keys_bar").apply();
-        return mode;
+        // Migrate from legacy boolean keys if present
+        if (prefs.contains("extra_keys_bar") || prefs.contains("auto_show_extra_keys")) {
+            boolean autoShow = prefs.getBoolean("auto_show_extra_keys", false);
+            boolean enabled = prefs.getBoolean("extra_keys_bar", true);
+            mode = autoShow ? MODE_WITH_KEYBOARD : (enabled ? MODE_ALWAYS : MODE_NEVER);
+            prefs.edit().putString(KEY_EXTRA_KEYS_MODE, mode)
+                  .remove("auto_show_extra_keys").remove("extra_keys_bar").apply();
+            return mode;
+        }
+        return MODE_ALWAYS;
     }
 
     private void setupDarkSpinner(Spinner spinner, String[] items) {
