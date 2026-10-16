@@ -3,9 +3,12 @@ package com.anland.consumer;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -308,7 +311,7 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
                 button.setTextColor(TEXT_COLOR);
                 button.setAllCaps(true);
                 button.setPadding(0, 0, 0, 0);
-                button.setBackgroundColor(BG_COLOR);
+                button.setBackground(null);
 
                 if (key.type == TYPE_MODIFIER) {
                     ModState state = mModifiers.get(key.display);
@@ -323,7 +326,8 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
                 GridLayout.LayoutParams param = new GridLayout.LayoutParams();
                 param.width = 0;
                 param.height = 0;
-                param.setMargins(0, 0, 0, 0);
+                int m = Math.round(1.5f * getResources().getDisplayMetrics().density);
+                param.setMargins(m, m, m, m);
                 param.columnSpec = GridLayout.spec(c, GridLayout.FILL, 1f);
                 param.rowSpec = GridLayout.spec(r, GridLayout.FILL, 1f);
                 button.setLayoutParams(param);
@@ -334,13 +338,33 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
         }
     }
 
+    private void setButtonPressedState(Button button, Key key, boolean pressed) {
+        float density = getResources().getDisplayMetrics().density;
+        boolean isMod = (key.type == TYPE_MODIFIER);
+        ModState modState = isMod ? mModifiers.get(key.display) : null;
+
+        if (pressed) {
+            GradientDrawable gd = new GradientDrawable();
+            gd.setCornerRadius(6 * density);
+            gd.setColor(0x5580DEEA);
+            button.setBackground(gd);
+        } else {
+            if (isMod && modState != null) {
+                updateModifierButton(button, modState);
+            } else {
+                button.setBackground(null);
+            }
+        }
+    }
+
     private void attachListeners(final Button button, final Key key) {
         button.setOnClickListener(v -> onKeyClick(key));
 
         button.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
-                    button.setBackgroundColor(ACTIVE_BG_COLOR);
+                    button.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                    setButtonPressedState(button, key, true);
                     startScheduled(button, key);
                     return true;
 
@@ -348,23 +372,22 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
                     if (key.popup != null) {
                         if (mPopupWindow == null && event.getY() < 0) {
                             stopScheduled();
-                            button.setBackgroundColor(BG_COLOR);
+                            setButtonPressedState(button, key, false);
                             showPopup(button, key.popup);
                         }
                         if (mPopupWindow != null && event.getY() > 0) {
-                            button.setBackgroundColor(ACTIVE_BG_COLOR);
+                            setButtonPressedState(button, key, true);
                             dismissPopup();
                         }
                     }
                     return true;
 
                 case MotionEvent.ACTION_CANCEL:
-                    button.setBackgroundColor(BG_COLOR);
+                    setButtonPressedState(button, key, false);
                     stopScheduled();
                     return true;
 
                 case MotionEvent.ACTION_UP:
-                    button.setBackgroundColor(BG_COLOR);
                     boolean repeated = mRepeatActive;
                     stopScheduled();
                     if (mPopupWindow != null) {
@@ -375,6 +398,7 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
                     } else if (!repeated && !mLongHoldFired) {
                         button.performClick();
                     }
+                    setButtonPressedState(button, key, false);
                     return true;
             }
             return false;
@@ -440,8 +464,35 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
     private void setModifierActive(ModState state, boolean active) {
         state.active = active;
         if (!active) state.locked = false;
-        for (Button b : state.buttons)
-            b.setTextColor(active ? ACTIVE_TEXT_COLOR : TEXT_COLOR);
+        updateModifierStateAppearance(state);
+    }
+
+    private void updateModifierStateAppearance(ModState state) {
+        for (Button b : state.buttons) {
+            updateModifierButton(b, state);
+        }
+    }
+
+    private void updateModifierButton(Button b, ModState state) {
+        float density = getResources().getDisplayMetrics().density;
+        if (state.active) {
+            b.setTextColor(state.locked ? 0xFFFFFFFF : ACTIVE_TEXT_COLOR);
+            b.setTypeface(Typeface.DEFAULT_BOLD);
+            GradientDrawable gd = new GradientDrawable();
+            gd.setCornerRadius(6 * density);
+            if (state.locked) {
+                gd.setColor(0xFF007A87);
+                gd.setStroke(Math.max(1, Math.round(1.5f * density)), 0xFF80DEEA);
+            } else {
+                gd.setColor(0xFF004F58);
+                gd.setStroke(Math.max(1, Math.round(1.0f * density)), 0x8880DEEA);
+            }
+            b.setBackground(gd);
+        } else {
+            b.setTextColor(TEXT_COLOR);
+            b.setTypeface(Typeface.DEFAULT);
+            b.setBackground(null);
+        }
     }
 
     // ------- long press / repeat scheduling -------
@@ -470,9 +521,15 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
                 ModState state = mModifiers.get(key.display);
                 if (state == null) return;
                 // Lock and toggle active (Termux semantics).
-                setModifierActive(state, !state.active);
-                state.locked = state.active;
+                if (state.locked) {
+                    state.locked = false;
+                    setModifierActive(state, false);
+                } else {
+                    state.locked = true;
+                    setModifierActive(state, true);
+                }
                 mLongHoldFired = true;
+                button.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
             };
             mHandler.postDelayed(mLongHoldRunnable, mLongPressTimeout);
         }
@@ -492,12 +549,18 @@ public class ExtraKeysBar extends GridLayout implements IModifierProvider {
     // ------- popup -------
 
     private void showPopup(View anchor, Key popupKey) {
+        float density = getResources().getDisplayMetrics().density;
         TextView tv = new TextView(getContext());
         tv.setText(popupKey.display);
         tv.setTextColor(ACTIVE_TEXT_COLOR);
         tv.setTextSize(18);
-        tv.setBackgroundColor(ACTIVE_BG_COLOR);
-        int pad = Math.round(8 * getResources().getDisplayMetrics().density);
+        tv.setTypeface(Typeface.DEFAULT_BOLD);
+        GradientDrawable gd = new GradientDrawable();
+        gd.setCornerRadius(6 * density);
+        gd.setColor(0xFF1E1E2E);
+        gd.setStroke(Math.max(1, Math.round(1.0f * density)), 0xFF80DEEA);
+        tv.setBackground(gd);
+        int pad = Math.round(8 * density);
         tv.setPadding(pad, pad, pad, pad);
         tv.setGravity(Gravity.CENTER);
 
