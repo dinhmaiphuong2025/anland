@@ -294,14 +294,17 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 mProfile = new HudLayoutProfile();
             }
         }
+        boolean isSteamDeck = mPrefs.getBoolean("steam_deck_mode", false);
         int orientation = getResources().getConfiguration().orientation;
-        HudLayout layout = (orientation == Configuration.ORIENTATION_LANDSCAPE)
+        // In Steam Deck Mode, ALWAYS lock to landscape layout regardless of transient system orientation.
+        boolean wantLandscape = isSteamDeck || (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        HudLayout layout = wantLandscape
                 ? mProfile.landscapeLayout : mProfile.portraitLayout;
         if (layout == null) {
-            layout = (orientation == Configuration.ORIENTATION_LANDSCAPE)
+            layout = wantLandscape
                     ? HudLayoutProfile.createSteamDeckLayout(true)
                     : HudLayoutProfile.createDefaultPortraitLayout();
-            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            if (wantLandscape) {
                 mProfile.landscapeLayout = layout;
             } else {
                 mProfile.portraitLayout = layout;
@@ -741,18 +744,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         if (w > 0 && h > 0 && (w != oldw || h != oldh)) {
-            HudLayout layout = getActiveLayout();
-            for (int i = 0; i < mFloatingContainer.getChildCount(); i++) {
-                View view = mFloatingContainer.getChildAt(i);
-                if (i < layout.floatingButtons.size()) {
-                    HudButton model = layout.floatingButtons.get(i);
-                    float density = getResources().getDisplayMetrics().density;
-                    int bw = Math.round(model.widthDp * density);
-                    int bh = Math.round(model.heightDp * density);
-                    view.setX(model.posXPercent * w - bw * 0.5f);
-                    view.setY(model.posYPercent * h - bh * 0.5f);
-                }
-            }
+            rebuildActiveLayout();
         }
     }
 
