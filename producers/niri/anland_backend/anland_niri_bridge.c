@@ -247,8 +247,8 @@ int anland_niri_poll_input(anland_niri_bridge *b, anland_niri_input *out)
                 switch (code) {
                 case 304: key = 28; break;  /* BTN_A -> ENTER */
                 case 305: key = 1; break;   /* BTN_B -> ESC */
-                case 308: key = 45; break;  /* BTN_X -> KEY_X */
-                case 307: key = 46; break;  /* BTN_Y -> KEY_C */
+                case 307: key = 45; break;  /* BTN_X -> KEY_X */
+                case 308: key = 46; break;  /* BTN_Y -> KEY_C */
                 case 310: key = 15; break;  /* BTN_TL (L1) -> TAB */
                 case 311: key = 18; break;  /* BTN_TR (R1) -> KEY_E */
                 case 312: key = 1; break;   /* BTN_TL2 (L2) -> ESC */

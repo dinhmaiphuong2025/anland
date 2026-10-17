@@ -423,11 +423,11 @@ public final class HudKeyPickerDialog {
 
     private static List<KeyEntry> getGamepadKeys() {
         List<KeyEntry> list = new ArrayList<>();
-        // Face buttons (Xbox 360 / XInput mapping)
+        // Face buttons (Xbox 360 / XInput mapping: A=304, B=305, X=307, Y=308)
         list.add(new KeyEntry("GP: A", HudAction.gamepadBtn(304)));
         list.add(new KeyEntry("GP: B", HudAction.gamepadBtn(305)));
-        list.add(new KeyEntry("GP: X", HudAction.gamepadBtn(308)));
-        list.add(new KeyEntry("GP: Y", HudAction.gamepadBtn(307)));
+        list.add(new KeyEntry("GP: X", HudAction.gamepadBtn(307)));
+        list.add(new KeyEntry("GP: Y", HudAction.gamepadBtn(308)));
 
         // Bumpers & Triggers
         list.add(new KeyEntry("GP: LB (L1)", HudAction.gamepadBtn(310)));

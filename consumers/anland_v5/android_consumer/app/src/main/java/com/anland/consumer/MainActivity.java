@@ -2329,8 +2329,14 @@ public class MainActivity extends Activity
         // suppress the extra-keys bar here.
         String mode = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .getString(KEY_EXTRA_KEYS_MODE, "always");
-        if (imeVisible != wasImeVisible && "with_keyboard".equals(mode))
-            setExtraKeysBarVisible(imeVisible);
+        if (imeVisible != wasImeVisible) {
+            if ("with_keyboard".equals(mode))
+                setExtraKeysBarVisible(imeVisible);
+            if (imeVisible)
+                hideFloatingForKeyboard();
+            else
+                restoreHudAfterKeyboard();
+        }
 
         relayout();
     }
@@ -2676,8 +2682,13 @@ public class MainActivity extends Activity
         }
     }
 
-    // Mo ban phim: giu nguyen HUD cam ung, chi an ExtraKeys neu can.
+    // Mo ban phim: tu dong an HUD controller va ExtraKeys de khong che mat man hinh.
     private void hideFloatingForKeyboard() {
+        if (mHudOverlay != null && mHudOverlay.getVisibility() == View.VISIBLE
+                && !mHudOverlay.isEditMode() && !mHudAutoHidden) {
+            mHudAutoHidden = true;
+            mHudOverlay.setVisibility(View.GONE);
+        }
         if (extraKeysBar != null && extraKeysBar.getVisibility() == View.VISIBLE) {
             extraKeysBar.setVisibility(View.GONE);
             extraKeysBar.reset();
@@ -2686,7 +2697,20 @@ public class MainActivity extends Activity
     }
 
     private void restoreHudAfterKeyboard() {
-        // HUD khong bi an khi mo ban phim, giu nguyen trang thai.
+        if (mHudAutoHidden) {
+            mHudAutoHidden = false;
+            boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .getBoolean("use_hud_overlay", false);
+            boolean isSteamDeck = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .getBoolean(KEY_STEAM_DECK_MODE, false);
+            if ((useHud || isSteamDeck) && mHudOverlay != null && !mHudOverlay.isEditMode()
+                    && mImeBottom <= 0
+                    && (virtualKeyboardView == null
+                        || virtualKeyboardView.getVisibility() != View.VISIBLE)) {
+                mHudOverlay.setVisibility(View.VISIBLE);
+                mHudOverlay.rebuildActiveLayout();
+            }
+        }
     }
 
     // scales with the parsed row count. Records the layout JSON it was built from.
@@ -2934,36 +2958,6 @@ public class MainActivity extends Activity
     public void sendGamepad(int gpType, int code, int value) {
         if (mNative != null)
             mNative.sendGamepad(gpType, code, value);
-
-        // Fallback: Also dispatch matching evdev key / mouse events so games (Stardew Valley,
-        // RPGs, emulators) and desktop apps respond immediately even when vgpad uinput daemon
-        // is not active on the server.
-        int evdevKey = 0;
-        int mouseBtn = 0;
-        switch (code) {
-            case 304: evdevKey = 28; break;  // BTN_A -> KEY_ENTER
-            case 305: evdevKey = 1; break;   // BTN_B -> KEY_ESC
-            case 307: evdevKey = 46; break;  // BTN_Y -> KEY_C
-            case 308: evdevKey = 45; break;  // BTN_X -> KEY_X
-            case 310: evdevKey = 15; break;  // BTN_TL (L1) -> KEY_TAB
-            case 311: evdevKey = 18; break;  // BTN_TR (R1) -> KEY_E
-            case 312: mouseBtn = 1; break;   // BTN_TL2 (L2) -> Mouse Left Click
-            case 313: mouseBtn = 2; break;   // BTN_TR2 (R2) -> Mouse Right Click
-            case 314: evdevKey = 42; break;  // BTN_SELECT (View) -> KEY_LEFTSHIFT
-            case 315: evdevKey = 28; break;  // BTN_START (Menu) -> KEY_ENTER
-            case 316: evdevKey = 125; break; // BTN_MODE (Home) -> KEY_LEFTMETA
-            case 317: evdevKey = 29; break;  // BTN_THUMBL (L3) -> KEY_LEFTCTRL
-            case 318: evdevKey = 56; break;  // BTN_THUMBR (R3) -> KEY_LEFTALT
-            case 544: evdevKey = 103; break; // BTN_DPAD_UP -> KEY_UP
-            case 545: evdevKey = 108; break; // BTN_DPAD_DOWN -> KEY_DOWN
-            case 546: evdevKey = 105; break; // BTN_DPAD_LEFT -> KEY_LEFT
-            case 547: evdevKey = 106; break; // BTN_DPAD_RIGHT -> KEY_RIGHT
-        }
-        if (mouseBtn != 0) {
-            sendMouseButton(mouseBtn, value != 0);
-        } else if (evdevKey != 0) {
-            sendKey(value != 0 ? 0 : 1, evdevKey);
-        }
     }
 
     @Override

@@ -938,16 +938,39 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     @Override
                     public void onDpadPress(int direction, boolean pressed) {
                         if (!mIsEditMode && mHost != null) {
-                            // Map direction to gamepad D-Pad button codes
+                            // Map direction to gamepad D-Pad button codes AND Xbox 360 Hat axes
                             int code;
+                            int hatAxis = -1;
+                            int hatVal = 0;
                             switch (direction) {
-                                case HudDpadView.DIR_UP: code = 544; break;    // BTN_DPAD_UP
-                                case HudDpadView.DIR_DOWN: code = 545; break;  // BTN_DPAD_DOWN
-                                case HudDpadView.DIR_LEFT: code = 546; break;  // BTN_DPAD_LEFT
-                                case HudDpadView.DIR_RIGHT: code = 547; break; // BTN_DPAD_RIGHT
+                                case HudDpadView.DIR_UP:
+                                    code = 544; // BTN_DPAD_UP
+                                    hatAxis = 17; // ABS_HAT0Y
+                                    hatVal = pressed ? -1 : 0;
+                                    break;
+                                case HudDpadView.DIR_DOWN:
+                                    code = 545; // BTN_DPAD_DOWN
+                                    hatAxis = 17; // ABS_HAT0Y
+                                    hatVal = pressed ? 1 : 0;
+                                    break;
+                                case HudDpadView.DIR_LEFT:
+                                    code = 546; // BTN_DPAD_LEFT
+                                    hatAxis = 16; // ABS_HAT0X
+                                    hatVal = pressed ? -1 : 0;
+                                    break;
+                                case HudDpadView.DIR_RIGHT:
+                                    code = 547; // BTN_DPAD_RIGHT
+                                    hatAxis = 16; // ABS_HAT0X
+                                    hatVal = pressed ? 1 : 0;
+                                    break;
                                 default: return;
                             }
+                            // 1. Send standard BTN_DPAD_* (key type 16)
                             mHost.sendGamepad(16, code, pressed ? 1 : 0);
+                            // 2. Send ABS_HAT0X / ABS_HAT0Y (abs type 17) for Xbox 360 controller in SDL2 games (Isaac, Stardew Valley)
+                            if (hatAxis >= 0) {
+                                mHost.sendGamepad(17, hatAxis, hatVal);
+                            }
                         }
                     }
                 });

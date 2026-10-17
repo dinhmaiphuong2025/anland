@@ -287,7 +287,7 @@ public final class HudLayoutProfile {
         // 4. ABXY Diamond Cluster (Center at rightBaseX, Y = 0.65f) - Right margin <= 0.905f (~10%)
         HudButton btnY = new HudButton();
         btnY.label = "Y";
-        btnY.action = HudAction.gamepadBtn(307); // BTN_Y
+        btnY.action = HudAction.gamepadBtn(308); // BTN_Y (North on Xbox)
         btnY.widthDp = 44;
         btnY.heightDp = 44;
         btnY.cornerRadiusDp = 22;
@@ -297,7 +297,7 @@ public final class HudLayoutProfile {
 
         HudButton btnA = new HudButton();
         btnA.label = "A";
-        btnA.action = HudAction.gamepadBtn(304); // BTN_A
+        btnA.action = HudAction.gamepadBtn(304); // BTN_A (South on Xbox)
         btnA.widthDp = 44;
         btnA.heightDp = 44;
         btnA.cornerRadiusDp = 22;
@@ -307,7 +307,7 @@ public final class HudLayoutProfile {
 
         HudButton btnX = new HudButton();
         btnX.label = "X";
-        btnX.action = HudAction.gamepadBtn(308); // BTN_X
+        btnX.action = HudAction.gamepadBtn(307); // BTN_X (West on Xbox)
         btnX.widthDp = 44;
         btnX.heightDp = 44;
         btnX.cornerRadiusDp = 22;
@@ -317,7 +317,7 @@ public final class HudLayoutProfile {
 
         HudButton btnB = new HudButton();
         btnB.label = "B";
-        btnB.action = HudAction.gamepadBtn(305); // BTN_B
+        btnB.action = HudAction.gamepadBtn(305); // BTN_B (East on Xbox)
         btnB.widthDp = 44;
         btnB.heightDp = 44;
         btnB.cornerRadiusDp = 22;
@@ -469,30 +469,30 @@ public final class HudLayoutProfile {
         btnR3.posYPercent = 0.1326389f;
         layout.floatingButtons.add(btnR3);
 
-        // 3. ABXY Diamond Cluster
-        HudButton btnX = new HudButton();
-        btnX.label = "X";
-        btnX.action = HudAction.gamepadBtn(308);
-        btnX.widthDp = 42;
-        btnX.heightDp = 42;
-        btnX.cornerRadiusDp = 21;
-        btnX.posXPercent = 0.9200000f;
-        btnX.posYPercent = 0.2989583f;
-        layout.floatingButtons.add(btnX);
-
+        // 3. ABXY Diamond Cluster (Steam Deck / Xbox: Y=Top, X=Left, B=Right, A=Bottom)
         HudButton btnY = new HudButton();
         btnY.label = "Y";
-        btnY.action = HudAction.gamepadBtn(307);
+        btnY.action = HudAction.gamepadBtn(308); // BTN_Y
         btnY.widthDp = 42;
         btnY.heightDp = 42;
         btnY.cornerRadiusDp = 21;
-        btnY.posXPercent = 0.8854687f;
-        btnY.posYPercent = 0.4059028f;
+        btnY.posXPercent = 0.9200000f;
+        btnY.posYPercent = 0.2989583f;
         layout.floatingButtons.add(btnY);
+
+        HudButton btnX = new HudButton();
+        btnX.label = "X";
+        btnX.action = HudAction.gamepadBtn(307); // BTN_X
+        btnX.widthDp = 42;
+        btnX.heightDp = 42;
+        btnX.cornerRadiusDp = 21;
+        btnX.posXPercent = 0.8854687f;
+        btnX.posYPercent = 0.4059028f;
+        layout.floatingButtons.add(btnX);
 
         HudButton btnB = new HudButton();
         btnB.label = "B";
-        btnB.action = HudAction.gamepadBtn(305);
+        btnB.action = HudAction.gamepadBtn(305); // BTN_B
         btnB.widthDp = 42;
         btnB.heightDp = 42;
         btnB.cornerRadiusDp = 21;
@@ -502,7 +502,7 @@ public final class HudLayoutProfile {
 
         HudButton btnA = new HudButton();
         btnA.label = "A";
-        btnA.action = HudAction.gamepadBtn(304);
+        btnA.action = HudAction.gamepadBtn(304); // BTN_A
         btnA.widthDp = 42;
         btnA.heightDp = 42;
         btnA.cornerRadiusDp = 21;

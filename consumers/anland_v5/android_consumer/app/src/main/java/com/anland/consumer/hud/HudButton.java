@@ -139,6 +139,15 @@ public final class HudButton {
         // Default to mouse mode when an old profile does not record a mode.
         b.trackpointMode = obj.optString("trackpoint_mode", MODE_MOUSE);
         b.hapticEnabled = obj.optBoolean("haptic_enabled", true);
+
+        // Auto-migrate inverted X / Y gamepad button codes from legacy profiles
+        if (b.action != null && HudAction.TYPE_GAMEPAD.equals(b.action.type)) {
+            if ("X".equalsIgnoreCase(b.label) && b.action.code == 308) {
+                b.action.code = 307; // Correct to standard BTN_X
+            } else if ("Y".equalsIgnoreCase(b.label) && b.action.code == 307) {
+                b.action.code = 308; // Correct to standard BTN_Y
+            }
+        }
         return b;
     }
 
