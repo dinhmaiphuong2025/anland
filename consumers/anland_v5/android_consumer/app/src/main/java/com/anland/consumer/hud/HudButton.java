@@ -14,6 +14,7 @@ public final class HudButton {
     public static final String WIDGET_TRACKPOINT = "trackpoint";
     public static final String WIDGET_TOUCHPAD = "touchpad";
     public static final String WIDGET_SCROLLBAR = "scrollbar";
+    public static final String WIDGET_DPAD = "dpad";
 
     // Strongly-typed mirror of WIDGET_* above, used by code that switches
     // over the widget kind (e.g. the toolbar's add-widget chooser).
@@ -22,7 +23,8 @@ public final class HudButton {
         SUPER_GESTURE, // WIDGET_SUPER_GESTURE
         TRACKPOINT,    // WIDGET_TRACKPOINT
         TOUCHPAD,      // WIDGET_TOUCHPAD
-        SCROLLBAR      // WIDGET_SCROLLBAR
+        SCROLLBAR,     // WIDGET_SCROLLBAR
+        DPAD           // WIDGET_DPAD
     }
 
     public String id = UUID.randomUUID().toString();
@@ -67,6 +69,9 @@ public final class HudButton {
     public static final String MODE_STICK_RIGHT = "stick_right";
     public String trackpointMode = MODE_MOUSE;
 
+    // Per-button haptic feedback toggle (default: enabled)
+    public boolean hapticEnabled = true;
+
     public HudButton() {}
 
     public JSONObject toJSON() throws JSONException {
@@ -99,6 +104,7 @@ public final class HudButton {
             obj.put("trackpoint_deadzone_dp", trackpointDeadzoneDp);
             obj.put("trackpoint_mode", trackpointMode != null ? trackpointMode : MODE_MOUSE);
         }
+        obj.put("haptic_enabled", hapticEnabled);
         return obj;
     }
 
@@ -132,6 +138,7 @@ public final class HudButton {
         b.trackpointDeadzoneDp = obj.optInt("trackpoint_deadzone_dp", 4);
         // Default to mouse mode when an old profile does not record a mode.
         b.trackpointMode = obj.optString("trackpoint_mode", MODE_MOUSE);
+        b.hapticEnabled = obj.optBoolean("haptic_enabled", true);
         return b;
     }
 
@@ -159,6 +166,7 @@ public final class HudButton {
         d.trackpointSensitivity = this.trackpointSensitivity;
         d.trackpointDeadzoneDp = this.trackpointDeadzoneDp;
         d.trackpointMode = this.trackpointMode;
+        d.hapticEnabled = this.hapticEnabled;
         return d;
     }
 }

@@ -211,6 +211,67 @@ public class SettingsActivity extends Activity {
         title.setPadding(0, 0, 0, dp(20));
         root.addView(title);
 
+        // Steam Deck Mode quick-action card
+        {
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+            boolean isSteamDeck = prefs.getBoolean("steam_deck_mode", false);
+
+            LinearLayout deckCard = new LinearLayout(this);
+            deckCard.setOrientation(LinearLayout.HORIZONTAL);
+            deckCard.setGravity(Gravity.CENTER_VERTICAL);
+            deckCard.setPadding(dp(20), dp(16), dp(20), dp(16));
+            deckCard.setBackground(M3.createRippleDrawable(this, M3.RADIUS_CARD,
+                    isSteamDeck ? 0xFF1A3B4D : M3.COLOR_SURFACE_LOW,
+                    isSteamDeck ? 0xFF2A5B7D : M3.COLOR_SURFACE_HIGH,
+                    isSteamDeck ? 0xFF00E5FF : M3.COLOR_BORDER_SUBTLE));
+            LinearLayout.LayoutParams deckLp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            deckLp.setMargins(0, 0, 0, dp(16));
+            deckCard.setLayoutParams(deckLp);
+
+            LinearLayout deckTexts = new LinearLayout(this);
+            deckTexts.setOrientation(LinearLayout.VERTICAL);
+            deckTexts.setLayoutParams(new LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+            TextView deckTitle = new TextView(this);
+            deckTitle.setText(isSteamDeck ? "Steam Deck Mode: ON" : "Steam Deck Mode");
+            deckTitle.setTextSize(17);
+            deckTitle.setTypeface(null, Typeface.BOLD);
+            deckTitle.setTextColor(isSteamDeck ? 0xFF00E5FF : M3.COLOR_TEXT_PRIMARY);
+            deckTexts.addView(deckTitle);
+
+            TextView deckSub = new TextView(this);
+            deckSub.setText(isSteamDeck
+                    ? "Tap to exit and return to portrait"
+                    : "Tap to activate landscape handheld mode");
+            deckSub.setTextSize(13);
+            deckSub.setTextColor(M3.COLOR_TEXT_MUTED);
+            deckSub.setPadding(0, dp(2), 0, 0);
+            deckTexts.addView(deckSub);
+
+            deckCard.addView(deckTexts);
+
+            // Glyph indicator
+            TextView deckGlyph = new TextView(this);
+            deckGlyph.setText(isSteamDeck ? "⣿" : "⠶");
+            deckGlyph.setTextSize(24);
+            deckGlyph.setTextColor(isSteamDeck ? 0xFF00E5FF : 0xFF80DEEA);
+            deckCard.addView(deckGlyph);
+
+            deckCard.setOnClickListener(v -> {
+                boolean cur = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                        .getBoolean("steam_deck_mode", false);
+                // Toggle Steam Deck Mode and go back to the running app
+                if (MainActivity.sInstance != null) {
+                    MainActivity.sInstance.setSteamDeckMode(!cur);
+                }
+                finish();
+            });
+
+            root.addView(deckCard);
+        }
+
         addCategoryRow(root, R.string.cat_keyboard_title,
             R.string.cat_keyboard_subtitle, this::showKeyboardPage);
         addCategoryRow(root, R.string.cat_touchpad_title,
@@ -339,7 +400,7 @@ public class SettingsActivity extends Activity {
         boolean useHud = prefs.getBoolean("use_hud_overlay", false);
 
         TextView header = new TextView(this);
-        header.setText("3. Nút nổi HUD & Gamepad điều khiển");
+        header.setText("3. HUD Overlay & Gamepad Controls");
         header.setTextSize(16);
         header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
@@ -357,7 +418,7 @@ public class SettingsActivity extends Activity {
 
         Switch hudSwitch = new Switch(this);
         M3.styleSwitch(hudSwitch);
-        hudSwitch.setText("Bật Nút Nổi HUD (Floating Controls)");
+        hudSwitch.setText("Enable Floating HUD Controls");
         hudSwitch.setChecked(useHud);
         hudSwitch.setPadding(0, dp(4), 0, dp(4));
         hudSwitch.setOnCheckedChangeListener((v, checked) -> {
@@ -370,7 +431,7 @@ public class SettingsActivity extends Activity {
         boolean useSteamDeck = prefs.getBoolean("steam_deck_mode", false);
         Switch steamDeckSwitch = new Switch(this);
         M3.styleSwitch(steamDeckSwitch);
-        steamDeckSwitch.setText("Chế độ Steam Deck (Handheld Console Mode)");
+        steamDeckSwitch.setText("Steam Deck Handheld Console Mode");
         steamDeckSwitch.setChecked(useSteamDeck);
         steamDeckSwitch.setPadding(0, dp(8), 0, dp(4));
         steamDeckSwitch.setOnCheckedChangeListener((v, checked) -> {
@@ -387,7 +448,7 @@ public class SettingsActivity extends Activity {
                 } catch (Exception ignored) {}
                 edit.apply();
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-                Toast.makeText(this, "Đang chuyển sang màn hình ngang Steam Deck...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Switching to Steam Deck landscape...", Toast.LENGTH_SHORT).show();
                 if (isTaskRoot()) {
                     Intent intent = new Intent(this, SecondaryActivity.class);
                     if (mCurrentSocketPath != null) intent.putExtra(MainActivity.EXTRA_SOCKET_PATH, mCurrentSocketPath);
@@ -404,14 +465,14 @@ public class SettingsActivity extends Activity {
         card.addView(steamDeckSwitch);
 
         TextView deckHint = new TextView(this);
-        deckHint.setText("Tách biệt hoàn toàn: Tự động co màn hình 16:10 giữa 2 tay cầm, tắt cảm ứng full màn hình (chống cấn D-Pad), và dùng ô Trackpad cảm ứng riêng để di chuột.");
+        deckHint.setText("Full isolation: Auto-resize 16:10 canvas between grips, disable full-screen touch (prevent D-Pad conflict), use dedicated Trackpad for mouse.");
         deckHint.setTextSize(12);
         deckHint.setTextColor(0xFF80DEEA);
         deckHint.setPadding(0, dp(2), 0, dp(8));
         card.addView(deckHint);
 
         TextView hudHint = new TextView(this);
-        hudHint.setText("Khi xoay ngang và bật HUD / Steam Deck, ExtraKeysBar sẽ tự động tắt hoàn toàn để không che khuất tầm nhìn.");
+        hudHint.setText("When in landscape with HUD / Steam Deck active, ExtraKeysBar is automatically hidden to maximize screen visibility.");
         hudHint.setTextSize(12);
         hudHint.setTextColor(M3.COLOR_TEXT_MUTED);
         hudHint.setPadding(0, dp(2), 0, dp(8));
@@ -420,7 +481,7 @@ public class SettingsActivity extends Activity {
         if (useHud) {
             Button btnEditHud = new Button(this);
             styleSettingsButton(btnEditHud);
-            btnEditHud.setText("Mở Visual HUD Layout Editor");
+            btnEditHud.setText("Open Visual HUD Layout Editor");
             btnEditHud.setOnClickListener(v -> {
                 Intent intent = new Intent(this, MainActivity.class);
                 intent.setAction("OPEN_HUD_EDITOR");
@@ -444,7 +505,7 @@ public class SettingsActivity extends Activity {
 
             Button btnPresets = new Button(this);
             styleSettingsButton(btnPresets);
-            btnPresets.setText("Chọn Preset Bố Cục (Console Gamepad / Desktop)...");
+            btnPresets.setText("Choose Layout Preset (Console Gamepad / Desktop)...");
             btnPresets.setOnClickListener(v -> showHudPresetsDialog());
             card.addView(btnPresets);
         }
@@ -474,7 +535,7 @@ public class SettingsActivity extends Activity {
                                 .putString("hud_layout_profile_v2", profile.toJSON().toString())
                                 .apply();
                     setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-                    Toast.makeText(this, "Đang vào Chế độ Steam Deck (Xoay ngang)...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Entering Steam Deck Mode (Landscape)...", Toast.LENGTH_SHORT).show();
                     if (isTaskRoot()) {
                         Intent intent = new Intent(this, SecondaryActivity.class);
                         if (mCurrentSocketPath != null) intent.putExtra(MainActivity.EXTRA_SOCKET_PATH, mCurrentSocketPath);
@@ -552,7 +613,7 @@ public class SettingsActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
         TextView header = new TextView(this);
-        header.setText("1. Bàn phím chia đôi (Virtual Keyboard Split-Arc)");
+        header.setText("1. Split-Arc Virtual Keyboard");
         header.setTextSize(16);
         header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
@@ -579,7 +640,7 @@ public class SettingsActivity extends Activity {
         card.addView(splitArcSwitch);
 
         TextView splitArcHint = new TextView(this);
-        splitArcHint.setText("Bàn phím công thái học vòm cong hai bên ngón cái khi xoay ngang, để trống phần giữa màn hình.");
+        splitArcHint.setText("Ergonomic arc-curved split keyboard for thumbs in landscape, leaving the center of the screen clear.");
         splitArcHint.setTextSize(12);
         splitArcHint.setTextColor(M3.COLOR_TEXT_MUTED);
         splitArcHint.setPadding(0, dp(2), 0, dp(10));
@@ -588,7 +649,7 @@ public class SettingsActivity extends Activity {
         // Wings Editor Button
         Button btnWings = new Button(this);
         M3.styleButton(btnWings, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_PRIMARY);
-        btnWings.setText("Tùy biến cánh phím phụ (Wings Editor)...");
+        btnWings.setText("Customize Top Wings (Wings Editor)...");
         btnWings.setTextSize(12.5f);
         btnWings.setOnClickListener(v -> showWingsEditorDialog());
         LinearLayout.LayoutParams bwLp = new LinearLayout.LayoutParams(
@@ -600,7 +661,7 @@ public class SettingsActivity extends Activity {
         // Collapsible Advanced Settings
         final Button btnAdvVkb = new Button(this);
         M3.styleButton(btnAdvVkb, M3.COLOR_SURFACE_HIGHEST, 0x33FFFFFF, M3.COLOR_TEXT_SECONDARY);
-        btnAdvVkb.setText("Cài đặt bàn phím nâng cao ▼");
+        btnAdvVkb.setText("Advanced Keyboard Settings ▼");
         btnAdvVkb.setTextSize(12);
         card.addView(btnAdvVkb);
 
@@ -612,19 +673,19 @@ public class SettingsActivity extends Activity {
         btnAdvVkb.setOnClickListener(v -> {
             boolean visible = (advVkbContainer.getVisibility() == View.VISIBLE);
             advVkbContainer.setVisibility(visible ? View.GONE : View.VISIBLE);
-            btnAdvVkb.setText(visible ? "Cài đặt bàn phím nâng cao ▼" : "Cài đặt bàn phím nâng cao ▲");
+            btnAdvVkb.setText(visible ? "Advanced Keyboard Settings ▼" : "Advanced Keyboard Settings ▲");
         });
 
         // Animation Style
         TextView animLabel = new TextView(this);
-        animLabel.setText("Kiểu hoạt ảnh mở phím (Animation)");
+        animLabel.setText("Open Animation Style");
         animLabel.setTextSize(13);
         animLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
         animLabel.setPadding(0, dp(6), 0, dp(2));
         advVkbContainer.addView(animLabel);
 
         Spinner animSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
-        String[] animOptions = {"Fan Open (Quạt mở - Mặc định)", "Corner Zoom (Phóng từ góc)"};
+        String[] animOptions = {"Fan Open (Default)", "Corner Zoom"};
         setupDarkSpinner(animSpinner, animOptions);
         animSpinner.setSelection(prefs.getInt("split_arc_anim", 0));
         animSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -637,14 +698,14 @@ public class SettingsActivity extends Activity {
 
         // Handedness
         TextView handLabel = new TextView(this);
-        handLabel.setText("Bố cục tay thuận (Handedness)");
+        handLabel.setText("Handedness");
         handLabel.setTextSize(13);
         handLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
         handLabel.setPadding(0, dp(10), 0, dp(2));
         advVkbContainer.addView(handLabel);
 
         Spinner handSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
-        String[] handOptions = {"Thuận tay trái (G & V bên trái)", "Thuận tay phải (G & V bên phải)"};
+        String[] handOptions = {"Left-handed (G & V on left)", "Right-handed (G & V on right)"};
         setupDarkSpinner(handSpinner, handOptions);
         handSpinner.setSelection("right".equals(prefs.getString("keyboard_handedness", "left")) ? 1 : 0);
         handSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -657,14 +718,14 @@ public class SettingsActivity extends Activity {
 
         // Theme
         TextView themeLabel = new TextView(this);
-        themeLabel.setText("Chủ đề bàn phím (Theme)");
+        themeLabel.setText("Keyboard Theme");
         themeLabel.setTextSize(13);
         themeLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
         themeLabel.setPadding(0, dp(10), 0, dp(2));
         advVkbContainer.addView(themeLabel);
 
         Spinner themeSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
-        String[] themeOptions = {"Filled (Nền tối M3)", "Border Only (Trong suốt có viền)", "Transparent Full (Chỉ chữ)"};
+        String[] themeOptions = {"Filled (Dark M3)", "Border Only (Transparent)", "Transparent Full (Text Only)"};
         setupDarkSpinner(themeSpinner, themeOptions);
         themeSpinner.setSelection(prefs.getInt("keyboard_theme", 0));
         themeSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
@@ -677,14 +738,14 @@ public class SettingsActivity extends Activity {
 
         // Bottom Margin
         TextView marginLabel = new TextView(this);
-        marginLabel.setText("Khoảng cách đáy (Bottom Margin)");
+        marginLabel.setText("Bottom Margin");
         marginLabel.setTextSize(13);
         marginLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
         marginLabel.setPadding(0, dp(10), 0, dp(2));
         advVkbContainer.addView(marginLabel);
 
         Spinner marginSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
-        String[] marginOptions = {"8dp (Thấp - Mặc định)", "16dp (Vừa)", "24dp (Cao)", "32dp (Rất cao)"};
+        String[] marginOptions = {"8dp (Low - Default)", "16dp (Medium)", "24dp (High)", "32dp (Very High)"};
         setupDarkSpinner(marginSpinner, marginOptions);
         float currentMargin = prefs.getFloat("keyboard_bottom_margin_dp", 8f);
         int marginSel = 0;
@@ -706,14 +767,14 @@ public class SettingsActivity extends Activity {
 
         // Key Height
         TextView heightLabel = new TextView(this);
-        heightLabel.setText("Chiều cao phím (Key Height)");
+        heightLabel.setText("Key Height");
         heightLabel.setTextSize(13);
         heightLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
         heightLabel.setPadding(0, dp(10), 0, dp(2));
         advVkbContainer.addView(heightLabel);
 
         Spinner heightSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
-        String[] heightOptions = {"38dp (Nhỏ gọn)", "42dp (Chuẩn)", "46dp (Lớn)", "50dp (Rất lớn)"};
+        String[] heightOptions = {"38dp (Compact)", "42dp (Standard)", "46dp (Large)", "50dp (Extra Large)"};
         setupDarkSpinner(heightSpinner, heightOptions);
         float currentHeight = prefs.getFloat("keyboard_key_height_dp", 42f);
         int heightSel = 1;
@@ -777,7 +838,7 @@ public class SettingsActivity extends Activity {
         }
 
         TextView title = new TextView(this);
-        title.setText("CUSTOMIZE TOP WINGS (PHÍM PHỤ)");
+        title.setText("CUSTOMIZE TOP WINGS");
         title.setTextColor(M3.COLOR_TEXT_PRIMARY);
         title.setTextSize(15);
         title.setTypeface(Typeface.DEFAULT_BOLD);
@@ -785,7 +846,7 @@ public class SettingsActivity extends Activity {
         root.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Chạm vào ô phím để gán ký tự / chức năng bằng HUD Key Picker.");
+        sub.setText("Tap a key slot to assign a character or function via HUD Key Picker.");
         sub.setTextSize(12);
         sub.setTextColor(M3.COLOR_TEXT_MUTED);
         sub.setPadding(0, 0, 0, dp(12));
@@ -829,7 +890,7 @@ public class SettingsActivity extends Activity {
 
         // Left Wing Card
         TextView leftTitle = new TextView(this);
-        leftTitle.setText("LEFT WING (CÁNH TRÁI - 6 PHÍM)");
+        leftTitle.setText("LEFT WING (6 KEYS)");
         leftTitle.setTextColor(M3.COLOR_PRIMARY);
         leftTitle.setTextSize(12);
         leftTitle.setTypeface(Typeface.DEFAULT_BOLD);
@@ -841,7 +902,7 @@ public class SettingsActivity extends Activity {
 
         // Right Wing Card
         TextView rightTitle = new TextView(this);
-        rightTitle.setText("RIGHT WING (CÁNH PHẢI - 6 PHÍM)");
+        rightTitle.setText("RIGHT WING (6 KEYS)");
         rightTitle.setTextColor(M3.COLOR_SECONDARY);
         rightTitle.setTextSize(12);
         rightTitle.setTypeface(Typeface.DEFAULT_BOLD);
@@ -871,7 +932,7 @@ public class SettingsActivity extends Activity {
         btnReset.setTextSize(11);
         btnReset.setOnClickListener(v -> {
             prefs.edit().remove("split_arc_top_wings").apply();
-            Toast.makeText(this, "Đã đặt lại cánh phím mặc định (Cụm mũi tên Inverted-T)", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Wings reset to default (Inverted-T arrows)", Toast.LENGTH_SHORT).show();
             dialog.dismiss();
             showWingsEditorDialog();
         });
@@ -988,7 +1049,7 @@ public class SettingsActivity extends Activity {
             JSONObject layout = normalizeLayoutJson(json);
             JSONArray rows = layout.optJSONArray("rows");
             if (rows == null || rows.length() == 0) {
-                Toast.makeText(this, "Không có dữ liệu ExtraKeys", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "No ExtraKeys data found", Toast.LENGTH_SHORT).show();
                 return;
             }
 
@@ -1044,7 +1105,7 @@ public class SettingsActivity extends Activity {
             }
 
             prefs.edit().putString("split_arc_top_wings", wingArr.toString()).apply();
-            Toast.makeText(this, "Đã đồng bộ cánh phím từ ExtraKeysBar!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Wings synced from ExtraKeysBar!", Toast.LENGTH_SHORT).show();
             dialog.dismiss();
             showWingsEditorDialog();
         } catch (Exception e) {
@@ -1238,7 +1299,7 @@ public class SettingsActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
         TextView header = new TextView(this);
-        header.setText("2. Thanh phím phụ đáy màn hình (ExtraKeys Bar)");
+        header.setText("2. ExtraKeys Bar (Bottom Strip)");
         header.setTextSize(16);
         header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
@@ -1309,7 +1370,7 @@ public class SettingsActivity extends Activity {
         // Collapsible Visual Layout Editor Button
         final Button btnToggleVisual = new Button(this);
         M3.styleButton(btnToggleVisual, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_PRIMARY);
-        btnToggleVisual.setText("Tùy biến bố cục ExtraKeys (Visual Editor) ▼");
+        btnToggleVisual.setText("Customize ExtraKeys Layout (Visual Editor) ▼");
         btnToggleVisual.setTextSize(12.5f);
         card.addView(btnToggleVisual);
 
@@ -1321,7 +1382,7 @@ public class SettingsActivity extends Activity {
         btnToggleVisual.setOnClickListener(v -> {
             boolean visible = (editorContainer.getVisibility() == View.VISIBLE);
             editorContainer.setVisibility(visible ? View.GONE : View.VISIBLE);
-            btnToggleVisual.setText(visible ? "Tùy biến bố cục ExtraKeys (Visual Editor) ▼" : "Tùy biến bố cục ExtraKeys (Visual Editor) ▲");
+            btnToggleVisual.setText(visible ? "Customize ExtraKeys Layout (Visual Editor) ▼" : "Customize ExtraKeys Layout (Visual Editor) ▲");
         });
 
         buildVisualExtraKeysEditor(editorContainer, prefs);
@@ -1333,7 +1394,7 @@ public class SettingsActivity extends Activity {
     private void buildVisualExtraKeysEditor(LinearLayout container, SharedPreferences prefs) {
         try {
             TextView layoutSub = new TextView(this);
-            layoutSub.setText("Chạm vào ô phím để gán ký tự / chức năng hoặc cử chỉ vuốt lên bằng HUD Key Picker.");
+            layoutSub.setText("Tap a key slot to assign a character, function, or swipe-up action via HUD Key Picker.");
             layoutSub.setTextSize(12);
             layoutSub.setTextColor(M3.COLOR_TEXT_MUTED);
             layoutSub.setPadding(0, 0, 0, dp(8));
@@ -1506,7 +1567,7 @@ public class SettingsActivity extends Activity {
 
     private void buildSystemShortcutsSection(LinearLayout root) {
         TextView header = new TextView(this);
-        header.setText("4. Phím tắt hệ thống (System & Shortcuts)");
+        header.setText("4. System & Shortcuts");
         header.setTextSize(16);
         header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
@@ -2808,8 +2869,8 @@ public class SettingsActivity extends Activity {
     Spinner ratioSpinner = new Spinner(this, Spinner.MODE_DROPDOWN);
     String[] ratioOptions = {
             "Auto Stretch (Fullscreen)",
-            "🎮 Steam Deck Handheld 16:10 (Nằm gọn giữa hai tay cầm)",
-            "Fit Between Keyboards (Nằm gọn giữa hai phím)",
+            "Steam Deck Handheld 16:10 (Centered between grips)",
+            "Fit Between Keyboards",
             "16:9 Letterbox (1920x1080)",
             "14:9 Letterbox (1680x1080)",
             "4:3 Letterbox (1440x1080)"

@@ -2504,10 +2504,10 @@ public class MainActivity extends Activity
                 profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
                 prefs.edit().putString("hud_layout_profile_v2", profile.toJSON().toString()).apply();
             } catch (Exception ignored) {}
-            android.widget.Toast.makeText(this, "Đã bật Chế độ Steam Deck (Xoay ngang)", android.widget.Toast.LENGTH_SHORT).show();
+            android.widget.Toast.makeText(this, "Steam Deck Mode enabled (Landscape)", android.widget.Toast.LENGTH_SHORT).show();
         } else {
-            applyOrientation();
-            android.widget.Toast.makeText(this, "Đã thoát Chế độ Steam Deck", android.widget.Toast.LENGTH_SHORT).show();
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            android.widget.Toast.makeText(this, "Steam Deck Mode disabled (Portrait)", android.widget.Toast.LENGTH_SHORT).show();
         }
 
         if (mHudOverlay != null) {

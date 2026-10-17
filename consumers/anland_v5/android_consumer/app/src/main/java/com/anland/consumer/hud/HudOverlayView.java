@@ -610,14 +610,16 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 "Super Gesture Nub",
                 "TrackPoint (Mouse / Scroll)",
                 "Steam Deck Trackpad (Touchpad / Mouse)",
-                "Scroll Bar (Vertical / Horizontal)"
+                "Scroll Bar (Vertical / Horizontal)",
+                "D-Pad (Sliding Cross)"
         };
         final HudButton.WidgetKind[] kinds = new HudButton.WidgetKind[] {
                 HudButton.WidgetKind.KEY,
                 HudButton.WidgetKind.SUPER_GESTURE,
                 HudButton.WidgetKind.TRACKPOINT,
                 HudButton.WidgetKind.TOUCHPAD,
-                HudButton.WidgetKind.SCROLLBAR
+                HudButton.WidgetKind.SCROLLBAR,
+                HudButton.WidgetKind.DPAD
         };
         mInspectorView.setVisibility(GONE);
         AlertDialog dialog = new android.app.AlertDialog.Builder(getContext(),
@@ -682,6 +684,15 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 b.cornerRadiusDp = 17;
                 b.posXPercent = 0.95f;
                 b.posYPercent = 0.5f;
+                break;
+            case DPAD:
+                b.widgetType = HudButton.WIDGET_DPAD;
+                b.label = "D-PAD";
+                b.widthDp = 130;
+                b.heightDp = 130;
+                b.cornerRadiusDp = 65;
+                b.posXPercent = 0.15f;
+                b.posYPercent = 0.6f;
                 break;
         }
         getActiveLayout().floatingButtons.add(b);
@@ -925,6 +936,25 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     }
                 });
                 ((HudScrollBarView) widgetView).setInEditMode(mIsEditMode);
+            } else if (HudButton.WIDGET_DPAD.equals(b.widgetType)) {
+                widgetView = new HudDpadView(getContext(), b, new HudDpadView.DpadDispatcher() {
+                    @Override
+                    public void onDpadPress(int direction, boolean pressed) {
+                        if (!mIsEditMode && mHost != null) {
+                            // Map direction to gamepad D-Pad button codes
+                            int code;
+                            switch (direction) {
+                                case HudDpadView.DIR_UP: code = 544; break;    // BTN_DPAD_UP
+                                case HudDpadView.DIR_DOWN: code = 545; break;  // BTN_DPAD_DOWN
+                                case HudDpadView.DIR_LEFT: code = 546; break;  // BTN_DPAD_LEFT
+                                case HudDpadView.DIR_RIGHT: code = 547; break; // BTN_DPAD_RIGHT
+                                default: return;
+                            }
+                            mHost.sendGamepad(16, code, pressed ? 1 : 0);
+                        }
+                    }
+                });
+                ((HudDpadView) widgetView).setInEditMode(mIsEditMode);
             } else {
                 widgetView = new HudFreeformButtonView(getContext(), b, new HudFreeformButtonView.ButtonActionListener() {
                     @Override

@@ -78,6 +78,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private EditText mTrackSensitivityInput;
     private SeekBar mTrackDeadzoneSeekBar;
     private EditText mTrackDeadzoneInput;
+    // Per-button haptic toggle
+    private android.widget.Switch mHapticSwitch;
     private Button mBtnDelete;
     private Button mBtnDuplicate;
     private boolean mConfirmDeleteActive = false;
@@ -461,6 +463,22 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mColorThemeRow = (LinearLayout) createColorPresetsRow();
         content.addView(mColorThemeRow);
 
+        // Per-button Haptic Feedback toggle
+        mHapticSwitch = new android.widget.Switch(getContext());
+        M3.styleSwitch(mHapticSwitch);
+        mHapticSwitch.setText("Haptic Feedback");
+        mHapticSwitch.setTextColor(0xFFCCCCCC);
+        mHapticSwitch.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 12);
+        mHapticSwitch.setPadding(0, dp(6), 0, dp(6));
+        mHapticSwitch.setOnCheckedChangeListener((v, checked) -> {
+            if (mIsProgrammaticChange) return;
+            if (mActiveButton != null) {
+                mActiveButton.hapticEnabled = checked;
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+            }
+        });
+        content.addView(mHapticSwitch);
+
         mScrollView.addView(content);
         addView(mScrollView, new LayoutParams(dp(280), dp(320)));
     }
@@ -551,6 +569,12 @@ public final class HudPropertyInspectorView extends LinearLayout {
         if (mColorThemeRow != null) mColorThemeRow.setVisibility(VISIBLE);
         if (mBtnDelete != null) mBtnDelete.setVisibility(VISIBLE);
         if (mBtnDuplicate != null) mBtnDuplicate.setVisibility(VISIBLE);
+        // Sync haptic toggle
+        if (mHapticSwitch != null) {
+            mIsProgrammaticChange = true;
+            try { mHapticSwitch.setChecked(b.hapticEnabled); } finally { mIsProgrammaticChange = false; }
+            mHapticSwitch.setVisibility(VISIBLE);
+        }
     }
 
     // Slim inspector for a dock strip button: only the display label and the
