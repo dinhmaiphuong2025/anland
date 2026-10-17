@@ -135,8 +135,7 @@ public final class SuperGestureButtonView extends View {
     }
 
     private boolean isHapticEnabled() {
-        return getContext().getSharedPreferences("anland_settings", Context.MODE_PRIVATE)
-                .getBoolean("haptic_feedback_enabled", true);
+        return mModel.hapticEnabled;
     }
 
     @Override

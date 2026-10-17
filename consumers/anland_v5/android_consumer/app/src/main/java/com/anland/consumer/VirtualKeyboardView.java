@@ -1720,10 +1720,7 @@ public class VirtualKeyboardView extends View {
                         mLongPressHandler.removeCallbacksAndMessages(null);
                     }
                     if (hitKey == null) {
-                        if (mIsSplitArcMode && action == MotionEvent.ACTION_DOWN) {
-                            return false;
-                        }
-                        break;
+                        return false;
                     }
 
                     if (isHapticEnabled()) {
@@ -1868,7 +1865,10 @@ public class VirtualKeyboardView extends View {
                     mLongPressHandler.removeCallbacksAndMessages(null);
 
                     KeyData released = activePointers.get(pointerId);
-                    if (released == null) break;
+                    if (released == null) {
+                        if (!mIsTouchScrolling && activePointers.size() == 0) return false;
+                        break;
+                    }
 
                     if (released == mTouchScrollPadKey || pointerId == mTouchScrollPointerId) {
                         mIsTouchScrolling = false;
@@ -1934,6 +1934,9 @@ public class VirtualKeyboardView extends View {
                 }
 
                 case MotionEvent.ACTION_MOVE: {
+                    if (!mIsTouchScrolling && activePointers.size() == 0) {
+                        return false;
+                    }
                     if (mIsTouchScrolling && mTouchScrollPointerId >= 0) {
                         int idx = event.findPointerIndex(mTouchScrollPointerId);
                         if (idx >= 0) {

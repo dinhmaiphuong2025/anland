@@ -11,12 +11,12 @@ import android.view.MotionEvent;
 import android.view.View;
 
 /**
- * Unified D-Pad widget that supports continuous sliding between directions.
- * The user can drag their finger across the pad without lifting, and the
- * active direction changes instantly as the finger crosses sector boundaries.
- *
- * Sectors: UP (top), DOWN (bottom), LEFT (left), RIGHT (right), CENTER (dead zone).
- * Diagonal sectors fire both adjacent keys simultaneously (UP+LEFT, UP+RIGHT, etc.).
+ * Premium Handheld Console D-Pad widget with sliding continuous direction tracking.
+ * Features:
+ * - Authentic 3D sculpted 4-way cross arms with tactile center dish (Steam Deck / DualSense style).
+ * - Smooth sliding between directions with active sector illumination.
+ * - Simultaneous diagonal sector activation (UP+LEFT, UP+RIGHT, DOWN+LEFT, DOWN+RIGHT).
+ * - Per-widget haptic feedback toggle.
  */
 public final class HudDpadView extends View {
 
@@ -33,22 +33,21 @@ public final class HudDpadView extends View {
     private final HudButton mModel;
     private final DpadDispatcher mDispatcher;
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mArmPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mArrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF mBounds = new RectF();
+    private final RectF mArmRect = new RectF();
 
     private boolean mInEditMode = false;
     private boolean mIsPressed = false;
-    // Currently active directions (can have up to 2 for diagonals)
     private boolean mUpActive = false;
     private boolean mDownActive = false;
     private boolean mLeftActive = false;
     private boolean mRightActive = false;
 
-    // Dead zone radius fraction (center of the pad)
+    // Dead zone fraction
     private static final float DEADZONE_FRAC = 0.18f;
-    // Diagonal threshold: if angle is within 22.5° of a diagonal, fire both axes
-    private static final float DIAG_HALF_ANGLE = 22.5f;
 
     public HudDpadView(Context context, HudButton model, DpadDispatcher dispatcher) {
         super(context);
@@ -59,7 +58,6 @@ public final class HudDpadView extends View {
         mTextPaint.setTextAlign(Paint.Align.CENTER);
         mTextPaint.setFakeBoldText(true);
 
-        mArrowPaint.setColor(0xCCFFFFFF);
         mArrowPaint.setStyle(Paint.Style.FILL);
     }
 
@@ -70,6 +68,10 @@ public final class HudDpadView extends View {
 
     public HudButton getModel() {
         return mModel;
+    }
+
+    private boolean isHapticEnabled() {
+        return mModel.hapticEnabled;
     }
 
     @Override
@@ -86,54 +88,122 @@ public final class HudDpadView extends View {
         float density = getResources().getDisplayMetrics().density;
         float w = getWidth();
         float h = getHeight();
+        if (w <= 0 || h <= 0) return;
+
         float cx = w * 0.5f;
         float cy = h * 0.5f;
-        mBounds.set(2, 2, w - 2, h - 2);
+        float minDim = Math.min(w, h);
+        float radius = minDim * 0.5f - 2f * density;
+        int activeAccent = mModel.activeColor != 0 ? mModel.activeColor : 0xFF80DEEA;
+        int baseBg = mModel.bgColor != 0 ? mModel.bgColor : 0xE61A1C29;
 
-        // Background circle / rounded rect
+        // 1. Outer Circular Bezel / Dish
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mModel.bgColor);
+        mPaint.setColor(baseBg);
         mPaint.setAlpha(Math.round(mModel.opacity * 255));
-        float corner = mModel.cornerRadiusDp * density;
-        canvas.drawRoundRect(mBounds, corner, corner, mPaint);
+        canvas.drawCircle(cx, cy, radius, mPaint);
 
-        // Border stroke
+        // Outer Bezel Rim
         mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(Math.max(1, Math.round(1.0f * density)));
-        mPaint.setColor(0x66FFFFFF);
-        canvas.drawRoundRect(mBounds, corner, corner, mPaint);
+        mPaint.setStrokeWidth(Math.max(1, Math.round(1.5f * density)));
+        mPaint.setColor(mIsPressed ? activeAccent : 0x5580DEEA);
+        canvas.drawCircle(cx, cy, radius, mPaint);
 
-        // Draw directional arrows with active highlights
-        float arrowSize = Math.min(w, h) * 0.16f;
-        float arrowOffset = Math.min(w, h) * 0.30f;
+        // Inner Tactile Bevel Ring
+        float innerBevelR = radius * 0.88f;
+        mPaint.setStrokeWidth(1.0f * density);
+        mPaint.setColor(0x22FFFFFF);
+        canvas.drawCircle(cx, cy, innerBevelR, mPaint);
 
-        // UP arrow
-        drawArrow(canvas, cx, cy - arrowOffset, arrowSize, 0, mUpActive);
-        // DOWN arrow
-        drawArrow(canvas, cx, cy + arrowOffset, arrowSize, 180, mDownActive);
-        // LEFT arrow
-        drawArrow(canvas, cx - arrowOffset, cy, arrowSize, 270, mLeftActive);
-        // RIGHT arrow
-        drawArrow(canvas, cx + arrowOffset, cy, arrowSize, 90, mRightActive);
+        // 2. Sculpted Cross Arms (Top, Bottom, Left, Right)
+        float armWidth = minDim * 0.32f;
+        float armLength = radius * 0.85f;
+        float armCorner = 8f * density;
 
-        // Center dot (dead zone indicator)
+        // Draw Vertical Cross Bar
+        mArmRect.set(cx - armWidth * 0.5f, cy - armLength, cx + armWidth * 0.5f, cy + armLength);
+        mArmPaint.setStyle(Paint.Style.FILL);
+        mArmPaint.setColor(0x33000000);
+        canvas.drawRoundRect(mArmRect, armCorner, armCorner, mArmPaint);
+
+        // Draw Horizontal Cross Bar
+        mArmRect.set(cx - armLength, cy - armWidth * 0.5f, cx + armLength, cy + armWidth * 0.5f);
+        canvas.drawRoundRect(mArmRect, armCorner, armCorner, mArmPaint);
+
+        // Draw Active Arm Highlights
+        if (mUpActive) {
+            drawActiveArmSegment(canvas, cx - armWidth * 0.5f, cy - armLength, cx + armWidth * 0.5f, cy, armCorner, activeAccent);
+        }
+        if (mDownActive) {
+            drawActiveArmSegment(canvas, cx - armWidth * 0.5f, cy, cx + armWidth * 0.5f, cy + armLength, armCorner, activeAccent);
+        }
+        if (mLeftActive) {
+            drawActiveArmSegment(canvas, cx - armLength, cy - armWidth * 0.5f, cx, cy + armWidth * 0.5f, armCorner, activeAccent);
+        }
+        if (mRightActive) {
+            drawActiveArmSegment(canvas, cx, cy - armWidth * 0.5f, cx + armLength, cy + armWidth * 0.5f, armCorner, activeAccent);
+        }
+
+        // Cross Arm Outlines
+        mArmPaint.setStyle(Paint.Style.STROKE);
+        mArmPaint.setStrokeWidth(1.2f * density);
+        mArmPaint.setColor(0x44FFFFFF);
+        mArmRect.set(cx - armWidth * 0.5f, cy - armLength, cx + armWidth * 0.5f, cy + armLength);
+        canvas.drawRoundRect(mArmRect, armCorner, armCorner, mArmPaint);
+        mArmRect.set(cx - armLength, cy - armWidth * 0.5f, cx + armLength, cy + armWidth * 0.5f);
+        canvas.drawRoundRect(mArmRect, armCorner, armCorner, mArmPaint);
+
+        // 3. Directional Chevrons
+        float arrowOffset = armLength * 0.65f;
+        float arrowSize = minDim * 0.12f;
+
+        // UP
+        drawChevron(canvas, cx, cy - arrowOffset, arrowSize, 0, mUpActive, activeAccent);
+        // DOWN
+        drawChevron(canvas, cx, cy + arrowOffset, arrowSize, 180, mDownActive, activeAccent);
+        // LEFT
+        drawChevron(canvas, cx - arrowOffset, cy, arrowSize, 270, mLeftActive, activeAccent);
+        // RIGHT
+        drawChevron(canvas, cx + arrowOffset, cy, arrowSize, 90, mRightActive, activeAccent);
+
+        // 4. Center Concave Pivot Dish
+        float pivotR = armWidth * 0.36f;
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mIsPressed ? 0x44FFFFFF : 0x22FFFFFF);
-        canvas.drawCircle(cx, cy, Math.min(w, h) * DEADZONE_FRAC * 0.6f, mPaint);
+        mPaint.setColor(mIsPressed ? 0x6622283A : 0xDD1B1D2B);
+        canvas.drawCircle(cx, cy, pivotR, mPaint);
+        mPaint.setStyle(Paint.Style.STROKE);
+        mPaint.setStrokeWidth(1.2f * density);
+        mPaint.setColor(mIsPressed ? activeAccent : 0x4480DEEA);
+        canvas.drawCircle(cx, cy, pivotR, mPaint);
+
+        // Center jewel dot
+        mPaint.setStyle(Paint.Style.FILL);
+        mPaint.setColor(mIsPressed ? activeAccent : 0x66FFFFFF);
+        canvas.drawCircle(cx, cy, 3f * density, mPaint);
     }
 
-    private void drawArrow(Canvas canvas, float cx, float cy, float size, float rotation, boolean active) {
+    private void drawActiveArmSegment(Canvas canvas, float l, float t, float r, float b, float corner, int color) {
+        mArmRect.set(l, t, r, b);
+        mArmPaint.setStyle(Paint.Style.FILL);
+        mArmPaint.setColor(color);
+        mArmPaint.setAlpha(100);
+        canvas.drawRoundRect(mArmRect, corner, corner, mArmPaint);
+    }
+
+    private void drawChevron(Canvas canvas, float cx, float cy, float size, float rotation, boolean active, int activeColor) {
         Path path = new Path();
-        // Upward-pointing triangle (before rotation)
-        path.moveTo(0, -size * 0.6f);
-        path.lineTo(-size * 0.5f, size * 0.4f);
-        path.lineTo(size * 0.5f, size * 0.4f);
+        path.moveTo(0, -size * 0.55f);
+        path.lineTo(-size * 0.5f, size * 0.35f);
+        path.lineTo(-size * 0.28f, size * 0.35f);
+        path.lineTo(0, -size * 0.1f);
+        path.lineTo(size * 0.28f, size * 0.35f);
+        path.lineTo(size * 0.5f, size * 0.35f);
         path.close();
 
         canvas.save();
         canvas.translate(cx, cy);
         canvas.rotate(rotation);
-        mArrowPaint.setColor(active ? mModel.activeColor : 0xAAFFFFFF);
+        mArrowPaint.setColor(active ? activeColor : 0xDDFFFFFF);
         canvas.drawPath(path, mArrowPaint);
         canvas.restore();
     }
@@ -175,18 +245,10 @@ public final class HudDpadView extends View {
         boolean newUp = false, newDown = false, newLeft = false, newRight = false;
 
         if (dist > maxR * DEADZONE_FRAC) {
-            // Compute angle: 0° = right, 90° = down, etc.
             float angle = (float) Math.toDegrees(Math.atan2(dy, dx));
             if (angle < 0) angle += 360f;
 
             // Cardinal + diagonal mapping with 45° sectors
-            // UP: 247.5° - 292.5° (pure up)
-            // RIGHT: 337.5° - 22.5° (pure right)
-            // DOWN: 67.5° - 112.5° (pure down)
-            // LEFT: 157.5° - 202.5° (pure left)
-            // Diagonals: sectors between cardinals
-
-            // Normalize to check sectors
             if (inRange(angle, 292.5f, 337.5f)) { newUp = true; newRight = true; }      // UP-RIGHT
             else if (inRange(angle, 247.5f, 292.5f)) { newUp = true; }                  // UP
             else if (inRange(angle, 202.5f, 247.5f)) { newUp = true; newLeft = true; }  // UP-LEFT
@@ -194,10 +256,9 @@ public final class HudDpadView extends View {
             else if (inRange(angle, 112.5f, 157.5f)) { newDown = true; newLeft = true; }// DOWN-LEFT
             else if (inRange(angle, 67.5f, 112.5f)) { newDown = true; }                 // DOWN
             else if (inRange(angle, 22.5f, 67.5f)) { newDown = true; newRight = true; } // DOWN-RIGHT
-            else { newRight = true; }                                                     // RIGHT (337.5-360 + 0-22.5)
+            else { newRight = true; }                                                     // RIGHT
         }
 
-        // Diff and dispatch changes
         boolean changed = false;
         if (newUp != mUpActive) {
             mUpActive = newUp;
@@ -221,7 +282,7 @@ public final class HudDpadView extends View {
         }
 
         if (changed) {
-            if (mModel.hapticEnabled) {
+            if (isHapticEnabled()) {
                 performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
             }
             invalidate();

@@ -142,6 +142,17 @@ public final class HudLayoutProfile {
         btnL2.posYPercent = 0.26f;
         layout.floatingButtons.add(btnL2);
 
+        // L3 (Stick Click / Thumb L)
+        HudButton btnL3 = new HudButton();
+        btnL3.label = "L3";
+        btnL3.action = HudAction.gamepadBtn(317); // BTN_THUMBL
+        btnL3.widthDp = 44;
+        btnL3.heightDp = 30;
+        btnL3.cornerRadiusDp = 8;
+        btnL3.posXPercent = shoulderLeftX + (isLandscape ? 0.06f : 0.08f);
+        btnL3.posYPercent = 0.20f;
+        layout.floatingButtons.add(btnL3);
+
         // 3. D-Pad (Center at leftBaseX, Y = 0.65f) - Left margin >= 0.095f (~10%)
         HudButton dpadUp = new HudButton();
         dpadUp.label = "▲";
@@ -250,6 +261,17 @@ public final class HudLayoutProfile {
         btnR2.posXPercent = shoulderRightX;
         btnR2.posYPercent = 0.26f;
         layout.floatingButtons.add(btnR2);
+
+        // R3 (Stick Click / Thumb R)
+        HudButton btnR3 = new HudButton();
+        btnR3.label = "R3";
+        btnR3.action = HudAction.gamepadBtn(318); // BTN_THUMBR
+        btnR3.widthDp = 44;
+        btnR3.heightDp = 30;
+        btnR3.cornerRadiusDp = 8;
+        btnR3.posXPercent = shoulderRightX - (isLandscape ? 0.06f : 0.08f);
+        btnR3.posYPercent = 0.20f;
+        layout.floatingButtons.add(btnR3);
 
         // 3. Right Stick TrackPoint (Mouse Look)
         HudButton rightStick = new HudButton();
@@ -362,56 +384,33 @@ public final class HudLayoutProfile {
         btnView.heightDp = 28;
         btnView.cornerRadiusDp = 8;
         btnView.posXPercent = leftBaseX + (isLandscape ? 0.07f : 0.10f);
-        btnView.posYPercent = 0.10f;
+        btnView.posYPercent = 0.09f;
         layout.floatingButtons.add(btnView);
 
-        // 3. D-Pad 4-Way Cross (Prominent left thumb position, NO ANALOG NUB!)
+        // L3 (Stick Click / Thumb L)
+        HudButton btnL3 = new HudButton();
+        btnL3.label = "L3";
+        btnL3.action = HudAction.gamepadBtn(317); // BTN_THUMBL
+        btnL3.widthDp = 42;
+        btnL3.heightDp = 28;
+        btnL3.cornerRadiusDp = 8;
+        btnL3.posXPercent = leftBaseX + (isLandscape ? 0.07f : 0.10f);
+        btnL3.posYPercent = 0.18f;
+        layout.floatingButtons.add(btnL3);
+
+        // 3. Unified D-Pad Widget (Continuous cross with diagonal support)
         float dpadCx = isLandscape ? 0.09f : 0.14f;
         float dpadCy = 0.52f;
 
-        HudButton dpadUp = new HudButton();
-        dpadUp.label = "▲";
-        dpadUp.action = HudAction.gamepadBtn(544);
-        dpadUp.action.repeat = true;
-        dpadUp.widthDp = 46;
-        dpadUp.heightDp = 46;
-        dpadUp.cornerRadiusDp = 12;
-        dpadUp.posXPercent = dpadCx;
-        dpadUp.posYPercent = dpadCy - 0.13f;
-        layout.floatingButtons.add(dpadUp);
-
-        HudButton dpadDown = new HudButton();
-        dpadDown.label = "▼";
-        dpadDown.action = HudAction.gamepadBtn(545);
-        dpadDown.action.repeat = true;
-        dpadDown.widthDp = 46;
-        dpadDown.heightDp = 46;
-        dpadDown.cornerRadiusDp = 12;
-        dpadDown.posXPercent = dpadCx;
-        dpadDown.posYPercent = dpadCy + 0.13f;
-        layout.floatingButtons.add(dpadDown);
-
-        HudButton dpadLeft = new HudButton();
-        dpadLeft.label = "◀";
-        dpadLeft.action = HudAction.gamepadBtn(546);
-        dpadLeft.action.repeat = true;
-        dpadLeft.widthDp = 46;
-        dpadLeft.heightDp = 46;
-        dpadLeft.cornerRadiusDp = 12;
-        dpadLeft.posXPercent = dpadCx - (isLandscape ? 0.055f : 0.08f);
-        dpadLeft.posYPercent = dpadCy;
-        layout.floatingButtons.add(dpadLeft);
-
-        HudButton dpadRight = new HudButton();
-        dpadRight.label = "▶";
-        dpadRight.action = HudAction.gamepadBtn(547);
-        dpadRight.action.repeat = true;
-        dpadRight.widthDp = 46;
-        dpadRight.heightDp = 46;
-        dpadRight.cornerRadiusDp = 12;
-        dpadRight.posXPercent = dpadCx + (isLandscape ? 0.055f : 0.08f);
-        dpadRight.posYPercent = dpadCy;
-        layout.floatingButtons.add(dpadRight);
+        HudButton dpad = new HudButton();
+        dpad.widgetType = HudButton.WIDGET_DPAD;
+        dpad.label = "D-PAD";
+        dpad.widthDp = 124;
+        dpad.heightDp = 124;
+        dpad.cornerRadiusDp = 62;
+        dpad.posXPercent = dpadCx;
+        dpad.posYPercent = dpadCy;
+        layout.floatingButtons.add(dpad);
 
         // 4. KB Toggle
         HudButton btnVk = new HudButton();
@@ -446,6 +445,17 @@ public final class HudLayoutProfile {
         btnR2.posYPercent = 0.18f;
         layout.floatingButtons.add(btnR2);
 
+        // R3 (Stick Click / Thumb R)
+        HudButton btnR3 = new HudButton();
+        btnR3.label = "R3";
+        btnR3.action = HudAction.gamepadBtn(318); // BTN_THUMBR
+        btnR3.widthDp = 42;
+        btnR3.heightDp = 28;
+        btnR3.cornerRadiusDp = 8;
+        btnR3.posXPercent = rightBaseX - (isLandscape ? 0.07f : 0.10f);
+        btnR3.posYPercent = 0.18f;
+        layout.floatingButtons.add(btnR3);
+
         // 2. Menu / Start button (☰)
         HudButton btnMenu = new HudButton();
         btnMenu.label = "MENU";
@@ -454,7 +464,7 @@ public final class HudLayoutProfile {
         btnMenu.heightDp = 28;
         btnMenu.cornerRadiusDp = 8;
         btnMenu.posXPercent = rightBaseX - (isLandscape ? 0.07f : 0.10f);
-        btnMenu.posYPercent = 0.10f;
+        btnMenu.posYPercent = 0.09f;
         layout.floatingButtons.add(btnMenu);
 
         // 3. ABXY Diamond Cluster (Right Top)
@@ -501,7 +511,19 @@ public final class HudLayoutProfile {
         btnB.posYPercent = abxyCy;
         layout.floatingButtons.add(btnB);
 
-        // 4. Dedicated Steam Deck Haptic Trackpad (Square Rounded Touchpad for mouse look & tap click, NO ANALOG NUB!)
+        // 4. Horizontal ScrollBar Widget (placed directly on top of the Touchpad)
+        HudButton deckScroll = new HudButton();
+        deckScroll.widgetType = HudButton.WIDGET_SCROLLBAR;
+        deckScroll.label = "SCROLL";
+        deckScroll.trackpointMode = "horizontal";
+        deckScroll.widthDp = 92;
+        deckScroll.heightDp = 22;
+        deckScroll.cornerRadiusDp = 11;
+        deckScroll.posXPercent = isLandscape ? 0.90f : 0.85f;
+        deckScroll.posYPercent = 0.52f;
+        layout.floatingButtons.add(deckScroll);
+
+        // 5. Dedicated Steam Deck Haptic Trackpad (Square Rounded Touchpad)
         HudButton deckTrackpad = new HudButton();
         deckTrackpad.widgetType = HudButton.WIDGET_TOUCHPAD;
         deckTrackpad.label = "TOUCHPAD";
@@ -510,10 +532,20 @@ public final class HudLayoutProfile {
         deckTrackpad.cornerRadiusDp = 18;
         deckTrackpad.trackpointSensitivity = 1.4f;
         deckTrackpad.posXPercent = isLandscape ? 0.90f : 0.85f;
-        deckTrackpad.posYPercent = 0.65f;
+        deckTrackpad.posYPercent = 0.69f;
         layout.floatingButtons.add(deckTrackpad);
 
-        // 5. Bottom Controls: EXIT DECK mode + Settings
+        // 6. Bottom Controls: HOME, EXIT DECK mode + Settings
+        HudButton btnHome = new HudButton();
+        btnHome.label = "HOME";
+        btnHome.action = HudAction.gamepadBtn(316); // BTN_MODE (Guide / Steam)
+        btnHome.widthDp = 44;
+        btnHome.heightDp = 30;
+        btnHome.cornerRadiusDp = 8;
+        btnHome.posXPercent = isLandscape ? 0.76f : 0.71f;
+        btnHome.posYPercent = 0.90f;
+        layout.floatingButtons.add(btnHome);
+
         HudButton btnExitDeck = new HudButton();
         btnExitDeck.label = "EXIT";
         btnExitDeck.action = HudAction.system("exit_steam_deck");

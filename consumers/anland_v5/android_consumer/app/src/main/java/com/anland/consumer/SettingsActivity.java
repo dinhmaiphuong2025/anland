@@ -129,6 +129,7 @@ public class SettingsActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        applyOrientation();
         // Capture the daemon the user is looking at so the HUD-editor
         // entry can hand it back to MainActivity unchanged.
         Intent launched = getIntent();
@@ -143,6 +144,34 @@ public class SettingsActivity extends Activity {
             }
         }
         showHome();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        applyOrientation();
+    }
+
+    private void applyOrientation() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean isSteamDeck = prefs.getBoolean("steam_deck_mode", false);
+        if (isSteamDeck) {
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+            return;
+        }
+        String mode = prefs.getString(KEY_ORIENTATION, "default");
+        if (mode == null) mode = "default";
+        switch (mode) {
+            case "landscape":
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                break;
+            case "portrait":
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+                break;
+            default:
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+                break;
+        }
     }
 
     // ============================================================
@@ -443,8 +472,10 @@ public class SettingsActivity extends Activity {
                 try {
                     String profileJson = prefs.getString("hud_layout_profile_v2", null);
                     com.anland.consumer.hud.HudLayoutProfile profile = com.anland.consumer.hud.HudLayoutProfile.fromJSON(profileJson);
-                    profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
-                    edit.putString("hud_layout_profile_v2", profile.toJSON().toString());
+                    if (profile.landscapeLayout == null || profile.landscapeLayout.floatingButtons == null || profile.landscapeLayout.floatingButtons.isEmpty()) {
+                        profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
+                        edit.putString("hud_layout_profile_v2", profile.toJSON().toString());
+                    }
                 } catch (Exception ignored) {}
                 edit.apply();
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);

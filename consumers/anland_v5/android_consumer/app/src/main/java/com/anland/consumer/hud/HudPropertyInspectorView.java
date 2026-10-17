@@ -15,6 +15,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -260,6 +261,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
                 }
             }
         });
+        content.addView(createQuickIconSelector());
 
         // Sliders with exact Numeric Edit Fields. All four live inside a single
         // container so we can hide the whole block for dock items (where
@@ -303,6 +305,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
                 if (mCallback != null) mCallback.onModelChanged(mActiveButton);
             }
         }));
+        mSizeSection.addView(createNudgeControls());
         content.addView(mSizeSection);
 
         // Action Assignment rendered as a left-right row: the "Action" label
@@ -1019,6 +1022,86 @@ public final class HudPropertyInspectorView extends LinearLayout {
             case 41: return "`";
             default: return "Key " + code;
         }
+    }
+
+    private View createQuickIconSelector() {
+        HorizontalScrollView hsv = new HorizontalScrollView(getContext());
+        hsv.setHorizontalScrollBarEnabled(false);
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(HORIZONTAL);
+        row.setPadding(0, dp(2), 0, dp(6));
+
+        final String[] icons = new String[]{
+                "▲", "▼", "◀", "▶", "⧉", "☰", "⚙", "🎮", "🖱",
+                "A", "B", "X", "Y", "L1", "L2", "L3", "R1", "R2", "R3",
+                "↵", "⌫", "⇥", "⎋", "⌥", "⌘", "⇧", "␣", "ESC", "TAB", "CTRL", "ALT"
+        };
+        for (String ic : icons) {
+            Button btn = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
+            btn.setText(ic);
+            btn.setTextSize(11f);
+            btn.setTextColor(Color.WHITE);
+            btn.setBackground(M3.createRippleDrawable(getContext(), M3.RADIUS_CHIP, 0x22FFFFFF, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
+            btn.setPadding(dp(6), dp(2), dp(6), dp(2));
+            btn.setMinWidth(dp(30));
+            btn.setMinHeight(dp(26));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(28));
+            lp.rightMargin = dp(4);
+            btn.setLayoutParams(lp);
+            btn.setOnClickListener(v -> {
+                if (mActiveButton != null) {
+                    mActiveButton.label = ic;
+                    mIsProgrammaticChange = true;
+                    try { mLabelInput.setText(ic); } finally { mIsProgrammaticChange = false; }
+                    if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                }
+            });
+            row.addView(btn);
+        }
+        hsv.addView(row);
+        return hsv;
+    }
+
+    private View createNudgeControls() {
+        LinearLayout container = new LinearLayout(getContext());
+        container.setOrientation(VERTICAL);
+        container.setPadding(0, dp(4), 0, dp(4));
+
+        TextView lbl = createSectionLabel("Fine-tune Position (Nudge):");
+        container.addView(lbl);
+
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        String[] arrows = new String[]{"◀", "▲", "▼", "▶"};
+        float[] dx = new float[]{-0.005f, 0f, 0f, 0.005f};
+        float[] dy = new float[]{0f, -0.005f, 0.005f, 0f};
+
+        for (int i = 0; i < 4; i++) {
+            final float dX = dx[i];
+            final float dY = dy[i];
+            Button b = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
+            b.setText(arrows[i]);
+            b.setTextSize(12f);
+            b.setTextColor(M3.COLOR_PRIMARY);
+            b.setBackground(M3.createRippleDrawable(getContext(), M3.RADIUS_CHIP, 0x22FFFFFF, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
+            b.setMinWidth(dp(44));
+            b.setMinHeight(dp(30));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(30), 1f);
+            if (i > 0) lp.leftMargin = dp(4);
+            b.setLayoutParams(lp);
+            b.setOnClickListener(v -> {
+                if (mActiveButton != null) {
+                    mActiveButton.posXPercent = Math.max(0.01f, Math.min(0.99f, mActiveButton.posXPercent + dX));
+                    mActiveButton.posYPercent = Math.max(0.01f, Math.min(0.99f, mActiveButton.posYPercent + dY));
+                    if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                }
+            });
+            row.addView(b);
+        }
+        container.addView(row);
+        return container;
     }
 
     private TextView createSectionLabel(String text) {

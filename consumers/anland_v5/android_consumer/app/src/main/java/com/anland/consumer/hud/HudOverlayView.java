@@ -170,16 +170,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     public void ensureSteamDeckLayout() {
         if (mProfile != null) {
-            boolean hasTouchpad = false;
-            if (mProfile.landscapeLayout != null && mProfile.landscapeLayout.floatingButtons != null) {
-                for (HudButton b : mProfile.landscapeLayout.floatingButtons) {
-                    if (HudButton.WIDGET_TOUCHPAD.equals(b.widgetType)) {
-                        hasTouchpad = true;
-                        break;
-                    }
-                }
-            }
-            if (!hasTouchpad) {
+            if (mProfile.landscapeLayout == null || mProfile.landscapeLayout.floatingButtons == null || mProfile.landscapeLayout.floatingButtons.isEmpty()) {
                 mProfile.landscapeLayout = HudLayoutProfile.createSteamDeckLayout(true);
                 try {
                     mPrefs.edit().putString(PREF_KEY_PROFILE, mProfile.toJSON().toString()).apply();
@@ -359,8 +350,18 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         if (mTopToolbar != null) {
             FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mTopToolbar.getLayoutParams();
             if (lp != null) {
-                int topMargin = Math.max(dp(36), mInsetTop + dp(6));
-                lp.setMargins(dp(10) + mInsetLeft, topMargin, dp(10) + mInsetRight, 0);
+                int orientation = getResources().getConfiguration().orientation;
+                boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+                if (isLandscape) {
+                    lp.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+                    lp.setMargins(0, Math.max(dp(8), mInsetTop), 0, 0);
+                } else {
+                    lp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+                    lp.gravity = Gravity.TOP;
+                    int topMargin = Math.max(dp(36), mInsetTop + dp(6));
+                    lp.setMargins(dp(10) + mInsetLeft, topMargin, dp(10) + mInsetRight, 0);
+                }
                 mTopToolbar.setLayoutParams(lp);
             }
         }
@@ -384,9 +385,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mTopToolbar = createTopToolbar();
         mTopToolbar.setVisibility(GONE);
         FrameLayout.LayoutParams tbLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP);
-        tbLp.setMargins(dp(10) + mInsetLeft, Math.max(dp(36), mInsetTop + dp(6)), dp(10) + mInsetRight, 0);
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         addView(mTopToolbar, tbLp);
+        updateToolbarMargins();
 
         // Property Inspector Panel (Floating, initially hidden)
         mInspectorView = new HudPropertyInspectorView(getContext(), new HudPropertyInspectorView.InspectorCallback() {
@@ -518,8 +519,12 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     }
 
     private LinearLayout.LayoutParams createToolButtonLayoutParams(boolean hasLeftMargin) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(34), 1f);
-        if (hasLeftMargin) lp.leftMargin = dp(4);
+        int orientation = getResources().getConfiguration().orientation;
+        boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        LinearLayout.LayoutParams lp = isLandscape
+                ? new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(32))
+                : new LinearLayout.LayoutParams(0, dp(34), 1f);
+        if (hasLeftMargin) lp.leftMargin = isLandscape ? dp(6) : dp(4);
         return lp;
     }
 
@@ -713,11 +718,11 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setTextColor(Color.WHITE);
         b.setBackground(M3.createRippleDrawable(getContext(), M3.RADIUS_CHIP, 0x22FFFFFF, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
-        b.setPadding(dp(4), dp(4), dp(4), dp(4));
+        b.setPadding(dp(10), dp(4), dp(10), dp(4));
         b.setGravity(Gravity.CENTER);
         b.setSingleLine(true);
-        b.setMinWidth(0);
-        b.setMinHeight(0);
+        b.setMinWidth(dp(44));
+        b.setMinHeight(dp(30));
         return b;
     }
 

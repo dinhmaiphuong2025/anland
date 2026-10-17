@@ -1898,6 +1898,7 @@ public class MainActivity extends Activity
             return;
         }
 
+        applyOrientation();
         requestMediaAudioFocus();
 
         // Show settings notification while in foreground, unless disabled in Settings.
@@ -1935,15 +1936,9 @@ public class MainActivity extends Activity
         }
         if (mHudOverlay != null && !mHudOverlay.isEditMode()) {
             mHudOverlay.loadProfile();
-            boolean vkbOpen = (virtualKeyboardView != null && virtualKeyboardView.getVisibility() == View.VISIBLE);
-            if (vkbOpen) {
-                mHudAutoHidden = true;
-                mHudOverlay.setVisibility(View.GONE);
-            } else {
-                boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
-                boolean isSteamDeck = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_STEAM_DECK_MODE, false);
-                mHudOverlay.setVisibility((useHud || isSteamDeck) ? View.VISIBLE : View.GONE);
-            }
+            boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean("use_hud_overlay", false);
+            boolean isSteamDeck = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).getBoolean(KEY_STEAM_DECK_MODE, false);
+            mHudOverlay.setVisibility((useHud || isSteamDeck) ? View.VISIBLE : View.GONE);
         }
         mKeyboardFloating = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
             .getBoolean(KEY_KEYBOARD_FLOATING, false);
@@ -2413,8 +2408,9 @@ public class MainActivity extends Activity
         }
         int orientation = getResources().getConfiguration().orientation;
         boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        boolean isSteamDeck = prefs.getBoolean(KEY_STEAM_DECK_MODE, false);
 
-        if (isLandscape && !RATIO_AUTO.equals(ratioPref)) {
+        if ((isLandscape || isSteamDeck) && (!RATIO_AUTO.equals(ratioPref) || isSteamDeck)) {
             lp.bottomMargin = target;
             adjustSurfaceViewLayoutRatio(lp, ratioPref);
         } else if (autoStretch || RATIO_AUTO.equals(ratioPref)) {
@@ -2501,8 +2497,10 @@ public class MainActivity extends Activity
             try {
                 String profileJson = prefs.getString("hud_layout_profile_v2", null);
                 com.anland.consumer.hud.HudLayoutProfile profile = com.anland.consumer.hud.HudLayoutProfile.fromJSON(profileJson);
-                profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
-                prefs.edit().putString("hud_layout_profile_v2", profile.toJSON().toString()).apply();
+                if (profile.landscapeLayout == null || profile.landscapeLayout.floatingButtons == null || profile.landscapeLayout.floatingButtons.isEmpty()) {
+                    profile.landscapeLayout = com.anland.consumer.hud.HudLayoutProfile.createSteamDeckLayout(true);
+                    prefs.edit().putString("hud_layout_profile_v2", profile.toJSON().toString()).apply();
+                }
             } catch (Exception ignored) {}
             android.widget.Toast.makeText(this, "Steam Deck Mode enabled (Landscape)", android.widget.Toast.LENGTH_SHORT).show();
         } else {
@@ -2671,13 +2669,8 @@ public class MainActivity extends Activity
         }
     }
 
-    // Mo ban phim: an ca HUD + ExtraKeys. Tat ban phim: chi hien lai HUD.
+    // Mo ban phim: giu nguyen HUD cam ung, chi an ExtraKeys neu can.
     private void hideFloatingForKeyboard() {
-        if (mHudOverlay != null && mHudOverlay.getVisibility() == View.VISIBLE
-                && !mHudOverlay.isEditMode() && !mHudAutoHidden) {
-            mHudAutoHidden = true;
-            mHudOverlay.setVisibility(View.GONE);
-        }
         if (extraKeysBar != null && extraKeysBar.getVisibility() == View.VISIBLE) {
             extraKeysBar.setVisibility(View.GONE);
             extraKeysBar.reset();
@@ -2685,31 +2678,8 @@ public class MainActivity extends Activity
         }
     }
 
-    // Dong ban phim: hien lai HUD neu truoc do bi tu an. Bo qua ExtraKeys.
     private void restoreHudAfterKeyboard() {
-        if (!mHudAutoHidden) return;
-        boolean useHud = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .getBoolean("use_hud_overlay", false);
-        if (!useHud || mHudOverlay == null || mHudOverlay.isEditMode()) {
-            mHudAutoHidden = false;
-            return;
-        }
-        if (mImeBottom <= 0
-                && (virtualKeyboardView == null
-                    || virtualKeyboardView.getVisibility() != View.VISIBLE)) {
-            mHudOverlay.setVisibility(View.VISIBLE);
-            mHudAutoHidden = false;
-        } else if (mRoot != null) {
-            // Neu ban phim dang trong qua trinh tat (animation), thu lai sau 1 frame
-            mRoot.postDelayed(() -> {
-                if (mHudAutoHidden && mImeBottom <= 0
-                        && (virtualKeyboardView == null
-                            || virtualKeyboardView.getVisibility() != View.VISIBLE)) {
-                    mHudOverlay.setVisibility(View.VISIBLE);
-                    mHudAutoHidden = false;
-                }
-            }, 100);
-        }
+        // HUD khong bi an khi mo ban phim, giu nguyen trang thai.
     }
 
     // scales with the parsed row count. Records the layout JSON it was built from.
