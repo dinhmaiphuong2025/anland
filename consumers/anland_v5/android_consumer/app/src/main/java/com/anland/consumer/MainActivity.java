@@ -2958,6 +2958,16 @@ public class MainActivity extends Activity
     public void sendGamepad(int gpType, int code, int value) {
         if (mNative != null)
             mNative.sendGamepad(gpType, code, value);
+
+        // Map digital L2 / R2 (BTN_TL2 312, BTN_TR2 313) to analog trigger axes ABS_Z (2) & ABS_RZ (5)
+        // Xbox 360 controller drivers in SDL2 / Linux expect 0..255 on ABS_Z (LT) and ABS_RZ (RT).
+        if (gpType == 16) {
+            if (code == 312 && mNative != null) {
+                mNative.sendGamepad(17, 2, value != 0 ? 255 : 0);
+            } else if (code == 313 && mNative != null) {
+                mNative.sendGamepad(17, 5, value != 0 ? 255 : 0);
+            }
+        }
     }
 
     @Override

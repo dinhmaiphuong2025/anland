@@ -915,8 +915,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
         switch (code) {
             case 304: return "GP: A";
             case 305: return "GP: B";
-            case 308: return "GP: X";
-            case 307: return "GP: Y";
+            case 307: return "GP: X";
+            case 308: return "GP: Y";
             case 310: return "GP: LB";
             case 311: return "GP: RB";
             case 312: return "GP: LT";
