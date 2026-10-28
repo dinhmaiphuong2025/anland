@@ -237,8 +237,11 @@ public class SettingsActivity extends Activity {
         title.setTextColor(Color.WHITE);
         title.setTypeface(null, Typeface.BOLD);
         title.setGravity(Gravity.START);
-        title.setPadding(0, 0, 0, dp(20));
+        title.setPadding(0, 0, 0, dp(12));
         root.addView(title);
+
+        // Section header for active mode
+        root.addView(M3.createSectionHeader(this, "ACTIVE MODE"));
 
         // Steam Deck Mode quick-action card
         {
@@ -248,14 +251,14 @@ public class SettingsActivity extends Activity {
             LinearLayout deckCard = new LinearLayout(this);
             deckCard.setOrientation(LinearLayout.HORIZONTAL);
             deckCard.setGravity(Gravity.CENTER_VERTICAL);
-            deckCard.setPadding(dp(20), dp(16), dp(20), dp(16));
+            deckCard.setPadding(dp(18), dp(16), dp(18), dp(16));
             deckCard.setBackground(M3.createRippleDrawable(this, M3.RADIUS_CARD,
-                    isSteamDeck ? 0xFF1A3B4D : M3.COLOR_SURFACE_LOW,
-                    isSteamDeck ? 0xFF2A5B7D : M3.COLOR_SURFACE_HIGH,
-                    isSteamDeck ? 0xFF00E5FF : M3.COLOR_BORDER_SUBTLE));
+                    isSteamDeck ? 0xFF182D38 : M3.COLOR_SURFACE_LOW,
+                    isSteamDeck ? 0xFF224355 : M3.COLOR_SURFACE_HIGH,
+                    isSteamDeck ? 0x4480DEEA : M3.COLOR_BORDER_SUBTLE));
             LinearLayout.LayoutParams deckLp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            deckLp.setMargins(0, 0, 0, dp(16));
+            deckLp.setMargins(0, 0, 0, dp(14));
             deckCard.setLayoutParams(deckLp);
 
             LinearLayout deckTexts = new LinearLayout(this);
@@ -264,28 +267,28 @@ public class SettingsActivity extends Activity {
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
             TextView deckTitle = new TextView(this);
-            deckTitle.setText(isSteamDeck ? "Steam Deck Mode: ON" : "Steam Deck Mode");
-            deckTitle.setTextSize(17);
+            deckTitle.setText(isSteamDeck ? "Steam Deck Mode: Active" : "Desktop Mode: Active");
+            deckTitle.setTextSize(16);
             deckTitle.setTypeface(null, Typeface.BOLD);
-            deckTitle.setTextColor(isSteamDeck ? 0xFF00E5FF : M3.COLOR_TEXT_PRIMARY);
+            deckTitle.setTextColor(isSteamDeck ? M3.COLOR_PRIMARY : M3.COLOR_TEXT_PRIMARY);
             deckTexts.addView(deckTitle);
 
             TextView deckSub = new TextView(this);
             deckSub.setText(isSteamDeck
-                    ? "Tap to exit and return to portrait"
-                    : "Tap to activate landscape handheld mode");
-            deckSub.setTextSize(13);
+                    ? "Tap to switch to Desktop mode (portrait/auto)"
+                    : "Tap to switch to Handheld mode (16:10 landscape)");
+            deckSub.setTextSize(12.5f);
             deckSub.setTextColor(M3.COLOR_TEXT_MUTED);
             deckSub.setPadding(0, dp(2), 0, 0);
             deckTexts.addView(deckSub);
 
             deckCard.addView(deckTexts);
 
-            // Glyph indicator
+            // Braille glyph indicator
             TextView deckGlyph = new TextView(this);
             deckGlyph.setText(isSteamDeck ? "⣿" : "⠶");
-            deckGlyph.setTextSize(24);
-            deckGlyph.setTextColor(isSteamDeck ? 0xFF00E5FF : 0xFF80DEEA);
+            deckGlyph.setTextSize(22);
+            deckGlyph.setTextColor(isSteamDeck ? M3.COLOR_PRIMARY : M3.COLOR_TEXT_MUTED);
             deckCard.addView(deckGlyph);
 
             deckCard.setOnClickListener(v -> {
@@ -300,6 +303,8 @@ public class SettingsActivity extends Activity {
 
             root.addView(deckCard);
         }
+
+        root.addView(M3.createSectionHeader(this, "PREFERENCES"));
 
         addCategoryRow(root, R.string.cat_keyboard_title,
             R.string.cat_keyboard_subtitle, this::showKeyboardPage);
@@ -443,28 +448,15 @@ public class SettingsActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         boolean useHud = prefs.getBoolean("use_hud_overlay", false);
 
-        TextView header = new TextView(this);
-        header.setText("1. Floating HUD & Gamepad Controls");
-        header.setTextSize(16);
-        header.setTextColor(Color.WHITE);
-        header.setTypeface(null, Typeface.BOLD);
-        header.setPadding(0, dp(14), 0, dp(6));
-        root.addView(header);
+        root.addView(M3.createSectionHeader(this, "ON-SCREEN CONTROLS & HUD"));
 
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
-        card.setPadding(dp(14), dp(12), dp(14), dp(14));
-        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cardLp.bottomMargin = dp(16);
-        card.setLayoutParams(cardLp);
+        LinearLayout card = M3.createGroupedCard(this);
 
         Switch hudSwitch = new Switch(this);
         M3.styleSwitch(hudSwitch);
         hudSwitch.setText("Enable Floating HUD Controls");
         hudSwitch.setChecked(useHud);
-        hudSwitch.setPadding(0, dp(4), 0, dp(4));
+        hudSwitch.setPadding(0, dp(6), 0, dp(6));
         hudSwitch.setOnCheckedChangeListener((v, checked) -> {
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean("use_hud_overlay", checked).apply();
@@ -472,12 +464,14 @@ public class SettingsActivity extends Activity {
         });
         card.addView(hudSwitch);
 
+        card.addView(M3.createDivider(this, 0));
+
         boolean useSteamDeck = prefs.getBoolean("steam_deck_mode", false);
         Switch steamDeckSwitch = new Switch(this);
         M3.styleSwitch(steamDeckSwitch);
-        steamDeckSwitch.setText("Steam Deck Handheld Console Mode");
+        steamDeckSwitch.setText("Steam Deck Handheld Mode");
         steamDeckSwitch.setChecked(useSteamDeck);
-        steamDeckSwitch.setPadding(0, dp(8), 0, dp(4));
+        steamDeckSwitch.setPadding(0, dp(6), 0, dp(4));
         steamDeckSwitch.setOnCheckedChangeListener((v, checked) -> {
             SharedPreferences.Editor edit = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
             edit.putBoolean("steam_deck_mode", checked);
@@ -494,7 +488,7 @@ public class SettingsActivity extends Activity {
                 } catch (Exception ignored) {}
                 edit.apply();
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-                Toast.makeText(this, "Switching to Steam Deck landscape...", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "Entering Steam Deck landscape...", Toast.LENGTH_SHORT).show();
                 if (isTaskRoot()) {
                     Intent intent = new Intent(this, SecondaryActivity.class);
                     if (mCurrentSocketPath != null) intent.putExtra(MainActivity.EXTRA_SOCKET_PATH, mCurrentSocketPath);
@@ -511,22 +505,17 @@ public class SettingsActivity extends Activity {
         card.addView(steamDeckSwitch);
 
         TextView deckHint = new TextView(this);
-        deckHint.setText("Full isolation: Auto-resize 16:10 canvas between grips, disable full-screen touch (prevent D-Pad conflict), use dedicated Trackpad for mouse.");
+        deckHint.setText("16:10 centered canvas with palm rejection and dedicated trackpad.");
         deckHint.setTextSize(12);
-        deckHint.setTextColor(0xFF80DEEA);
-        deckHint.setPadding(0, dp(2), 0, dp(8));
+        deckHint.setTextColor(M3.COLOR_TEXT_MUTED);
+        deckHint.setPadding(0, 0, 0, dp(6));
         card.addView(deckHint);
 
-        TextView hudHint = new TextView(this);
-        hudHint.setText("When in landscape with HUD / Steam Deck active, ExtraKeysBar is automatically hidden to maximize screen visibility.");
-        hudHint.setTextSize(12);
-        hudHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        hudHint.setPadding(0, dp(2), 0, dp(8));
-        card.addView(hudHint);
-
         if (useHud) {
+            card.addView(M3.createDivider(this, 0));
+
             Button btnEditHud = new Button(this);
-            styleSettingsButton(btnEditHud);
+            M3.styleButton(btnEditHud, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_PRIMARY);
             btnEditHud.setText("Open Visual HUD Layout Editor");
             btnEditHud.setOnClickListener(v -> {
                 Intent intent = new Intent(this, MainActivity.class);
@@ -545,14 +534,19 @@ public class SettingsActivity extends Activity {
             });
             LinearLayout.LayoutParams ehLp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            ehLp.topMargin = dp(8);
             ehLp.bottomMargin = dp(8);
             btnEditHud.setLayoutParams(ehLp);
             card.addView(btnEditHud);
 
             Button btnPresets = new Button(this);
-            styleSettingsButton(btnPresets);
-            btnPresets.setText("Choose Layout Preset (Console Gamepad / Desktop)...");
+            M3.styleButton(btnPresets, M3.COLOR_SURFACE_HIGHEST, 0x33FFFFFF, M3.COLOR_TEXT_SECONDARY);
+            btnPresets.setText("Layout Presets...");
             btnPresets.setOnClickListener(v -> showHudPresetsDialog());
+            LinearLayout.LayoutParams bpLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            bpLp.bottomMargin = dp(6);
+            btnPresets.setLayoutParams(bpLp);
             card.addView(btnPresets);
         }
 
@@ -561,9 +555,9 @@ public class SettingsActivity extends Activity {
 
     private void showHudPresetsDialog() {
         final String[] items = new String[] {
-                "🎮 Steam Deck Handheld Preset (16:10 Viewport + Dedicated Trackpad)",
-                "Console Gamepad Preset (10% Inset - D-Pad + ABXY + Sticks)",
-                "Desktop / Productivity Preset (10% Inset - Super Gesture + TrackPoint + Hotkeys)",
+                "Steam Deck Handheld (16:10 Viewport + Dedicated Trackpad)",
+                "Console Gamepad (10% Inset - D-Pad + ABXY + Sticks)",
+                "Desktop Productivity (10% Inset - Super Gesture + TrackPoint + Hotkeys)",
                 "Reset Default Layouts (Steam Deck Handheld + Portrait)"
         };
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
@@ -609,52 +603,42 @@ public class SettingsActivity extends Activity {
     }
 
     private void buildGamepadTipsSection(LinearLayout root) {
-        TextView header = new TextView(this);
-        header.setText("2. Gamepad & Architecture Notes");
-        header.setTextSize(16);
-        header.setTextColor(Color.WHITE);
-        header.setTypeface(null, Typeface.BOLD);
-        header.setPadding(0, dp(14), 0, dp(6));
-        root.addView(header);
+        root.addView(M3.createSectionHeader(this, "CONTROLLER COMPATIBILITY"));
 
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
-        card.setPadding(dp(14), dp(12), dp(14), dp(14));
-        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cardLp.bottomMargin = dp(16);
-        card.setLayoutParams(cardLp);
+        LinearLayout card = M3.createGroupedCard(this);
 
         addTipItem(card, "Dual D-Pad Dispatch",
-                "Simultaneously emits Hat0 axes (ABS_HAT0X/Y) and evdev buttons (BTN_DPAD_*) for full compatibility with MonoGame, SDL2, and standard Linux Xbox 360 pad mappings.");
+                "Simultaneously transmits Hat0 axes (ABS_HAT0X/Y) and evdev buttons for MonoGame & SDL2 compatibility.");
+        card.addView(M3.createDivider(this, 12));
 
         addTipItem(card, "Analog Triggers L2 / R2",
-                "Triggers dispatch parallel analog axis events (ABS_Z and ABS_RZ, 0..255) so games with analog throttle or trigger requirements respond accurately.");
+                "Dispatches parallel analog axes (ABS_Z and ABS_RZ, 0..255) for smooth trigger control.");
+        card.addView(M3.createDivider(this, 12));
 
         addTipItem(card, "In-Game Controller Menus",
-                "In games like Stardew Valley, enable \"Use Controller-Style Menus\" (snappyMenus) in the game options so D-Pad can navigate dialogs and inventory grids.");
+                "Enable \"Use Controller-Style Menus\" (snappyMenus) in game options to navigate menus with D-Pad.");
+        card.addView(M3.createDivider(this, 12));
 
-        addTipItem(card, "Haptic Trackpad Gestures",
-                "Dedicated HUD Trackpad widget supports single tap (left click), double tap (double click), double-tap drag (mouse drag), and hold >380ms (right click).");
+        addTipItem(card, "HUD Trackpad Gestures",
+                "Single tap (left click), double tap (double click), double-tap drag (drag), hold (right click).");
 
         root.addView(card);
     }
 
     private void addTipItem(LinearLayout parent, String title, String description) {
         TextView t = new TextView(this);
-        t.setText("• " + title);
+        t.setText(title);
         t.setTextSize(14);
         t.setTypeface(null, Typeface.BOLD);
-        t.setTextColor(0xFF80DEEA);
-        t.setPadding(0, dp(6), 0, dp(2));
+        t.setTextColor(M3.COLOR_TEXT_PRIMARY);
+        t.setPadding(0, dp(8), 0, dp(2));
         parent.addView(t);
 
         TextView d = new TextView(this);
         d.setText(description);
         d.setTextSize(12);
         d.setTextColor(M3.COLOR_TEXT_MUTED);
-        d.setPadding(dp(12), 0, 0, dp(6));
+        d.setPadding(0, 0, 0, dp(8));
         parent.addView(d);
     }
 
@@ -708,22 +692,9 @@ public class SettingsActivity extends Activity {
     private void buildVirtualKeyboardSection(LinearLayout root) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-        TextView header = new TextView(this);
-        header.setText("1. Split-Arc Virtual Keyboard");
-        header.setTextSize(16);
-        header.setTextColor(Color.WHITE);
-        header.setTypeface(null, Typeface.BOLD);
-        header.setPadding(0, dp(12), 0, dp(6));
-        root.addView(header);
+        root.addView(M3.createSectionHeader(this, "VIRTUAL KEYBOARD WINGS"));
 
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
-        card.setPadding(dp(14), dp(12), dp(14), dp(14));
-        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cardLp.bottomMargin = dp(16);
-        card.setLayoutParams(cardLp);
+        LinearLayout card = M3.createGroupedCard(this);
 
         // Landscape Split Arc Keyboard Switch
         Switch splitArcSwitch = new Switch(this);
@@ -1394,22 +1365,9 @@ public class SettingsActivity extends Activity {
     private void buildExtraKeysSection(LinearLayout root) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-        TextView header = new TextView(this);
-        header.setText("2. ExtraKeys Bar (Bottom Strip)");
-        header.setTextSize(16);
-        header.setTextColor(Color.WHITE);
-        header.setTypeface(null, Typeface.BOLD);
-        header.setPadding(0, dp(14), 0, dp(6));
-        root.addView(header);
+        root.addView(M3.createSectionHeader(this, "EXTRA KEYS BAR"));
 
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
-        card.setPadding(dp(14), dp(12), dp(14), dp(14));
-        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cardLp.bottomMargin = dp(16);
-        card.setLayoutParams(cardLp);
+        LinearLayout card = M3.createGroupedCard(this);
 
         // === Extra keys bar mode selector (Shared) ===
         TextView modeLabel = new TextView(this);
@@ -1662,22 +1620,9 @@ public class SettingsActivity extends Activity {
     }
 
     private void buildSystemShortcutsSection(LinearLayout root) {
-        TextView header = new TextView(this);
-        header.setText("3. System & Shortcuts");
-        header.setTextSize(16);
-        header.setTextColor(Color.WHITE);
-        header.setTypeface(null, Typeface.BOLD);
-        header.setPadding(0, dp(14), 0, dp(6));
-        root.addView(header);
+        root.addView(M3.createSectionHeader(this, "SYSTEM & SHORTCUTS"));
 
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
-        card.setPadding(dp(14), dp(12), dp(14), dp(14));
-        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cardLp.bottomMargin = dp(16);
-        card.setLayoutParams(cardLp);
+        LinearLayout card = M3.createGroupedCard(this);
 
         buildImmersiveSection(card);
         buildAccessibilitySection(card);
@@ -2338,27 +2283,22 @@ public class SettingsActivity extends Activity {
     private void buildOrientationSection(LinearLayout root) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-        TextView header = new TextView(this);
-        header.setText(R.string.section_orientation);
-        header.setTextSize(16);
-        header.setTextColor(Color.WHITE);
-        header.setTypeface(null, Typeface.BOLD);
-        header.setPadding(0, 0, 0, dp(8));
-        root.addView(header);
+        root.addView(M3.createSectionHeader(this, "SCREEN ORIENTATION"));
+        LinearLayout card = M3.createGroupedCard(this);
 
         TextView label = new TextView(this);
         label.setText(R.string.orientation_label);
-        label.setTextSize(14);
-        label.setTextColor(0xFFA6ADC8);
-        label.setPadding(0, dp(4), 0, dp(8));
-        root.addView(label);
+        label.setTextSize(13);
+        label.setTextColor(M3.COLOR_TEXT_SECONDARY);
+        label.setPadding(0, dp(4), 0, dp(6));
+        card.addView(label);
 
         LinearLayout spinnerCard = new LinearLayout(this);
         spinnerCard.setOrientation(LinearLayout.VERTICAL);
         android.graphics.drawable.GradientDrawable spBg = new android.graphics.drawable.GradientDrawable();
         spBg.setCornerRadius(dp(8));
-        spBg.setColor(0xFF181825);
-        spBg.setStroke(dp(1), 0x22FFFFFF);
+        spBg.setColor(M3.COLOR_SURFACE_HIGH);
+        spBg.setStroke(dp(1), M3.COLOR_BORDER_SUBTLE);
         spinnerCard.setBackground(spBg);
         spinnerCard.setPadding(dp(12), dp(4), dp(12), dp(4));
 
@@ -2381,88 +2321,83 @@ public class SettingsActivity extends Activity {
             public void onNothingSelected(AdapterView<?> parent) {}
         });
         spinnerCard.addView(spinner);
-        root.addView(spinnerCard);
+        LinearLayout.LayoutParams spLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        spLp.bottomMargin = dp(8);
+        spinnerCard.setLayoutParams(spLp);
+        card.addView(spinnerCard);
+
+        root.addView(card);
     }
 
     private void buildHapticSection(LinearLayout root) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-        TextView header = new TextView(this);
-        header.setText("Haptic Feedback");
-        header.setTextSize(16);
-        header.setTextColor(Color.WHITE);
-        header.setTypeface(null, Typeface.BOLD);
-        header.setPadding(0, dp(24), 0, dp(8));
-        root.addView(header);
+        root.addView(M3.createSectionHeader(this, "HAPTIC FEEDBACK"));
+        LinearLayout card = M3.createGroupedCard(this);
 
         Switch hapticSwitch = new Switch(this);
         M3.styleSwitch(hapticSwitch);
-        hapticSwitch.setText("Enable Touch Vibration");
-        hapticSwitch.setPadding(0, dp(8), 0, 0);
+        hapticSwitch.setText("Touch Vibration Feedback");
+        hapticSwitch.setPadding(0, dp(6), 0, dp(4));
         hapticSwitch.setChecked(prefs.getBoolean(KEY_HAPTIC_FEEDBACK, true));
         hapticSwitch.setOnCheckedChangeListener((v, checked) ->
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_HAPTIC_FEEDBACK, checked).apply());
-        root.addView(hapticSwitch);
+        card.addView(hapticSwitch);
 
         TextView hapticHint = new TextView(this);
         hapticHint.setText("Vibrate on on-screen button taps, gesture swipes, and trackpoint interactions.");
         hapticHint.setTextSize(12);
-        hapticHint.setTextColor(0xFFA6ADC8);
-        hapticHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(hapticHint);
+        hapticHint.setTextColor(M3.COLOR_TEXT_MUTED);
+        hapticHint.setPadding(0, 0, 0, dp(6));
+        card.addView(hapticHint);
+
+        root.addView(card);
     }
 
     private void buildNotificationSection(LinearLayout root) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-        TextView header = new TextView(this);
-        header.setText(R.string.section_notification);
-        header.setTextSize(16);
-        header.setTextColor(Color.WHITE);
-        header.setTypeface(null, Typeface.BOLD);
-        header.setPadding(0, 0, 0, dp(8));
-        root.addView(header);
+        root.addView(M3.createSectionHeader(this, "NOTIFICATIONS"));
+        LinearLayout card = M3.createGroupedCard(this);
 
         Switch notificationSwitch = new Switch(this);
         M3.styleSwitch(notificationSwitch);
         notificationSwitch.setText(R.string.notification_switch);
-        notificationSwitch.setPadding(0, dp(8), 0, 0);
+        notificationSwitch.setPadding(0, dp(6), 0, dp(4));
         notificationSwitch.setChecked(prefs.getBoolean(KEY_NOTIFICATION_ENABLED, true));
         notificationSwitch.setOnCheckedChangeListener((v, checked) ->
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_NOTIFICATION_ENABLED, checked).apply());
-        root.addView(notificationSwitch);
+        card.addView(notificationSwitch);
 
         TextView notificationHint = new TextView(this);
         notificationHint.setText(R.string.notification_hint);
         notificationHint.setTextSize(12);
         notificationHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        notificationHint.setPadding(0, dp(4), 0, dp(8));
-        root.addView(notificationHint);
+        notificationHint.setPadding(0, 0, 0, dp(6));
+        card.addView(notificationHint);
+
+        root.addView(card);
     }
 
     private void buildBackupRestoreSection(LinearLayout root) {
-        TextView header = new TextView(this);
-        header.setText("Backup & Restore Settings");
-        header.setTextSize(16);
-        header.setTextColor(Color.WHITE);
-        header.setTypeface(null, Typeface.BOLD);
-        header.setPadding(0, dp(24), 0, dp(8));
-        root.addView(header);
+        root.addView(M3.createSectionHeader(this, "BACKUP & RESTORE"));
+        LinearLayout card = M3.createGroupedCard(this);
 
         TextView hint = new TextView(this);
-        hint.setText("Export all settings and HUD layouts to a JSON backup file, or restore from a previously saved file.");
+        hint.setText("Export all preferences and HUD layouts to a JSON backup file, or restore from a previously saved file.");
         hint.setTextSize(12);
-        hint.setTextColor(0xFFA6ADC8);
-        hint.setPadding(0, 0, 0, dp(12));
-        root.addView(hint);
+        hint.setTextColor(M3.COLOR_TEXT_MUTED);
+        hint.setPadding(0, dp(6), 0, dp(10));
+        card.addView(hint);
 
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
 
         Button btnBackup = new Button(this);
-        styleSettingsButton(btnBackup);
+        M3.styleButton(btnBackup, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_PRIMARY);
         btnBackup.setText("Backup Settings");
         btnBackup.setOnClickListener(v -> backupSettings());
         LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -2470,7 +2405,7 @@ public class SettingsActivity extends Activity {
         row.addView(btnBackup);
 
         Button btnRestore = new Button(this);
-        styleSettingsButton(btnRestore);
+        M3.styleButton(btnRestore, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_TEXT_SECONDARY);
         btnRestore.setText("Restore Settings");
         btnRestore.setOnClickListener(v -> restoreSettings());
         LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -2478,7 +2413,13 @@ public class SettingsActivity extends Activity {
         btnRestore.setLayoutParams(rLp);
         row.addView(btnRestore);
 
-        root.addView(row);
+        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        rowLp.bottomMargin = dp(8);
+        row.setLayoutParams(rowLp);
+        card.addView(row);
+
+        root.addView(card);
     }
 
     // ============================================================
@@ -2487,47 +2428,56 @@ public class SettingsActivity extends Activity {
     private void buildTouchpadSection(LinearLayout root) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
-        // 触摸板模式开关
+        // Group 1: POINTER & CAPTURE
+        root.addView(M3.createSectionHeader(this, "POINTER & CAPTURE"));
+        LinearLayout cardPointer = M3.createGroupedCard(this);
+
         Switch touchpadModeSwitch = new Switch(this);
         M3.styleSwitch(touchpadModeSwitch);
         touchpadModeSwitch.setText(R.string.touchpad_mode_switch);
-        touchpadModeSwitch.setPadding(0, dp(8), 0, 0);
+        touchpadModeSwitch.setPadding(0, dp(6), 0, dp(4));
         touchpadModeSwitch.setChecked(prefs.getBoolean(KEY_TOUCHPAD_MODE, false));
         touchpadModeSwitch.setOnCheckedChangeListener((v, checked) ->
                 getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                         .putBoolean(KEY_TOUCHPAD_MODE, checked).apply());
-        root.addView(touchpadModeSwitch);
+        cardPointer.addView(touchpadModeSwitch);
 
         TextView touchpadHint = new TextView(this);
         touchpadHint.setText(R.string.touchpad_hint);
         touchpadHint.setTextSize(12);
         touchpadHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        touchpadHint.setPadding(0, dp(4), 0, dp(12));
-        root.addView(touchpadHint);
+        touchpadHint.setPadding(0, 0, 0, dp(8));
+        cardPointer.addView(touchpadHint);
 
-        // External mouse pointer capture.  This is opt-in because it changes
-        // Android's mouse event mode from absolute coordinates to relative motion.
+        cardPointer.addView(M3.createDivider(this, 0));
+
         Switch pointerCaptureSwitch = new Switch(this);
         M3.styleSwitch(pointerCaptureSwitch);
         pointerCaptureSwitch.setText(R.string.pointer_capture_switch);
-        pointerCaptureSwitch.setPadding(0, dp(8), 0, 0);
+        pointerCaptureSwitch.setPadding(0, dp(6), 0, dp(4));
         pointerCaptureSwitch.setChecked(prefs.getBoolean(KEY_POINTER_CAPTURE, false));
         pointerCaptureSwitch.setOnCheckedChangeListener((v, checked) ->
                 getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                         .putBoolean(KEY_POINTER_CAPTURE, checked).apply());
-        root.addView(pointerCaptureSwitch);
+        cardPointer.addView(pointerCaptureSwitch);
 
         TextView pointerCaptureHint = new TextView(this);
         pointerCaptureHint.setText(R.string.pointer_capture_hint);
         pointerCaptureHint.setTextSize(12);
         pointerCaptureHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        pointerCaptureHint.setPadding(0, dp(4), 0, dp(12));
-        root.addView(pointerCaptureHint);
+        pointerCaptureHint.setPadding(0, 0, 0, dp(6));
+        cardPointer.addView(pointerCaptureHint);
+
+        root.addView(cardPointer);
+
+        // Group 2: SENSITIVITY & GESTURES
+        root.addView(M3.createSectionHeader(this, "SENSITIVITY & GESTURES"));
+        LinearLayout cardGestures = M3.createGroupedCard(this);
 
         // 鼠标加速度（灵敏度）—— 范围 0.5 ~ 10.0
         LinearLayout accelLayout = new LinearLayout(this);
         accelLayout.setOrientation(LinearLayout.VERTICAL);
-        accelLayout.setPadding(0, dp(8), 0, dp(16));
+        accelLayout.setPadding(0, dp(6), 0, dp(8));
 
         TextView accelLabel = new TextView(this);
         accelLabel.setText(R.string.mouse_sensitivity_label);
@@ -2536,7 +2486,7 @@ public class SettingsActivity extends Activity {
         accelLayout.addView(accelLabel);
 
         final TextView accelValue = new TextView(this);
-        accelValue.setTextSize(14);
+        accelValue.setTextSize(13);
         accelValue.setTextColor(0xFFB4BEFE);
         accelValue.setPadding(0, dp(2), 0, dp(4));
         accelLayout.addView(accelValue);
@@ -2560,90 +2510,83 @@ public class SettingsActivity extends Activity {
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
         accelLayout.addView(accelSeek);
-        root.addView(accelLayout);
+        cardGestures.addView(accelLayout);
 
-        // ===== 双指滚动 =====
+        cardGestures.addView(M3.createDivider(this, 0));
+
         Switch reverseScrollSwitch = new Switch(this);
         M3.styleSwitch(reverseScrollSwitch);
         reverseScrollSwitch.setText(R.string.scroll_reverse_switch);
-        reverseScrollSwitch.setPadding(0, dp(8), 0, 0);
+        reverseScrollSwitch.setPadding(0, dp(6), 0, dp(4));
         reverseScrollSwitch.setChecked(prefs.getBoolean(KEY_SCROLL_REVERSE, false));
         reverseScrollSwitch.setOnCheckedChangeListener((v, checked) ->
                 getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                         .putBoolean(KEY_SCROLL_REVERSE, checked).apply());
-        root.addView(reverseScrollSwitch);
+        cardGestures.addView(reverseScrollSwitch);
 
         TextView reverseScrollHint = new TextView(this);
         reverseScrollHint.setText(R.string.scroll_reverse_hint);
         reverseScrollHint.setTextSize(12);
         reverseScrollHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        reverseScrollHint.setPadding(0, dp(4), 0, dp(12));
-        root.addView(reverseScrollHint);
+        reverseScrollHint.setPadding(0, 0, 0, dp(8));
+        cardGestures.addView(reverseScrollHint);
 
-        // Disable pinch (two-finger spread) and three-or-more-finger gestures.
+        cardGestures.addView(M3.createDivider(this, 0));
+
         Switch disableMultiFingerSwitch = new Switch(this);
         M3.styleSwitch(disableMultiFingerSwitch);
         disableMultiFingerSwitch.setText(R.string.disable_multi_finger_switch);
-        disableMultiFingerSwitch.setPadding(0, dp(8), 0, 0);
+        disableMultiFingerSwitch.setPadding(0, dp(6), 0, dp(4));
         disableMultiFingerSwitch.setChecked(prefs.getBoolean(
                 KEY_DISABLE_MULTI_FINGER_GESTURES, false));
         disableMultiFingerSwitch.setOnCheckedChangeListener((v, checked) ->
                 getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                         .putBoolean(KEY_DISABLE_MULTI_FINGER_GESTURES, checked).apply());
-        root.addView(disableMultiFingerSwitch);
+        cardGestures.addView(disableMultiFingerSwitch);
 
         TextView disableMultiFingerHint = new TextView(this);
         disableMultiFingerHint.setText(R.string.disable_multi_finger_hint);
         disableMultiFingerHint.setTextSize(12);
         disableMultiFingerHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        disableMultiFingerHint.setPadding(0, dp(4), 0, dp(12));
-        root.addView(disableMultiFingerHint);
+        disableMultiFingerHint.setPadding(0, 0, 0, dp(8));
+        cardGestures.addView(disableMultiFingerHint);
 
-        addFloatSlider(root, R.string.scroll_speed_label, R.string.scroll_speed_value,
+        addFloatSlider(cardGestures, R.string.scroll_speed_label, R.string.scroll_speed_value,
                 null, KEY_SCROLL_SPEED, 0.05f, 3.0f, 0.05f, 0.5f);
-        addFloatSlider(root, R.string.scroll_threshold_label,
+        addFloatSlider(cardGestures, R.string.scroll_threshold_label,
                 R.string.threshold_factor_value, R.string.scroll_threshold_hint,
                 KEY_SCROLL_THRESHOLD, 0.05f, 3.0f, 0.05f, 0.5f);
-        addFloatSlider(root, R.string.move_threshold_label,
+        addFloatSlider(cardGestures, R.string.move_threshold_label,
                 R.string.threshold_factor_value, R.string.move_threshold_hint,
                 KEY_MOVE_THRESHOLD, 0.1f, 8.0f, 0.05f, 2.35f);
-        addFloatSlider(root, R.string.gesture_scale_label, R.string.gesture_scale_value,
+        addFloatSlider(cardGestures, R.string.gesture_scale_label, R.string.gesture_scale_value,
                 R.string.gesture_scale_hint,
                 KEY_GESTURE_SCALE, 100f, 3000f, 20f, 800f);
 
-        // Dedicated HUD Trackpad Card (Steam Deck Mode)
-        LinearLayout hudPadCard = new LinearLayout(this);
-        hudPadCard.setOrientation(LinearLayout.VERTICAL);
-        hudPadCard.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
-        hudPadCard.setPadding(dp(14), dp(12), dp(14), dp(14));
-        LinearLayout.LayoutParams hpLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        hpLp.topMargin = dp(16);
-        hpLp.bottomMargin = dp(16);
-        hudPadCard.setLayoutParams(hpLp);
+        root.addView(cardGestures);
+
+        // Group 3: ON-SCREEN HUD TRACKPAD
+        root.addView(M3.createSectionHeader(this, "ON-SCREEN HUD TRACKPAD"));
+        LinearLayout hudPadCard = M3.createGroupedCard(this);
 
         TextView hpTitle = new TextView(this);
-        hpTitle.setText("On-Screen HUD Trackpad (Steam Deck Mode)");
-        hpTitle.setTextSize(15);
+        hpTitle.setText("Steam Deck Trackpad Widget");
+        hpTitle.setTextSize(14);
         hpTitle.setTextColor(Color.WHITE);
         hpTitle.setTypeface(null, Typeface.BOLD);
+        hpTitle.setPadding(0, dp(8), 0, dp(2));
         hudPadCard.addView(hpTitle);
 
         TextView hpDesc = new TextView(this);
-        hpDesc.setText("The HUD Trackpad widget provides precision mouse control for handheld gaming:\n"
-                + "• Tap (<280ms): Left-click (0x110 with 50ms hold)\n"
-                + "• Double-tap: Double-click\n"
-                + "• Double-tap & drag: Mouse drag\n"
-                + "• Hold (>380ms): Right-click (0x111)\n"
-                + "• Two fingers: Scroll wheel");
+        hpDesc.setText("Precision mouse control for handheld gaming: tap to click, double-tap drag to select, hold to right-click.");
         hpDesc.setTextSize(12);
         hpDesc.setTextColor(M3.COLOR_TEXT_MUTED);
-        hpDesc.setPadding(0, dp(4), 0, dp(10));
+        hpDesc.setPadding(0, 0, 0, dp(8));
         hudPadCard.addView(hpDesc);
 
         Button btnEditPad = new Button(this);
-        styleSettingsButton(btnEditPad);
-        btnEditPad.setText("Configure Trackpad in Visual HUD Editor");
+        M3.styleButton(btnEditPad, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_PRIMARY);
+        btnEditPad.setText("Configure Trackpad in HUD Editor");
         btnEditPad.setOnClickListener(v -> {
             Intent intent = new Intent(this, MainActivity.class);
             intent.setAction("OPEN_HUD_EDITOR");
@@ -2657,7 +2600,12 @@ public class SettingsActivity extends Activity {
             startActivity(intent);
             finish();
         });
+        LinearLayout.LayoutParams bepLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bepLp.bottomMargin = dp(8);
+        btnEditPad.setLayoutParams(bepLp);
         hudPadCard.addView(btnEditPad);
+
         root.addView(hudPadCard);
     }
 
@@ -2724,12 +2672,15 @@ public class SettingsActivity extends Activity {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
 
         // Socket path
+        root.addView(M3.createSectionHeader(this, "DAEMON SOCKET & SECOND WINDOW"));
+        LinearLayout cardSocket = M3.createGroupedCard(this);
+
         TextView sockLabel = new TextView(this);
         sockLabel.setText(R.string.socket_path_label);
-        sockLabel.setTextSize(14);
-        sockLabel.setTextColor(M3.COLOR_TEXT_MUTED);
-        sockLabel.setPadding(0, 0, 0, dp(4));
-        root.addView(sockLabel);
+        sockLabel.setTextSize(13);
+        sockLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
+        sockLabel.setPadding(0, dp(4), 0, dp(4));
+        cardSocket.addView(sockLabel);
 
         EditText socketInput = new EditText(this);
         M3.styleInput(socketInput);
@@ -2744,23 +2695,23 @@ public class SettingsActivity extends Activity {
                     .putString(KEY_SOCKET_PATH, s.toString().trim()).apply();
             }
         });
-        root.addView(socketInput);
+        cardSocket.addView(socketInput);
 
-        // Open a second window: an independent pipeline in the same process, targeting
-        // its own daemon socket and shown with its own title. Launched as a new task
-        // (freeform / split-screen) via SecondaryActivity.
+        cardSocket.addView(M3.createDivider(this, 0));
+
+        // Open a second window
         TextView secLabel = new TextView(this);
         secLabel.setText(R.string.second_window_label);
-        secLabel.setTextSize(14);
-        secLabel.setTextColor(M3.COLOR_TEXT_MUTED);
-        secLabel.setPadding(0, dp(16), 0, dp(4));
-        root.addView(secLabel);
+        secLabel.setTextSize(13);
+        secLabel.setTextColor(M3.COLOR_TEXT_SECONDARY);
+        secLabel.setPadding(0, dp(8), 0, dp(4));
+        cardSocket.addView(secLabel);
 
         EditText secName = new EditText(this);
         M3.styleInput(secName);
         secName.setSingleLine(true);
         secName.setHint(R.string.second_window_name_hint);
-        root.addView(secName);
+        cardSocket.addView(secName);
 
         EditText secSocket = new EditText(this);
         M3.styleInput(secSocket);
@@ -2768,12 +2719,12 @@ public class SettingsActivity extends Activity {
         secSocket.setHint(DEFAULT_SOCKET_PATH);
         LinearLayout.LayoutParams secSockLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        secSockLp.setMargins(0, dp(8), 0, dp(8));
+        secSockLp.setMargins(0, dp(6), 0, dp(8));
         secSocket.setLayoutParams(secSockLp);
-        root.addView(secSocket);
+        cardSocket.addView(secSocket);
 
         Button secOpen = new Button(this);
-        styleSettingsButton(secOpen);
+        M3.styleButton(secOpen, M3.COLOR_SURFACE_HIGH, 0x33FFFFFF, M3.COLOR_PRIMARY);
         secOpen.setText(R.string.second_window_open);
         secOpen.setOnClickListener(v -> {
             Intent i = new Intent(this, SecondaryActivity.class);
@@ -2784,25 +2735,37 @@ public class SettingsActivity extends Activity {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
             startActivity(i);
         });
-        root.addView(secOpen);
+        LinearLayout.LayoutParams soLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        soLp.bottomMargin = dp(8);
+        secOpen.setLayoutParams(soLp);
+        cardSocket.addView(secOpen);
+
+        root.addView(cardSocket);
+
+        // Hardware & Services
+        root.addView(M3.createSectionHeader(this, "SERVICES & HARDWARE"));
+        LinearLayout cardServices = M3.createGroupedCard(this);
 
         // Connect with root
         Switch rootSwitch = new Switch(this);
         M3.styleSwitch(rootSwitch);
         rootSwitch.setText(R.string.root_switch);
-        rootSwitch.setPadding(0, dp(16), 0, 0);
+        rootSwitch.setPadding(0, dp(6), 0, dp(4));
         rootSwitch.setChecked(prefs.getBoolean(KEY_USE_ROOT, true));
         rootSwitch.setOnCheckedChangeListener((v, checked) ->
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_USE_ROOT, checked).apply());
-        root.addView(rootSwitch);
+        cardServices.addView(rootSwitch);
 
         TextView rootHint = new TextView(this);
         rootHint.setText(R.string.root_hint);
         rootHint.setTextSize(12);
         rootHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        rootHint.setPadding(0, dp(4), 0, 0);
-        root.addView(rootHint);
+        rootHint.setPadding(0, 0, 0, dp(8));
+        cardServices.addView(rootHint);
+
+        cardServices.addView(M3.createDivider(this, 0));
 
         // Forward microphone: capture the device mic and expose it to the Linux
         // desktop as a recording source. Requires the RECORD_AUDIO permission, which
@@ -2810,87 +2773,87 @@ public class SettingsActivity extends Activity {
         Switch micSwitch = new Switch(this);
         M3.styleSwitch(micSwitch);
         micSwitch.setText(R.string.mic_switch);
-        micSwitch.setPadding(0, dp(16), 0, 0);
+        micSwitch.setPadding(0, dp(6), 0, dp(4));
         micSwitch.setChecked(prefs.getBoolean(KEY_MIC_ENABLED, false));
         micSwitch.setOnCheckedChangeListener((v, checked) ->
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_MIC_ENABLED, checked).apply());
-        root.addView(micSwitch);
+        cardServices.addView(micSwitch);
 
         TextView micHint = new TextView(this);
         micHint.setText(R.string.mic_hint);
         micHint.setTextSize(12);
         micHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        micHint.setPadding(0, dp(4), 0, 0);
-        root.addView(micHint);
+        micHint.setPadding(0, 0, 0, dp(8));
+        cardServices.addView(micHint);
 
-        // Forward camera: expose the device camera(s) to the Linux desktop. When on,
-        // the app pre-creates the camera service resources at startup (CameraX is only
-        // opened once the desktop actually requests a recording). Requires the CAMERA
-        // permission, which MainActivity requests when this is enabled.
+        cardServices.addView(M3.createDivider(this, 0));
+
+        // Forward camera: expose the device camera(s) to the Linux desktop.
         Switch cameraSwitch = new Switch(this);
         M3.styleSwitch(cameraSwitch);
         cameraSwitch.setText(R.string.camera_switch);
-        cameraSwitch.setPadding(0, dp(16), 0, 0);
+        cameraSwitch.setPadding(0, dp(6), 0, dp(4));
         cameraSwitch.setChecked(prefs.getBoolean(KEY_CAMERA_ENABLED, false));
         cameraSwitch.setOnCheckedChangeListener((v, checked) ->
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_CAMERA_ENABLED, checked).apply());
-        root.addView(cameraSwitch);
+        cardServices.addView(cameraSwitch);
 
         TextView cameraHint = new TextView(this);
         cameraHint.setText(R.string.camera_hint);
         cameraHint.setTextSize(12);
         cameraHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        cameraHint.setPadding(0, dp(4), 0, 0);
-        root.addView(cameraHint);
+        cameraHint.setPadding(0, 0, 0, dp(8));
+        cardServices.addView(cameraHint);
 
-        // Audio keep-alive: keep the AAudio output stream running (fed near-silent
-        // keepalive) so short Linux UI sounds (volume ticks, key clicks) always play
-        // immediately. Off by default so the audio path can sleep when the desktop is
-        // silent and save standby power.
+        cardServices.addView(M3.createDivider(this, 0));
+
+        // Audio keep-alive
         Switch keepaliveSwitch = new Switch(this);
         M3.styleSwitch(keepaliveSwitch);
         keepaliveSwitch.setText(R.string.audio_keepalive_switch);
-        keepaliveSwitch.setPadding(0, dp(16), 0, 0);
+        keepaliveSwitch.setPadding(0, dp(6), 0, dp(4));
         keepaliveSwitch.setChecked(prefs.getBoolean(KEY_AUDIO_KEEPALIVE, false));
         keepaliveSwitch.setOnCheckedChangeListener((v, checked) ->
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean(KEY_AUDIO_KEEPALIVE, checked).apply());
-        root.addView(keepaliveSwitch);
+        cardServices.addView(keepaliveSwitch);
 
         TextView keepaliveHint = new TextView(this);
         keepaliveHint.setText(R.string.audio_keepalive_hint);
         keepaliveHint.setTextSize(12);
         keepaliveHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        keepaliveHint.setPadding(0, dp(4), 0, 0);
-        root.addView(keepaliveHint);
+        keepaliveHint.setPadding(0, 0, 0, dp(8));
+        cardServices.addView(keepaliveHint);
 
-        // Audio latency presets, separately for the speaker (playback) and microphone
-        // (capture) paths. The chosen buffer is forwarded to the producer's PipeWire
-        // nodes; smaller = lower latency but more risk of audio glitches.
-        TextView latTitle = new TextView(this);
-        latTitle.setText(R.string.audio_latency_title);
-        latTitle.setTextSize(15);
-        latTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        latTitle.setPadding(0, dp(20), 0, 0);
-        root.addView(latTitle);
+        root.addView(cardServices);
 
-        root.addView(makeLatencySpinner(getString(R.string.latency_speaker_label),
+        // Audio latency presets
+        root.addView(M3.createSectionHeader(this, "AUDIO LATENCY PRESETS"));
+        LinearLayout cardLatency = M3.createGroupedCard(this);
+
+        cardLatency.addView(makeLatencySpinner(getString(R.string.latency_speaker_label),
                                         KEY_SPEAKER_LATENCY_MS, prefs));
-        root.addView(makeLatencySpinner(getString(R.string.latency_mic_label),
+        cardLatency.addView(M3.createDivider(this, 0));
+        cardLatency.addView(makeLatencySpinner(getString(R.string.latency_mic_label),
                                         KEY_MIC_LATENCY_MS, prefs));
 
         TextView latHint = new TextView(this);
         latHint.setText(R.string.latency_hint);
         latHint.setTextSize(12);
         latHint.setTextColor(M3.COLOR_TEXT_MUTED);
-        latHint.setPadding(0, dp(4), 0, 0);
-        root.addView(latHint);
+        latHint.setPadding(0, dp(4), 0, dp(8));
+        cardLatency.addView(latHint);
+
+        root.addView(cardLatency);
     }
 
     private void addResolutionSection(LinearLayout root) {
     SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+
+    root.addView(M3.createSectionHeader(this, "CUSTOM RESOLUTION"));
+    LinearLayout cardRes = M3.createGroupedCard(this);
 
     // Width / height fields. Created first (but added below the preset picker) so
     // the picker can populate them; their TextWatchers are the single source of
@@ -2927,15 +2890,13 @@ public class SettingsActivity extends Activity {
         }
     });
 
-    // Preset picker: fills width/height (which persist via their watchers). Index
-    // 0 is a no-op placeholder so the Spinner's initial auto-selection and manual
-    // edits leave the fields untouched.
+    // Preset picker
     LinearLayout spinnerCard = new LinearLayout(this);
     spinnerCard.setOrientation(LinearLayout.VERTICAL);
     android.graphics.drawable.GradientDrawable spBg = new android.graphics.drawable.GradientDrawable();
     spBg.setCornerRadius(dp(8));
-    spBg.setColor(0xFF181825);
-    spBg.setStroke(dp(1), 0x22FFFFFF);
+    spBg.setColor(M3.COLOR_SURFACE_HIGH);
+    spBg.setStroke(dp(1), M3.COLOR_BORDER_SUBTLE);
     spinnerCard.setBackground(spBg);
     spinnerCard.setPadding(dp(12), dp(4), dp(12), dp(4));
 
@@ -2953,11 +2914,15 @@ public class SettingsActivity extends Activity {
         public void onNothingSelected(AdapterView<?> parent) {}
     });
     spinnerCard.addView(presetSpinner);
-    root.addView(spinnerCard);
+    LinearLayout.LayoutParams spLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    spLp.bottomMargin = dp(8);
+    spinnerCard.setLayoutParams(spLp);
+    cardRes.addView(spinnerCard);
 
     LinearLayout inputsRow = new LinearLayout(this);
     inputsRow.setOrientation(LinearLayout.HORIZONTAL);
-    inputsRow.setPadding(0, dp(10), 0, dp(4));
+    inputsRow.setPadding(0, 0, 0, dp(4));
 
     M3.styleInput(widthInput);
     LinearLayout.LayoutParams wLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
@@ -2970,44 +2935,45 @@ public class SettingsActivity extends Activity {
     heightInput.setLayoutParams(hLp);
     inputsRow.addView(heightInput);
 
-    root.addView(inputsRow);
+    cardRes.addView(inputsRow);
 
     TextView hint = new TextView(this);
     hint.setText(R.string.resolution_hint);
     hint.setTextSize(12);
     hint.setTextColor(M3.COLOR_TEXT_MUTED);
-    hint.setPadding(0, dp(4), 0, 0);
-    root.addView(hint);
+    hint.setPadding(0, dp(4), 0, dp(8));
+    cardRes.addView(hint);
+
+    cardRes.addView(M3.createDivider(this, 0));
 
     Switch autoStretchSwitch = new Switch(this);
     M3.styleSwitch(autoStretchSwitch);
     autoStretchSwitch.setText(R.string.auto_stretch_switch);
-    autoStretchSwitch.setPadding(0, dp(16), 0, 0);
+    autoStretchSwitch.setPadding(0, dp(6), 0, dp(4));
     autoStretchSwitch.setChecked(prefs.getBoolean("auto_stretch", true));
     autoStretchSwitch.setOnCheckedChangeListener((v, checked) ->
         prefs.edit().putBoolean("auto_stretch", checked).apply());
-    root.addView(autoStretchSwitch);
+    cardRes.addView(autoStretchSwitch);
 
     TextView autoStretchHint = new TextView(this);
     autoStretchHint.setText(R.string.auto_stretch_hint);
     autoStretchHint.setTextSize(12);
     autoStretchHint.setTextColor(M3.COLOR_TEXT_MUTED);
-    autoStretchHint.setPadding(0, dp(4), 0, 0);
-    root.addView(autoStretchHint);
+    autoStretchHint.setPadding(0, 0, 0, dp(8));
+    cardRes.addView(autoStretchHint);
 
-    TextView ratioLabel = new TextView(this);
-    ratioLabel.setText("Landscape Display Aspect Ratio");
-    ratioLabel.setTextSize(14);
-    ratioLabel.setTextColor(Color.WHITE);
-    ratioLabel.setPadding(0, dp(16), 0, dp(4));
-    root.addView(ratioLabel);
+    root.addView(cardRes);
+
+    // Aspect ratio group
+    root.addView(M3.createSectionHeader(this, "LANDSCAPE ASPECT RATIO"));
+    LinearLayout cardRatio = M3.createGroupedCard(this);
 
     LinearLayout ratioCard = new LinearLayout(this);
     ratioCard.setOrientation(LinearLayout.VERTICAL);
     android.graphics.drawable.GradientDrawable rBg = new android.graphics.drawable.GradientDrawable();
     rBg.setCornerRadius(dp(8));
-    rBg.setColor(0xFF181825);
-    rBg.setStroke(dp(1), 0x22FFFFFF);
+    rBg.setColor(M3.COLOR_SURFACE_HIGH);
+    rBg.setStroke(dp(1), M3.COLOR_BORDER_SUBTLE);
     ratioCard.setBackground(rBg);
     ratioCard.setPadding(dp(12), dp(4), dp(12), dp(4));
 
@@ -3049,14 +3015,21 @@ public class SettingsActivity extends Activity {
         public void onNothingSelected(AdapterView<?> parent) {}
     });
     ratioCard.addView(ratioSpinner);
-    root.addView(ratioCard);
+    LinearLayout.LayoutParams rcLp = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    rcLp.topMargin = dp(4);
+    rcLp.bottomMargin = dp(8);
+    ratioCard.setLayoutParams(rcLp);
+    cardRatio.addView(ratioCard);
 
     TextView ratioHint = new TextView(this);
-    ratioHint.setText("Locks desktop center stage with side margins (gutters) for Switch controller HUD buttons and Split keyboard.");
+    ratioHint.setText("Centers desktop canvas with side gutters for controller HUD buttons and Split keyboard.");
     ratioHint.setTextSize(12);
     ratioHint.setTextColor(M3.COLOR_TEXT_MUTED);
-    ratioHint.setPadding(0, dp(4), 0, 0);
-    root.addView(ratioHint);
+    ratioHint.setPadding(0, 0, 0, dp(8));
+    cardRatio.addView(ratioHint);
+
+    root.addView(cardRatio);
     }
 
     // Maps a res_preset_labels index to {width, height}, or null for the index-0

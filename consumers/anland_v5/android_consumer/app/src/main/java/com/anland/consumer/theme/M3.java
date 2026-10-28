@@ -110,6 +110,50 @@ public final class M3 {
     // COMPONENT STYLING HELPERS
     // ============================================================
 
+    /**
+     * Create a Grouped Inset Card container matching iOS layout standards.
+     * Related settings live inside a single rounded container with internal dividers.
+     */
+    public static LinearLayout createGroupedCard(Context ctx) {
+        LinearLayout card = new LinearLayout(ctx);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(shape(ctx, RADIUS_CARD, COLOR_SURFACE_LOW, COLOR_BORDER_SUBTLE, 1.0f));
+        card.setPadding(dp(ctx, 16), dp(ctx, 4), dp(ctx, 16), dp(ctx, 4));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.bottomMargin = dp(ctx, 16);
+        card.setLayoutParams(lp);
+        return card;
+    }
+
+    /**
+     * Create an elegant uppercase section header (iOS HIG standard: small, bold, muted, clean margins).
+     */
+    public static TextView createSectionHeader(Context ctx, CharSequence title) {
+        TextView tv = new TextView(ctx);
+        tv.setText(title);
+        tv.setTextSize(12f);
+        tv.setTypeface(null, Typeface.BOLD);
+        tv.setTextColor(COLOR_TEXT_MUTED);
+        tv.setLetterSpacing(0.05f);
+        tv.setPadding(dp(ctx, 4), dp(ctx, 14), dp(ctx, 4), dp(ctx, 6));
+        return tv;
+    }
+
+    /**
+     * Create a subtle hairline divider between grouped rows.
+     */
+    public static View createDivider(Context ctx, int leftInsetDp) {
+        View divider = new View(ctx);
+        int h = Math.max(1, Math.round(0.75f * ctx.getResources().getDisplayMetrics().density));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, h);
+        lp.leftMargin = dp(ctx, leftInsetDp);
+        divider.setLayoutParams(lp);
+        divider.setBackgroundColor(0x18FFFFFF);
+        return divider;
+    }
+
     /** Style an interactive button with M3 Purist 10dp radius, 1px border, safe padding. */
     public static void styleButton(Button btn, int normalBg, int activeBg, int textColor) {
         Context ctx = btn.getContext();
