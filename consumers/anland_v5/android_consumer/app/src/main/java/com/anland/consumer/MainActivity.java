@@ -2255,16 +2255,34 @@ public class MainActivity extends Activity
     public void onConfigurationChanged(android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
         dbg("configChanged orient=" + newConfig.orientation);
-        if (newConfig.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT) {
+        boolean isLandscape = (newConfig.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE);
+
+        // Always reset any transient auto-hide state on orientation change
+        mHudAutoHidden = false;
+
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean useHud = prefs.getBoolean("use_hud_overlay", false);
+        boolean isSteamDeck = prefs.getBoolean(KEY_STEAM_DECK_MODE, false);
+
+        if (mHudOverlay != null && !mHudOverlay.isEditMode()) {
+            mHudOverlay.setVisibility((useHud || isSteamDeck) ? View.VISIBLE : View.GONE);
+        }
+
+        if (!isLandscape) {
             if (virtualKeyboardView != null && virtualKeyboardView.getVisibility() == View.VISIBLE) {
                 virtualKeyboardView.setVisibility(View.GONE);
-                restoreHudAfterKeyboard();
             }
         }
+
         setExtraKeysBarVisible(shouldShowBar(systemIme != null && systemIme.isImeVisible()));
         relayout();
+
         if (mHudOverlay != null) {
-            mHudOverlay.rebuildActiveLayout();
+            mHudOverlay.post(() -> {
+                if (mHudOverlay != null) {
+                    mHudOverlay.rebuildActiveLayout();
+                }
+            });
         }
         if (mRoot != null)
             mRoot.postDelayed(this::syncScreenSizeToSurface, 400);
@@ -2323,19 +2341,23 @@ public class MainActivity extends Activity
 
         mImeBottom = newImeBottom;
 
-        // Only "with_keyboard" mode tracks the IME; "always"/"never"
-        // let the user's manual toggle (back key) stay untouched.
-        // The HUD editor is a separate, peer feature and must NOT
-        // suppress the extra-keys bar here.
-        String mode = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                .getString(KEY_EXTRA_KEYS_MODE, "always");
+        int orientation = getResources().getConfiguration().orientation;
+        boolean isLandscape = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean isSteamDeck = prefs.getBoolean(KEY_STEAM_DECK_MODE, false);
+
         if (imeVisible != wasImeVisible) {
-            if ("with_keyboard".equals(mode))
-                setExtraKeysBarVisible(imeVisible);
-            if (imeVisible)
-                hideFloatingForKeyboard();
-            else
+            setExtraKeysBarVisible(shouldShowBar(imeVisible));
+            // Only auto-hide HUD in landscape / Steam Deck mode when keyboard opens
+            if (isLandscape && isSteamDeck) {
+                if (imeVisible) {
+                    hideFloatingForKeyboard();
+                } else {
+                    restoreHudAfterKeyboard();
+                }
+            } else if (!imeVisible) {
                 restoreHudAfterKeyboard();
+            }
         }
 
         relayout();
@@ -2524,6 +2546,9 @@ public class MainActivity extends Activity
         if (mHudOverlay != null) {
             mHudOverlay.loadProfile();
             mHudOverlay.setVisibility(enabled ? View.VISIBLE : (prefs.getBoolean("use_hud_overlay", false) ? View.VISIBLE : View.GONE));
+            mHudOverlay.post(() -> {
+                if (mHudOverlay != null) mHudOverlay.rebuildActiveLayout();
+            });
         }
         relayout();
     }
@@ -2682,17 +2707,12 @@ public class MainActivity extends Activity
         }
     }
 
-    // Mo ban phim: tu dong an HUD controller va ExtraKeys de khong che mat man hinh.
+    // Mo ban phim o che do ngang: tu dong an HUD controller de khong che mat man hinh.
     private void hideFloatingForKeyboard() {
         if (mHudOverlay != null && mHudOverlay.getVisibility() == View.VISIBLE
                 && !mHudOverlay.isEditMode() && !mHudAutoHidden) {
             mHudAutoHidden = true;
             mHudOverlay.setVisibility(View.GONE);
-        }
-        if (extraKeysBar != null && extraKeysBar.getVisibility() == View.VISIBLE) {
-            extraKeysBar.setVisibility(View.GONE);
-            extraKeysBar.reset();
-            relayout();
         }
     }
 
@@ -2704,11 +2724,12 @@ public class MainActivity extends Activity
             boolean isSteamDeck = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                     .getBoolean(KEY_STEAM_DECK_MODE, false);
             if ((useHud || isSteamDeck) && mHudOverlay != null && !mHudOverlay.isEditMode()
-                    && mImeBottom <= 0
                     && (virtualKeyboardView == null
                         || virtualKeyboardView.getVisibility() != View.VISIBLE)) {
                 mHudOverlay.setVisibility(View.VISIBLE);
-                mHudOverlay.rebuildActiveLayout();
+                mHudOverlay.post(() -> {
+                    if (mHudOverlay != null) mHudOverlay.rebuildActiveLayout();
+                });
             }
         }
     }

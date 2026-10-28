@@ -1023,7 +1023,10 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         view.setLayoutParams(new LayoutParams(w, h));
         int curPw = getWidth();
         int curPh = getHeight();
-        if (curPw > 0 && curPh > 0) {
+        boolean isLandscape = getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+        boolean dimensionsMatchOrientation = (isLandscape && curPw >= curPh) || (!isLandscape && curPw <= curPh);
+
+        if (curPw > 0 && curPh > 0 && dimensionsMatchOrientation) {
             view.setX(model.posXPercent * curPw - w * 0.5f);
             view.setY(model.posYPercent * curPh - h * 0.5f);
         } else {
@@ -1328,7 +1331,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     }
 
     public void applyImeBottom(int imeBottom) {
-        mInsetBottom = Math.max(mInsetBottom, imeBottom);
+        mInsetBottom = Math.max(getSystemNavigationBarHeight(getContext()), imeBottom);
         invalidate();
     }
 
