@@ -14,14 +14,18 @@
 
     <!-- Settings home: category rows and back navigation -->
     <string name="nav_back">‹ Back</string>
-    <string name="cat_keyboard_title">Keyboard &amp; Keys</string>
-    <string name="cat_keyboard_subtitle">Key binding, immersive mode, accessibility &amp; extra keys bar</string>
+    <string name="cat_keyboard_title">Keyboard &amp; Typing</string>
+    <string name="cat_keyboard_subtitle">Virtual keyboard wings, ExtraKeys bar &amp; key bindings</string>
+    <string name="cat_gaming_hud_title">Gaming &amp; On-Screen HUD</string>
+    <string name="cat_gaming_hud_subtitle">Floating HUD, Steam Deck layout, gamepad presets &amp; editor</string>
     <string name="cat_touchpad_title">Touchpad &amp; Mouse</string>
     <string name="cat_touchpad_subtitle">Touchpad mode, pointer capture &amp; sensitivity</string>
-    <string name="cat_connection_subtitle">Socket, root, mic, camera &amp; audio latency</string>
-    <string name="cat_resolution_subtitle">Output resolution &amp; presets</string>
-    <string name="cat_general_title">General</string>
-    <string name="cat_general_subtitle">Screen orientation &amp; settings notification</string>
+    <string name="cat_resolution_title">Display &amp; Orientation</string>
+    <string name="cat_resolution_subtitle">Screen orientation, resolution &amp; landscape aspect ratio</string>
+    <string name="cat_connection_title">Connection &amp; Audio</string>
+    <string name="cat_connection_subtitle">Socket path, root helper, mic &amp; audio latency</string>
+    <string name="cat_general_title">System &amp; Backup</string>
+    <string name="cat_general_subtitle">Haptic feedback, notifications, backup &amp; restore</string>
 
     <!-- Screen orientation -->
     <string name="section_orientation">Screen Orientation</string>

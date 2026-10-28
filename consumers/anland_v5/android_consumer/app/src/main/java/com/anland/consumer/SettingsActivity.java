@@ -104,7 +104,7 @@ public class SettingsActivity extends Activity {
     private static final int[] LATENCY_MS = {0, 1, 3, 5, 10, 20};
 
     // Which secondary page is on screen. Back returns HOME -> exits the activity.
-    private enum Page { HOME, KEYBOARD, TOUCHPAD, CONNECTION, RESOLUTION, GENERAL }
+    private enum Page { HOME, KEYBOARD, GAMING_HUD, TOUCHPAD, CONNECTION, RESOLUTION, GENERAL }
     private Page currentPage = Page.HOME;
 
     // The key-binding row currently counting down, if any: it gets the next key
@@ -303,12 +303,14 @@ public class SettingsActivity extends Activity {
 
         addCategoryRow(root, R.string.cat_keyboard_title,
             R.string.cat_keyboard_subtitle, this::showKeyboardPage);
+        addCategoryRow(root, R.string.cat_gaming_hud_title,
+            R.string.cat_gaming_hud_subtitle, this::showGamingHudPage);
         addCategoryRow(root, R.string.cat_touchpad_title,
             R.string.cat_touchpad_subtitle, this::showTouchpadPage);
-        addCategoryRow(root, R.string.section_connection,
-            R.string.cat_connection_subtitle, this::showConnectionPage);
-        addCategoryRow(root, R.string.section_resolution,
+        addCategoryRow(root, R.string.cat_resolution_title,
             R.string.cat_resolution_subtitle, this::showResolutionPage);
+        addCategoryRow(root, R.string.cat_connection_title,
+            R.string.cat_connection_subtitle, this::showConnectionPage);
         addCategoryRow(root, R.string.cat_general_title,
             R.string.cat_general_subtitle, this::showGeneralPage);
 
@@ -414,7 +416,6 @@ public class SettingsActivity extends Activity {
             LinearLayout root = newPage(R.string.cat_keyboard_title);
             buildVirtualKeyboardSection(root);
             buildExtraKeysSection(root);
-            buildHudSection(root);
             buildSystemShortcutsSection(root);
             setContent(root);
         } catch (Throwable t) {
@@ -424,12 +425,26 @@ public class SettingsActivity extends Activity {
         }
     }
 
+    private void showGamingHudPage() {
+        try {
+            currentPage = Page.GAMING_HUD;
+            LinearLayout root = newPage(R.string.cat_gaming_hud_title);
+            buildHudSection(root);
+            buildGamepadTipsSection(root);
+            setContent(root);
+        } catch (Throwable t) {
+            Log.e(TAG, "showGamingHudPage error", t);
+            Toast.makeText(this, "Error loading gaming settings: " + t.getMessage(), Toast.LENGTH_LONG).show();
+            showHome();
+        }
+    }
+
     private void buildHudSection(LinearLayout root) {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         boolean useHud = prefs.getBoolean("use_hud_overlay", false);
 
         TextView header = new TextView(this);
-        header.setText("3. HUD Overlay & Gamepad Controls");
+        header.setText("1. Floating HUD & Gamepad Controls");
         header.setTextSize(16);
         header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
@@ -453,7 +468,7 @@ public class SettingsActivity extends Activity {
         hudSwitch.setOnCheckedChangeListener((v, checked) -> {
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                 .putBoolean("use_hud_overlay", checked).apply();
-            showKeyboardPage();
+            showGamingHudPage();
         });
         card.addView(hudSwitch);
 
@@ -490,7 +505,7 @@ public class SettingsActivity extends Activity {
                 edit.putString("landscape_aspect_ratio", "auto");
                 edit.apply();
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
-                showKeyboardPage();
+                showGamingHudPage();
             }
         });
         card.addView(steamDeckSwitch);
@@ -593,6 +608,56 @@ public class SettingsActivity extends Activity {
         builder.show();
     }
 
+    private void buildGamepadTipsSection(LinearLayout root) {
+        TextView header = new TextView(this);
+        header.setText("2. Gamepad & Architecture Notes");
+        header.setTextSize(16);
+        header.setTextColor(Color.WHITE);
+        header.setTypeface(null, Typeface.BOLD);
+        header.setPadding(0, dp(14), 0, dp(6));
+        root.addView(header);
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+        card.setPadding(dp(14), dp(12), dp(14), dp(14));
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.bottomMargin = dp(16);
+        card.setLayoutParams(cardLp);
+
+        addTipItem(card, "Dual D-Pad Dispatch",
+                "Simultaneously emits Hat0 axes (ABS_HAT0X/Y) and evdev buttons (BTN_DPAD_*) for full compatibility with MonoGame, SDL2, and standard Linux Xbox 360 pad mappings.");
+
+        addTipItem(card, "Analog Triggers L2 / R2",
+                "Triggers dispatch parallel analog axis events (ABS_Z and ABS_RZ, 0..255) so games with analog throttle or trigger requirements respond accurately.");
+
+        addTipItem(card, "In-Game Controller Menus",
+                "In games like Stardew Valley, enable \"Use Controller-Style Menus\" (snappyMenus) in the game options so D-Pad can navigate dialogs and inventory grids.");
+
+        addTipItem(card, "Haptic Trackpad Gestures",
+                "Dedicated HUD Trackpad widget supports single tap (left click), double tap (double click), double-tap drag (mouse drag), and hold >380ms (right click).");
+
+        root.addView(card);
+    }
+
+    private void addTipItem(LinearLayout parent, String title, String description) {
+        TextView t = new TextView(this);
+        t.setText("• " + title);
+        t.setTextSize(14);
+        t.setTypeface(null, Typeface.BOLD);
+        t.setTextColor(0xFF80DEEA);
+        t.setPadding(0, dp(6), 0, dp(2));
+        parent.addView(t);
+
+        TextView d = new TextView(this);
+        d.setText(description);
+        d.setTextSize(12);
+        d.setTextColor(M3.COLOR_TEXT_MUTED);
+        d.setPadding(dp(12), 0, 0, dp(6));
+        parent.addView(d);
+    }
+
     private void showTouchpadPage() {
         currentPage = Page.TOUCHPAD;
         LinearLayout root = newPage(R.string.cat_touchpad_title);
@@ -602,14 +667,15 @@ public class SettingsActivity extends Activity {
 
     private void showConnectionPage() {
         currentPage = Page.CONNECTION;
-        LinearLayout root = newPage(R.string.section_connection);
+        LinearLayout root = newPage(R.string.cat_connection_title);
         addConnectionSection(root);
         setContent(root);
     }
 
     private void showResolutionPage() {
         currentPage = Page.RESOLUTION;
-        LinearLayout root = newPage(R.string.section_resolution);
+        LinearLayout root = newPage(R.string.cat_resolution_title);
+        buildOrientationSection(root);
         addResolutionSection(root);
         setContent(root);
     }
@@ -617,7 +683,6 @@ public class SettingsActivity extends Activity {
     private void showGeneralPage() {
         currentPage = Page.GENERAL;
         LinearLayout root = newPage(R.string.cat_general_title);
-        buildOrientationSection(root);
         buildHapticSection(root);
         buildNotificationSection(root);
         buildBackupRestoreSection(root);
@@ -1598,7 +1663,7 @@ public class SettingsActivity extends Activity {
 
     private void buildSystemShortcutsSection(LinearLayout root) {
         TextView header = new TextView(this);
-        header.setText("4. System & Shortcuts");
+        header.setText("3. System & Shortcuts");
         header.setTextSize(16);
         header.setTextColor(Color.WHITE);
         header.setTypeface(null, Typeface.BOLD);
@@ -2545,6 +2610,55 @@ public class SettingsActivity extends Activity {
         addFloatSlider(root, R.string.gesture_scale_label, R.string.gesture_scale_value,
                 R.string.gesture_scale_hint,
                 KEY_GESTURE_SCALE, 100f, 3000f, 20f, 800f);
+
+        // Dedicated HUD Trackpad Card (Steam Deck Mode)
+        LinearLayout hudPadCard = new LinearLayout(this);
+        hudPadCard.setOrientation(LinearLayout.VERTICAL);
+        hudPadCard.setBackground(M3.shape(this, M3.RADIUS_CARD, M3.COLOR_SURFACE_LOW, M3.COLOR_BORDER_SUBTLE, 1.0f));
+        hudPadCard.setPadding(dp(14), dp(12), dp(14), dp(14));
+        LinearLayout.LayoutParams hpLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hpLp.topMargin = dp(16);
+        hpLp.bottomMargin = dp(16);
+        hudPadCard.setLayoutParams(hpLp);
+
+        TextView hpTitle = new TextView(this);
+        hpTitle.setText("On-Screen HUD Trackpad (Steam Deck Mode)");
+        hpTitle.setTextSize(15);
+        hpTitle.setTextColor(Color.WHITE);
+        hpTitle.setTypeface(null, Typeface.BOLD);
+        hudPadCard.addView(hpTitle);
+
+        TextView hpDesc = new TextView(this);
+        hpDesc.setText("The HUD Trackpad widget provides precision mouse control for handheld gaming:\n"
+                + "• Tap (<280ms): Left-click (0x110 with 50ms hold)\n"
+                + "• Double-tap: Double-click\n"
+                + "• Double-tap & drag: Mouse drag\n"
+                + "• Hold (>380ms): Right-click (0x111)\n"
+                + "• Two fingers: Scroll wheel");
+        hpDesc.setTextSize(12);
+        hpDesc.setTextColor(M3.COLOR_TEXT_MUTED);
+        hpDesc.setPadding(0, dp(4), 0, dp(10));
+        hudPadCard.addView(hpDesc);
+
+        Button btnEditPad = new Button(this);
+        styleSettingsButton(btnEditPad);
+        btnEditPad.setText("Configure Trackpad in Visual HUD Editor");
+        btnEditPad.setOnClickListener(v -> {
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.setAction("OPEN_HUD_EDITOR");
+            if (mCurrentSocketPath != null) {
+                intent.putExtra(MainActivity.EXTRA_SOCKET_PATH, mCurrentSocketPath);
+            }
+            if (mCurrentWindowName != null) {
+                intent.putExtra(MainActivity.EXTRA_WINDOW_NAME, mCurrentWindowName);
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            startActivity(intent);
+            finish();
+        });
+        hudPadCard.addView(btnEditPad);
+        root.addView(hudPadCard);
     }
 
     /**

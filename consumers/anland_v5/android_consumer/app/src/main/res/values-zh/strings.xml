@@ -14,14 +14,18 @@
 
     <!-- Settings home: category rows and back navigation -->
     <string name="nav_back">‹ 返回</string>
-    <string name="cat_keyboard_title">键盘与按键</string>
-    <string name="cat_keyboard_subtitle">按键绑定、沉浸模式、无障碍与扩展按键栏</string>
+    <string name="cat_keyboard_title">键盘与输入</string>
+    <string name="cat_keyboard_subtitle">虚拟分弧键盘、扩展按键栏与按键绑定</string>
+    <string name="cat_gaming_hud_title">游戏与屏幕 HUD</string>
+    <string name="cat_gaming_hud_subtitle">悬浮 HUD 控件、Steam Deck 掌机模式与手柄预设</string>
     <string name="cat_touchpad_title">触摸板与鼠标</string>
     <string name="cat_touchpad_subtitle">触摸板模式、指针捕获与灵敏度</string>
+    <string name="cat_resolution_title">显示与屏幕方向</string>
+    <string name="cat_resolution_subtitle">屏幕方向、输出分辨率与横屏纵横比</string>
+    <string name="cat_connection_title">连接与音频</string>
     <string name="cat_connection_subtitle">套接字、root、麦克风、摄像头与音频延迟</string>
-    <string name="cat_resolution_subtitle">输出分辨率与预设</string>
-    <string name="cat_general_title">通用</string>
-    <string name="cat_general_subtitle">屏幕方向与设置通知</string>
+    <string name="cat_general_title">系统与备份</string>
+    <string name="cat_general_subtitle">触觉振动反馈、设置通知、备份与恢复</string>
 
     <!-- Screen orientation -->
     <string name="section_orientation">屏幕方向</string>
