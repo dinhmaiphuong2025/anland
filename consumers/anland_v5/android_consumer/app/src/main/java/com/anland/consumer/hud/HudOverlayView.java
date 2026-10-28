@@ -86,6 +86,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     // sibling guides (cạnh của nút khác trên màn hình).
     private final List<Float> mActiveSelfVerticalGuides = new ArrayList<>();
     private final List<Float> mActiveSelfHorizontalGuides = new ArrayList<>();
+    private boolean mWasSnapped = false;
 
     // UI Sub-containers
     private FrameLayout mFloatingContainer;
@@ -1067,28 +1068,29 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     } else {
                         mInitialBtnLeft = view.getX();
                         mInitialBtnTop = view.getY();
-                    }
-                    mActiveVerticalGuides.clear();
-                    mActiveHorizontalGuides.clear();
-                    mActiveSelfVerticalGuides.clear();
-                    mActiveSelfHorizontalGuides.clear();
-                    invalidate();
-                    return true;
+                        }
+                        mActiveVerticalGuides.clear();
+                        mActiveHorizontalGuides.clear();
+                        mActiveSelfVerticalGuides.clear();
+                        mActiveSelfHorizontalGuides.clear();
+                        mWasSnapped = false;
+                        invalidate();
+                        return true;
 
-                case MotionEvent.ACTION_MOVE:
-                    mHasUnsavedChanges = true;
-                    float targetX = mInitialBtnLeft + (rawX - mTouchDownX);
-                    float targetY = mInitialBtnTop + (rawY - mTouchDownY);
+                        case MotionEvent.ACTION_MOVE:
+                        mHasUnsavedChanges = true;
+                        float targetX = mInitialBtnLeft + (rawX - mTouchDownX);
+                        float targetY = mInitialBtnTop + (rawY - mTouchDownY);
 
-                    float snappedX = targetX;
-                    float snappedY = targetY;
+                        float snappedX = targetX;
+                        float snappedY = targetY;
 
-                    mActiveVerticalGuides.clear();
-                    mActiveHorizontalGuides.clear();
-                    mActiveSelfVerticalGuides.clear();
-                    mActiveSelfHorizontalGuides.clear();
+                        mActiveVerticalGuides.clear();
+                        mActiveHorizontalGuides.clear();
+                        mActiveSelfVerticalGuides.clear();
+                        mActiveSelfHorizontalGuides.clear();
 
-                    if (mSnapEnabled) {
+                        if (mSnapEnabled) {
                         RectF candidate = new RectF(targetX, targetY, targetX + view.getWidth(), targetY + view.getHeight());
                         List<RectF> siblings = getSiblingBounds(model);
 
@@ -1098,34 +1100,35 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         snappedX = snap.snappedX;
                         snappedY = snap.snappedY;
 
-                        // Sibling guides: xanh lá, snap-to-other-buttons
+                        // Only draw exact alignment guidelines (Zalith Launcher style)
                         mActiveVerticalGuides.addAll(snap.verticalGuidelines);
                         mActiveHorizontalGuides.addAll(snap.horizontalGuidelines);
-                        // Self guides: cyan, các cạnh của chính nút đang kéo
-                        mActiveSelfVerticalGuides.add(snappedX);
-                        mActiveSelfVerticalGuides.add(snappedX + view.getWidth());
-                        mActiveSelfVerticalGuides.add(snappedX + view.getWidth() * 0.5f);
-                        mActiveSelfHorizontalGuides.add(snappedY);
-                        mActiveSelfHorizontalGuides.add(snappedY + view.getHeight());
-                        mActiveSelfHorizontalGuides.add(snappedY + view.getHeight() * 0.5f);
-                    }
 
-                    view.setX(snappedX);
-                    view.setY(snappedY);
+                        // Crisp haptic feedback on magnetic latch
+                        boolean isSnapped = snap.hasSnapX || snap.hasSnapY;
+                        if (isSnapped && !mWasSnapped) {
+                            view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
+                        }
+                        mWasSnapped = isSnapped;
+                        }
 
-                    model.posXPercent = (snappedX + view.getWidth() * 0.5f) / getWidth();
-                    model.posYPercent = (snappedY + view.getHeight() * 0.5f) / getHeight();
-                    invalidate();
-                    return true;
+                        view.setX(snappedX);
+                        view.setY(snappedY);
 
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    mActiveVerticalGuides.clear();
-                    mActiveHorizontalGuides.clear();
-                    mActiveSelfVerticalGuides.clear();
-                    mActiveSelfHorizontalGuides.clear();
-                    invalidate();
-                    return true;
+                        model.posXPercent = (snappedX + view.getWidth() * 0.5f) / getWidth();
+                        model.posYPercent = (snappedY + view.getHeight() * 0.5f) / getHeight();
+                        invalidate();
+                        return true;
+
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_CANCEL:
+                        mActiveVerticalGuides.clear();
+                        mActiveHorizontalGuides.clear();
+                        mActiveSelfVerticalGuides.clear();
+                        mActiveSelfHorizontalGuides.clear();
+                        mWasSnapped = false;
+                        invalidate();
+                        return true;
             }
             return false;
         });

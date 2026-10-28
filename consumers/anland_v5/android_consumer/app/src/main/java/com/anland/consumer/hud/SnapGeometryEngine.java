@@ -6,35 +6,55 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * High-precision snapping engine inspired by PojavLauncher & Zalith Launcher.
- * Features:
- * 1. Clean Grid Snapping (aligns to 8dp/16dp step grid)
- * 2. Single Best-Match Magnetic Snapping (finds the single closest alignment target)
- * 3. Never jumps chaotically or outputs multiple conflicting guidelines
+ * Clean magnetic snapping engine inspired by Zalith Launcher 2 & PojavLauncher.
+ *
+ * Design principles learned from Zalith Launcher:
+ * 1. Zero grid interference: Does not force an invisible coarse grid during dragging.
+ *    Dragging is 100% fluid and 1:1 with finger touch unless approaching an alignment target.
+ * 2. Crisp magnetic threshold (~6dp): Magnetic pull engages only when close to an edge or center.
+ * 3. Minimalist guidelines: Only draws lines for true alignment axes (single nearest match),
+ *    never flooding the screen with self-bounding boxes or spurious grid lines.
+ * 4. Dual alignment support: Both adjacent (flush touching / 4dp gap) and co-linear (edge / center matching).
  */
 public final class SnapGeometryEngine {
     public static final class SnapResult {
         public float snappedX;
         public float snappedY;
+        public boolean hasSnapX;
+        public boolean hasSnapY;
         public final List<Float> verticalGuidelines = new ArrayList<>();
         public final List<Float> horizontalGuidelines = new ArrayList<>();
     }
 
+    private static final class SnapCandidate {
+        final float targetCoord;
+        final float guideCoord;
+        final float distance;
+
+        SnapCandidate(float targetCoord, float guideCoord, float distance) {
+            this.targetCoord = targetCoord;
+            this.guideCoord = guideCoord;
+            this.distance = distance;
+        }
+    }
+
     private final float mDensity;
     private final float mSnapThresholdPx;
-    private final float mCollisionMarginPx;
-    private final float mGridStepPx;
+    private final float mGapPx;
 
     public SnapGeometryEngine(float density) {
         this.mDensity = density;
-        this.mSnapThresholdPx = 10f * density;
-        this.mCollisionMarginPx = 4f * density;
-        this.mGridStepPx = 16f * density; // 16dp standard design grid
+        // 6dp magnetic snap threshold (matches Zalith Launcher 4-6dp sweet spot)
+        this.mSnapThresholdPx = 6f * density;
+        this.mGapPx = 4f * density;
+    }
+
+    public float getSnapThresholdPx() {
+        return mSnapThresholdPx;
     }
 
     /**
      * Calculates the snapped position for the active button bounding box against screen bounds and siblings.
-     * Uses nearest-match selection to avoid chaotic jumping.
      */
     public SnapResult computeSnap(
             RectF candidate,
@@ -50,161 +70,162 @@ public final class SnapGeometryEngine {
         float h = candidate.height();
         float effectiveMaxY = dockTopBoundary > 0 ? (dockTopBoundary - h) : (screenHeight - h);
 
-        // --- Best Snap Candidate Tracking for X ---
-        float bestDistX = mSnapThresholdPx;
-        float bestSnappedX = x;
-        Float bestGuideX = null;
+        List<SnapCandidate> candidatesX = new ArrayList<>();
+        List<SnapCandidate> candidatesY = new ArrayList<>();
 
-        // --- Best Snap Candidate Tracking for Y ---
-        float bestDistY = mSnapThresholdPx;
-        float bestSnappedY = y;
-        Float bestGuideY = null;
-
-        // 1. Grid Snap candidate (PojavLauncher style)
-        float gridX = Math.round(x / mGridStepPx) * mGridStepPx;
-        float dGridX = Math.abs(x - gridX);
-        if (dGridX < bestDistX) {
-            bestDistX = dGridX;
-            bestSnappedX = gridX;
-            bestGuideX = gridX;
+        // -------------------------------------------------------------
+        // 1. Screen Alignment Targets (Left, Right, Center X)
+        // -------------------------------------------------------------
+        // Screen Left (0)
+        float dScreenL = Math.abs(x);
+        if (dScreenL < mSnapThresholdPx) {
+            candidatesX.add(new SnapCandidate(0f, 0f, dScreenL));
         }
-
-        float gridY = Math.round(y / mGridStepPx) * mGridStepPx;
-        float dGridY = Math.abs(y - gridY);
-        if (dGridY < bestDistY) {
-            bestDistY = dGridY;
-            bestSnappedY = gridY;
-            bestGuideY = gridY;
+        // Screen Right (screenWidth - w)
+        float dScreenR = Math.abs(x + w - screenWidth);
+        if (dScreenR < mSnapThresholdPx) {
+            candidatesX.add(new SnapCandidate(screenWidth - w, screenWidth, dScreenR));
         }
-
-        // 2. Screen Edge Snapping
-        if (Math.abs(x) < bestDistX) {
-            bestDistX = Math.abs(x);
-            bestSnappedX = 0f;
-            bestGuideX = 0f;
-        }
-        float rightDist = Math.abs(x + w - screenWidth);
-        if (rightDist < bestDistX) {
-            bestDistX = rightDist;
-            bestSnappedX = screenWidth - w;
-            bestGuideX = screenWidth;
-        }
-
-        if (Math.abs(y) < bestDistY) {
-            bestDistY = Math.abs(y);
-            bestSnappedY = 0f;
-            bestGuideY = 0f;
-        }
-        float bottomDist = Math.abs(y + h - (effectiveMaxY + h));
-        if (bottomDist < bestDistY) {
-            bestDistY = bottomDist;
-            bestSnappedY = effectiveMaxY;
-            bestGuideY = effectiveMaxY + h;
-        }
-
-        // Screen Center
-        float centerX = x + w * 0.5f;
-        float centerY = y + h * 0.5f;
+        // Screen Center X
         float screenMidX = screenWidth * 0.5f;
+        float dScreenMidX = Math.abs((x + w * 0.5f) - screenMidX);
+        if (dScreenMidX < mSnapThresholdPx) {
+            candidatesX.add(new SnapCandidate(screenMidX - w * 0.5f, screenMidX, dScreenMidX));
+        }
+
+        // -------------------------------------------------------------
+        // 2. Screen Alignment Targets (Top, Bottom, Center Y)
+        // -------------------------------------------------------------
+        // Screen Top (0)
+        float dScreenT = Math.abs(y);
+        if (dScreenT < mSnapThresholdPx) {
+            candidatesY.add(new SnapCandidate(0f, 0f, dScreenT));
+        }
+        // Screen Bottom (effectiveMaxY)
+        float dScreenB = Math.abs(y - effectiveMaxY);
+        if (dScreenB < mSnapThresholdPx) {
+            candidatesY.add(new SnapCandidate(effectiveMaxY, effectiveMaxY + h, dScreenB));
+        }
+        // Screen Center Y
         float screenMidY = screenHeight * 0.5f;
-
-        float centerDistX = Math.abs(centerX - screenMidX);
-        if (centerDistX < bestDistX) {
-            bestDistX = centerDistX;
-            bestSnappedX = screenMidX - w * 0.5f;
-            bestGuideX = screenMidX;
-        }
-        float centerDistY = Math.abs(centerY - screenMidY);
-        if (centerDistY < bestDistY) {
-            bestDistY = centerDistY;
-            bestSnappedY = screenMidY - h * 0.5f;
-            bestGuideY = screenMidY;
+        float dScreenMidY = Math.abs((y + h * 0.5f) - screenMidY);
+        if (dScreenMidY < mSnapThresholdPx) {
+            candidatesY.add(new SnapCandidate(screenMidY - h * 0.5f, screenMidY, dScreenMidY));
         }
 
-        // 3. Sibling Magnet Snapping (Find the single closest alignment target)
+        // -------------------------------------------------------------
+        // 3. Sibling Alignment Targets (Zalith Launcher algorithm)
+        // -------------------------------------------------------------
         if (siblings != null) {
             for (RectF s : siblings) {
-                // Sibling Left-Left
+                // Sibling Left-to-Left (Aligned left edge)
                 float dLL = Math.abs(x - s.left);
-                if (dLL < bestDistX) {
-                    bestDistX = dLL;
-                    bestSnappedX = s.left;
-                    bestGuideX = s.left;
-                }
-                // Sibling Right-Right
-                float dRR = Math.abs((x + w) - s.right);
-                if (dRR < bestDistX) {
-                    bestDistX = dRR;
-                    bestSnappedX = s.right - w;
-                    bestGuideX = s.right;
-                }
-                // Sibling Center-Center Vertical
-                float dCCX = Math.abs((x + w * 0.5f) - s.centerX());
-                if (dCCX < bestDistX) {
-                    bestDistX = dCCX;
-                    bestSnappedX = s.centerX() - w * 0.5f;
-                    bestGuideX = s.centerX();
-                }
-                // Sibling Adjacent Edge (Left to Sibling Right)
-                float dAdjR = Math.abs(x - (s.right + mCollisionMarginPx));
-                if (dAdjR < bestDistX) {
-                    bestDistX = dAdjR;
-                    bestSnappedX = s.right + mCollisionMarginPx;
-                    bestGuideX = s.right;
-                }
-                // Sibling Adjacent Edge (Right to Sibling Left)
-                float dAdjL = Math.abs((x + w) - (s.left - mCollisionMarginPx));
-                if (dAdjL < bestDistX) {
-                    bestDistX = dAdjL;
-                    bestSnappedX = s.left - mCollisionMarginPx - w;
-                    bestGuideX = s.left;
+                if (dLL < mSnapThresholdPx) {
+                    candidatesX.add(new SnapCandidate(s.left, s.left, dLL));
                 }
 
-                // Sibling Top-Top
+                // Sibling Right-to-Right (Aligned right edge)
+                float dRR = Math.abs((x + w) - s.right);
+                if (dRR < mSnapThresholdPx) {
+                    candidatesX.add(new SnapCandidate(s.right - w, s.right, dRR));
+                }
+
+                // Sibling Center-to-Center X
+                float dCCX = Math.abs((x + w * 0.5f) - s.centerX());
+                if (dCCX < mSnapThresholdPx) {
+                    candidatesX.add(new SnapCandidate(s.centerX() - w * 0.5f, s.centerX(), dCCX));
+                }
+
+                // Sibling Adjacent: My Left to Sibling Right (flush or 4dp gap)
+                float dAdjR_flush = Math.abs(x - s.right);
+                if (dAdjR_flush < mSnapThresholdPx) {
+                    candidatesX.add(new SnapCandidate(s.right, s.right, dAdjR_flush));
+                }
+                float dAdjR_gap = Math.abs(x - (s.right + mGapPx));
+                if (dAdjR_gap < mSnapThresholdPx) {
+                    candidatesX.add(new SnapCandidate(s.right + mGapPx, s.right, dAdjR_gap));
+                }
+
+                // Sibling Adjacent: My Right to Sibling Left (flush or 4dp gap)
+                float dAdjL_flush = Math.abs((x + w) - s.left);
+                if (dAdjL_flush < mSnapThresholdPx) {
+                    candidatesX.add(new SnapCandidate(s.left - w, s.left, dAdjL_flush));
+                }
+                float dAdjL_gap = Math.abs((x + w) - (s.left - mGapPx));
+                if (dAdjL_gap < mSnapThresholdPx) {
+                    candidatesX.add(new SnapCandidate(s.left - mGapPx - w, s.left, dAdjL_gap));
+                }
+
+                // Sibling Top-to-Top (Aligned top edge)
                 float dTT = Math.abs(y - s.top);
-                if (dTT < bestDistY) {
-                    bestDistY = dTT;
-                    bestSnappedY = s.top;
-                    bestGuideY = s.top;
+                if (dTT < mSnapThresholdPx) {
+                    candidatesY.add(new SnapCandidate(s.top, s.top, dTT));
                 }
-                // Sibling Bottom-Bottom
+
+                // Sibling Bottom-to-Bottom (Aligned bottom edge)
                 float dBB = Math.abs((y + h) - s.bottom);
-                if (dBB < bestDistY) {
-                    bestDistY = dBB;
-                    bestSnappedY = s.bottom - h;
-                    bestGuideY = s.bottom;
+                if (dBB < mSnapThresholdPx) {
+                    candidatesY.add(new SnapCandidate(s.bottom - h, s.bottom, dBB));
                 }
-                // Sibling Center-Center Horizontal
+
+                // Sibling Center-to-Center Y
                 float dCCY = Math.abs((y + h * 0.5f) - s.centerY());
-                if (dCCY < bestDistY) {
-                    bestDistY = dCCY;
-                    bestSnappedY = s.centerY() - h * 0.5f;
-                    bestGuideY = s.centerY();
+                if (dCCY < mSnapThresholdPx) {
+                    candidatesY.add(new SnapCandidate(s.centerY() - h * 0.5f, s.centerY(), dCCY));
                 }
-                // Sibling Adjacent Edge (Top to Sibling Bottom)
-                float dAdjB = Math.abs(y - (s.bottom + mCollisionMarginPx));
-                if (dAdjB < bestDistY) {
-                    bestDistY = dAdjB;
-                    bestSnappedY = s.bottom + mCollisionMarginPx;
-                    bestGuideY = s.bottom;
+
+                // Sibling Adjacent: My Top to Sibling Bottom (flush or 4dp gap)
+                float dAdjB_flush = Math.abs(y - s.bottom);
+                if (dAdjB_flush < mSnapThresholdPx) {
+                    candidatesY.add(new SnapCandidate(s.bottom, s.bottom, dAdjB_flush));
                 }
-                // Sibling Adjacent Edge (Bottom to Sibling Top)
-                float dAdjT = Math.abs((y + h) - (s.top - mCollisionMarginPx));
-                if (dAdjT < bestDistY) {
-                    bestDistY = dAdjT;
-                    bestSnappedY = s.top - mCollisionMarginPx - h;
-                    bestGuideY = s.top;
+                float dAdjB_gap = Math.abs(y - (s.bottom + mGapPx));
+                if (dAdjB_gap < mSnapThresholdPx) {
+                    candidatesY.add(new SnapCandidate(s.bottom + mGapPx, s.bottom, dAdjB_gap));
+                }
+
+                // Sibling Adjacent: My Bottom to Sibling Top (flush or 4dp gap)
+                float dAdjT_flush = Math.abs((y + h) - s.top);
+                if (dAdjT_flush < mSnapThresholdPx) {
+                    candidatesY.add(new SnapCandidate(s.top - h, s.top, dAdjT_flush));
+                }
+                float dAdjT_gap = Math.abs((y + h) - (s.top - mGapPx));
+                if (dAdjT_gap < mSnapThresholdPx) {
+                    candidatesY.add(new SnapCandidate(s.top - mGapPx - h, s.top, dAdjT_gap));
                 }
             }
         }
 
-        // Apply best found snaps
-        x = bestSnappedX;
-        y = bestSnappedY;
-        if (bestGuideX != null) res.verticalGuidelines.add(bestGuideX);
-        if (bestGuideY != null) res.horizontalGuidelines.add(bestGuideY);
+        // -------------------------------------------------------------
+        // 4. Select the Single Best Candidate per Axis (Minimum distance)
+        // -------------------------------------------------------------
+        SnapCandidate bestX = null;
+        for (SnapCandidate c : candidatesX) {
+            if (bestX == null || c.distance < bestX.distance) {
+                bestX = c;
+            }
+        }
 
-        // Clamp to screen bounds
+        SnapCandidate bestY = null;
+        for (SnapCandidate c : candidatesY) {
+            if (bestY == null || c.distance < bestY.distance) {
+                bestY = c;
+            }
+        }
+
+        if (bestX != null) {
+            x = bestX.targetCoord;
+            res.verticalGuidelines.add(bestX.guideCoord);
+            res.hasSnapX = true;
+        }
+
+        if (bestY != null) {
+            y = bestY.targetCoord;
+            res.horizontalGuidelines.add(bestY.guideCoord);
+            res.hasSnapY = true;
+        }
+
+        // Clamp to screen boundaries
         x = Math.max(0, Math.min(screenWidth - w, x));
         y = Math.max(0, Math.min(effectiveMaxY, y));
 
