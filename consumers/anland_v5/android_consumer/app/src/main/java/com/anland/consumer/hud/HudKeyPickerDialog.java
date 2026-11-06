@@ -124,11 +124,11 @@ public final class HudKeyPickerDialog {
         // Tab Navigation Bar directly on the header row!
         HorizontalScrollView tabScroller = new HorizontalScrollView(context);
         tabScroller.setHorizontalScrollBarEnabled(false);
-        tabScroller.setFillViewport(true);
+        tabScroller.setFillViewport(false);
         LinearLayout tabRow = new LinearLayout(context);
         tabRow.setOrientation(LinearLayout.HORIZONTAL);
         tabRow.setGravity(Gravity.CENTER_VERTICAL);
-        tabRow.setPadding(dp(context, 10), 0, dp(context, 4), 0);
+        tabRow.setPadding(dp(context, 8), 0, dp(context, 2), 0);
         tabScroller.addView(tabRow, new HorizontalScrollView.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -140,8 +140,8 @@ public final class HudKeyPickerDialog {
         // Sub-header Row: Search filter input OR 3-Slot Row for Combo
         FrameLayout subHeader = new FrameLayout(context);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(context, 32));
-        subLp.setMargins(0, 0, 0, dp(context, 6));
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(context, 38));
+        subLp.setMargins(0, 0, 0, dp(context, 8));
         subHeader.setLayoutParams(subLp);
 
         // Search filter input
@@ -246,6 +246,7 @@ public final class HudKeyPickerDialog {
             slotContainer.setVisibility(View.VISIBLE);
             highlightTab(tabRow, 2);
             showComboTab(context, contentContainer, listener, dialog, slotContainer);
+            tabScroller.post(() -> tabScroller.fullScroll(HorizontalScrollView.FOCUS_RIGHT));
         };
 
         btnTabKeys.setOnClickListener(v -> selectTab[0].run());
@@ -293,7 +294,9 @@ public final class HudKeyPickerDialog {
         b.setGravity(Gravity.CENTER);
         b.setMinHeight(0);
         b.setMinWidth(0);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(ctx, 92), dp(ctx, 32));
+        b.setPadding(dp(ctx, 12), dp(ctx, 4), dp(ctx, 12), dp(ctx, 4));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(ctx, 30));
         lp.rightMargin = dp(ctx, 6);
         b.setLayoutParams(lp);
         return b;
@@ -350,7 +353,8 @@ public final class HudKeyPickerDialog {
                 == android.content.res.Configuration.ORIENTATION_LANDSCAPE;
         int hSpacing = dp(ctx, isLandscape ? 4 : 6);
         int vSpacing = dp(ctx, isLandscape ? 4 : 6);
-        grid.setPadding(dp(ctx, 2), dp(ctx, 4), dp(ctx, 12), dp(ctx, 6)); // Right padding 12dp to make room for scrollbar
+        int sbPadding = dp(ctx, 8); // Symmetric 8dp padding on both sides to keep grid centered!
+        grid.setPadding(sbPadding, dp(ctx, 4), sbPadding, dp(ctx, 6));
 
         for (int row = 0; row < entries.size(); row += columns) {
             LinearLayout rowView = new LinearLayout(ctx);
@@ -381,7 +385,7 @@ public final class HudKeyPickerDialog {
                 btnBg.setStroke(dp(ctx, 1), 0x33FFFFFF);
                 btn.setBackground(btnBg);
                 btn.setPadding(dp(ctx, 4), dp(ctx, 2), dp(ctx, 4), dp(ctx, 2));
-                btn.setMinHeight(dp(ctx, isLandscape ? 30 : 38));
+                btn.setMinHeight(dp(ctx, isLandscape ? 40 : 48));
                 btn.setSingleLine(true);
                 btn.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 btn.setGravity(Gravity.CENTER);
@@ -444,13 +448,14 @@ public final class HudKeyPickerDialog {
         list.add(new KeyEntry("LEFT", HudAction.key(105)));
         list.add(new KeyEntry("RIGHT", HudAction.key(106)));
         // System actions - clear, concise titles that fit comfortably on any screen
-        list.add(new KeyEntry(context.getString(R.string.hud_layout_1), HudAction.system("switch_layout_1")));
-        list.add(new KeyEntry(context.getString(R.string.hud_layout_2), HudAction.system("switch_layout_2")));
-        list.add(new KeyEntry(context.getString(R.string.hud_layout_3), HudAction.system("switch_layout_3")));
+        list.add(new KeyEntry(context.getString(R.string.hud_slot_1), HudAction.system("switch_layout_1")));
+        list.add(new KeyEntry(context.getString(R.string.hud_slot_2), HudAction.system("switch_layout_2")));
+        list.add(new KeyEntry(context.getString(R.string.hud_slot_3), HudAction.system("switch_layout_3")));
         list.add(new KeyEntry(context.getString(R.string.hud_system_soft_keyboard), HudAction.system("toggle_ime")));
         list.add(new KeyEntry(context.getString(R.string.hud_system_virtual_keyboard), HudAction.system("toggle_vk")));
         list.add(new KeyEntry(context.getString(R.string.hud_system_toggle_hud_hidden), HudAction.system("toggle_hud_hidden")));
         list.add(new KeyEntry(context.getString(R.string.hud_system_settings), HudAction.system("open_settings")));
+        list.add(new KeyEntry(context.getString(R.string.hud_system_open_editor), HudAction.system("open_editor")));
         list.add(new KeyEntry(context.getString(R.string.hud_system_mouse_left), HudAction.system("mouse_left")));
         list.add(new KeyEntry(context.getString(R.string.hud_system_mouse_right), HudAction.system("mouse_right")));
         list.add(new KeyEntry(context.getString(R.string.hud_system_mouse_middle), HudAction.system("mouse_middle")));

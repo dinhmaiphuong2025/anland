@@ -20,6 +20,7 @@ public final class HudButton {
     public static final String WIDGET_DPAD = "dpad";
     /** Container that holds child keys and moves them as one unit. */
     public static final String WIDGET_GROUP = "group";
+    public static final String WIDGET_EXTRA_KEYS = "extra_keys";
 
     // Strongly-typed mirror of WIDGET_* above, used by code that switches
     // over the widget kind (e.g. the toolbar's add-widget chooser).
@@ -30,7 +31,10 @@ public final class HudButton {
         TOUCHPAD,      // WIDGET_TOUCHPAD
         SCROLLBAR,     // WIDGET_SCROLLBAR
         DPAD,          // WIDGET_DPAD
-        GROUP          // WIDGET_GROUP
+        GROUP,         // WIDGET_GROUP
+        EXTRA_KEYS,    // WIDGET_EXTRA_KEYS
+        NUMBER_ROW,    // Number row 1-0 preset
+        FN_ROW         // Function keys F1-F12 preset
     }
 
     public String id = UUID.randomUUID().toString();
@@ -44,6 +48,10 @@ public final class HudButton {
     // Size in density-independent pixels (dp)
     public int widthDp = 64;
     public int heightDp = 40;
+    // Number of columns for WIDGET_GROUP / WIDGET_EXTRA_KEYS (0 = auto wrap by width)
+    public int columns = 0;
+    // Number of rows for WIDGET_GROUP / WIDGET_EXTRA_KEYS (0 = auto wrap)
+    public int rows = 0;
     /** Inner padding for WIDGET_GROUP, in dp. */
     public int padDp = 8;
     // Zalith-style 8 button corner shapes:
@@ -55,8 +63,10 @@ public final class HudButton {
     public static final int CORNER_BOTTOM_RIGHT = 4;
     public static final int CORNER_LEFT_BOTH = 5;
     public static final int CORNER_RIGHT_BOTH = 6;
-    public static final int CORNER_ALL = 7;
-    public static final int CORNER_NONE = 8;
+    public static final int CORNER_TOP_BOTH = 7;
+    public static final int CORNER_BOTTOM_BOTH = 8;
+    public static final int CORNER_ALL = 9;
+    public static final int CORNER_NONE = 10;
     public int cornerShape = CORNER_ALL;
 
     public int cornerRadiusDp = 8;
@@ -66,7 +76,7 @@ public final class HudButton {
     public int bgColor = 0xFF424242; // Alight Motion dark charcoal C23C479
     public int textColor = 0xFFFFFFFF;
     public int activeColor = 0xFFA39CB8; // Lilac pastel C23C479
-    public int borderStrokeWidthDp = 1;  // 0 = none, 1..10 dp
+    public int borderStrokeWidthDp = 0;  // 0 = none (default), 1..10 dp
     public int borderColor = 0xFFFFFFFF; // Clean white border default
     public String iconId = null;         // Pure vector icon identifier (e.g. "save", "copy", "up"...)
     public int styleVariant = 0;         // Widget-specific visual variant (0=default/minimal, 1=classic/matte, 2=outline/glass)
@@ -111,6 +121,9 @@ public final class HudButton {
 
     // Per-button haptic feedback toggle (default: enabled)
     public boolean hapticEnabled = true;
+
+    // Attach to soft keyboard (ExtraKey mode: lifts above soft keyboard when open)
+    public boolean attachToKeyboard = false;
 
     // Independent held actions for the sliding cross; Linux keyboard arrows by default.
     public HudAction dpadUpAction = HudAction.key(103);
@@ -206,8 +219,11 @@ public final class HudButton {
             obj.put("dpad_right", actionJSON(dpadRightAction));
         }
         obj.put("haptic_enabled", hapticEnabled);
-        if (WIDGET_GROUP.equals(widgetType)) {
+        obj.put("attach_to_keyboard", attachToKeyboard);
+        if (WIDGET_GROUP.equals(widgetType) || WIDGET_EXTRA_KEYS.equals(widgetType)) {
             obj.put("pad_dp", padDp);
+            obj.put("columns", columns);
+            obj.put("rows", rows);
             JSONArray kids = new JSONArray();
             for (HudButton child : children) kids.put(child.toJSON());
             obj.put("children", kids);
@@ -239,7 +255,7 @@ public final class HudButton {
         b.bgColor = obj.optInt("bg_color", 0xFF424242);
         b.textColor = obj.optInt("text_color", 0xFFFFFFFF);
         b.activeColor = obj.optInt("active_color", 0xFFA39CB8);
-        b.borderStrokeWidthDp = obj.optInt("border_stroke_width_dp", 1);
+        b.borderStrokeWidthDp = obj.optInt("border_stroke_width_dp", 0);
         b.borderColor = obj.optInt("border_color", 0xFFFFFFFF);
         if (obj.has("icon_id")) b.iconId = obj.optString("icon_id", null);
         b.styleVariant = obj.optInt("style_variant", 0);
@@ -278,9 +294,12 @@ public final class HudButton {
         if ("stick_left".equals(b.trackpointMode) || "stick_right".equals(b.trackpointMode))
             b.trackpointMode = MODE_MOUSE;
         b.hapticEnabled = obj.optBoolean("haptic_enabled", true);
+        b.attachToKeyboard = obj.optBoolean("attach_to_keyboard", false);
 
-        if (WIDGET_GROUP.equals(b.widgetType)) {
+        if (WIDGET_GROUP.equals(b.widgetType) || WIDGET_EXTRA_KEYS.equals(b.widgetType)) {
             b.padDp = obj.optInt("pad_dp", 8);
+            b.columns = obj.optInt("columns", 0);
+            b.rows = obj.optInt("rows", 0);
             JSONArray kids = obj.optJSONArray("children");
             if (kids != null) {
                 for (int i = 0; i < kids.length(); i++) {
@@ -309,7 +328,7 @@ public final class HudButton {
         if (WIDGET_DPAD.equals(widgetType)
                 && (isHudVisibilityAction(dpadUpAction) || isHudVisibilityAction(dpadDownAction)
                 || isHudVisibilityAction(dpadLeftAction) || isHudVisibilityAction(dpadRightAction))) return true;
-        if (WIDGET_GROUP.equals(widgetType)) {
+        if (WIDGET_GROUP.equals(widgetType) || WIDGET_EXTRA_KEYS.equals(widgetType)) {
             for (HudButton child : children) if (child.canToggleHudVisibility()) return true;
         }
         return false;
@@ -358,6 +377,7 @@ public final class HudButton {
         d.trackpointDeadzoneDp = this.trackpointDeadzoneDp;
         d.trackpointMode = this.trackpointMode;
         d.hapticEnabled = this.hapticEnabled;
+        d.attachToKeyboard = this.attachToKeyboard;
         d.padDp = this.padDp;
         for (HudButton child : this.children) d.children.add(child.duplicate());
         return d;

@@ -89,6 +89,7 @@ public final class HudFreeformButtonView extends View {
 
         mTextPaint.setColor(Color.WHITE);
         mTextPaint.setTextAlign(Paint.Align.CENTER);
+        mTextPaint.setTypeface(android.graphics.Typeface.SANS_SERIF);
         mTextPaint.setFakeBoldText(true);
     }
 
@@ -152,6 +153,14 @@ public final class HudFreeformButtonView extends View {
                 outRadii[2] = r; outRadii[3] = r;
                 outRadii[4] = r; outRadii[5] = r;
                 break;
+            case HudButton.CORNER_TOP_BOTH:
+                outRadii[0] = r; outRadii[1] = r;
+                outRadii[2] = r; outRadii[3] = r;
+                break;
+            case HudButton.CORNER_BOTTOM_BOTH:
+                outRadii[4] = r; outRadii[5] = r;
+                outRadii[6] = r; outRadii[7] = r;
+                break;
             case HudButton.CORNER_ALL:
                 java.util.Arrays.fill(outRadii, r);
                 break;
@@ -185,9 +194,26 @@ public final class HudFreeformButtonView extends View {
         float h = getHeight();
         mBounds.set(2, 2, w - 2, h - 2);
 
+        // Check if this button is an active modifier key (CTRL, ALT, SHIFT, SUPER)
+        boolean isModifierActive = false;
+        if (mModel != null && HudAction.TYPE_MODIFIER.equals(mModel.action.type)) {
+            if (getContext() instanceof IModifierProvider) {
+                isModifierActive = ((IModifierProvider) getContext()).isModifierActive(mModel.action.code);
+            } else if (getParent() instanceof View) {
+                View p = (View) getParent();
+                while (p != null) {
+                    if (p instanceof IModifierProvider) {
+                        isModifierActive = ((IModifierProvider) p).isModifierActive(mModel.action.code);
+                        break;
+                    }
+                    p = (p.getParent() instanceof View) ? (View) p.getParent() : null;
+                }
+            }
+        }
+
         // Fill
         mPaint.setStyle(Paint.Style.FILL);
-        int baseColor = mIsPressed ? mModel.activeColor : mModel.bgColor;
+        int baseColor = (mIsPressed || isModifierActive) ? mModel.activeColor : mModel.bgColor;
         int origAlpha = (baseColor >>> 24);
         int finalAlpha = Math.round(mModel.opacity * origAlpha);
         mPaint.setColor((baseColor & 0x00FFFFFF) | (finalAlpha << 24));
@@ -215,12 +241,14 @@ public final class HudFreeformButtonView extends View {
             // Text with auto font scaling and alignment
             mTextPaint.setColor(mIsPressed ? 0xFF11111B : mModel.textColor);
             String label = mModel.label != null ? mModel.label : "BTN";
-            float maxTextWidth = w - 16 * density;
-            float textSize = Math.min(w, h) * 0.35f;
-            mTextPaint.setTextSize(textSize);
+            float maxTextWidth = w - 4 * density; // Compact 2dp margin
+            // Target font size: 12dp, scaling gently with button size
+            float baseTextSize = Math.max(11f * density, Math.min(13.5f * density, Math.min(w, h) * 0.40f));
+            mTextPaint.setTextSize(baseTextSize);
             float textW = mTextPaint.measureText(label);
             if (textW > maxTextWidth && textW > 0) {
-                mTextPaint.setTextSize(Math.max(8 * density, textSize * (maxTextWidth / textW)));
+                // If text overflows, scale down but never below 10dp to ensure HOME/PGDN/PGUP stay legible
+                mTextPaint.setTextSize(Math.max(10.2f * density, baseTextSize * (maxTextWidth / textW)));
             }
             float textY = h * 0.5f - ((mTextPaint.descent() + mTextPaint.ascent()) * 0.5f);
 

@@ -223,15 +223,8 @@ public final class ComboBuilderView {
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
 
-        // On short screens, let the whole builder scroll rather than squeezing
-        // its weighted key grid down to an unusable sliver.
-        ScrollView scroll = new ScrollView(ctx);
-        scroll.setFillViewport(true);
-        LinearLayout content = buildContent(ctx);
-        content.setMinimumHeight(dp(ctx, 320));
-        scroll.addView(content, new ScrollView.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        host.addView(scroll, new ViewGroup.LayoutParams(
+        // Add content directly into host with MATCH_PARENT so weight=1f pins actions at the bottom
+        host.addView(buildContent(ctx), new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
 
@@ -248,9 +241,9 @@ public final class ComboBuilderView {
             slot.setTextSize(isLandscape ? 11f : 12f);
             slot.setAllCaps(false);
             slot.setTextColor(0xFF888888);
-            slot.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
-            slot.setPadding(dp(ctx, 10), 0, dp(ctx, 6), 0);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(ctx, 32), 1f);
+            slot.setGravity(Gravity.CENTER);
+            slot.setPadding(dp(ctx, 4), 0, dp(ctx, 4), 0);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(ctx, 36), 1f);
             if (i > 0) lp.leftMargin = dp(ctx, 6);
             slotRow.addView(slot, lp);
             mSlotLabels[i] = slot;
@@ -291,7 +284,8 @@ public final class ComboBuilderView {
 
         LinearLayout keyGrid = new LinearLayout(ctx);
         keyGrid.setOrientation(LinearLayout.VERTICAL);
-        keyGrid.setPadding(dp(ctx, 2), dp(ctx, 2), dp(ctx, 12), dp(ctx, 4)); // Right padding 12dp to make room for scrollbar
+        int sbPadding = dp(ctx, 8); // Symmetric 8dp padding to keep keys centered
+        keyGrid.setPadding(sbPadding, dp(ctx, 4), sbPadding, dp(ctx, 4));
 
         final int keyCols = isLandscape ? 5 : 3; // Standard 5 columns
         final int hSpacing = dp(ctx, isLandscape ? 4 : 6);
@@ -324,7 +318,7 @@ public final class ComboBuilderView {
                 kBg.setColor(0xFF484848);
                 kBg.setStroke(dp(ctx, 1), 0x33FFFFFF);
                 k.setBackground(kBg);
-                k.setMinHeight(dp(ctx, isLandscape ? 30 : 38));
+                k.setMinHeight(dp(ctx, isLandscape ? 40 : 48));
                 k.setPadding(dp(ctx, 4), dp(ctx, 2), dp(ctx, 4), dp(ctx, 2));
                 k.setSingleLine(true);
                 k.setEllipsize(android.text.TextUtils.TruncateAt.END);

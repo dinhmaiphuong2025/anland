@@ -38,7 +38,7 @@ public final class HudCornerShapePickerView extends LinearLayout {
     private static final int SHAPE_NORMAL = 0xFFD2D2DC;
     private static final int SHAPE_ACTIVE = 0xFFA39CB8; // Lilac pastel
 
-    private final ShapeCardView[] mCards = new ShapeCardView[8];
+    private final ShapeCardView[] mCards = new ShapeCardView[10];
     private int mSelectedShape = HudButton.CORNER_ALL;
     private OnShapeSelectedListener mListener;
 
@@ -59,6 +59,8 @@ public final class HudCornerShapePickerView extends LinearLayout {
             new ShapeDef(HudButton.CORNER_BOTTOM_RIGHT, R.string.hud_editor_shape_bottom_right),
             new ShapeDef(HudButton.CORNER_LEFT_BOTH, R.string.hud_editor_shape_left),
             new ShapeDef(HudButton.CORNER_RIGHT_BOTH, R.string.hud_editor_shape_right),
+            new ShapeDef(HudButton.CORNER_TOP_BOTH, R.string.hud_editor_shape_top),
+            new ShapeDef(HudButton.CORNER_BOTTOM_BOTH, R.string.hud_editor_shape_bottom),
             new ShapeDef(HudButton.CORNER_ALL, R.string.hud_editor_shape_all),
             new ShapeDef(HudButton.CORNER_NONE, R.string.hud_editor_shape_none)
     };

@@ -339,6 +339,8 @@
     <string name="hud_color_theme">색상 테마:</string>
     <string name="hud_haptic_feedback">햅틱 피드백</string>
     <string name="hud_hold_to_repeat">누르고 있으면 연속 입력</string>
+    <string name="hud_send_mode_press">누를 때</string>
+    <string name="hud_send_mode_release">뗄 때</string>
     <string name="hud_nudge_position">위치 미세 조정:</string>
     <string name="hud_unassigned">할당되지 않음</string>
     <string name="hud_text_action">텍스트: %1$s</string>
@@ -359,9 +361,11 @@
     <string name="hud_tab_mods_system">수정자 및 시스템</string>
     <string name="hud_tab_combo">조합</string>
     <string name="hud_none">없음</string>
-    <string name="hud_system_soft_keyboard">소프트 키보드</string>
-    <string name="hud_system_virtual_keyboard">가상 키보드</string>
+    <string name="hud_system_soft_keyboard">소프트 KB</string>
+    <string name="hud_system_virtual_keyboard">가상 KB</string>
+    <string name="hud_system_toggle_hud_hidden">HUD 숨기기</string>
     <string name="hud_system_settings">설정</string>
+    <string name="hud_system_open_editor">HUD 편집</string>
     <string name="hud_system_mouse_left">마우스 왼쪽</string>
     <string name="hud_system_mouse_right">마우스 오른쪽</string>
     <string name="hud_system_mouse_middle">마우스 가운데</string>

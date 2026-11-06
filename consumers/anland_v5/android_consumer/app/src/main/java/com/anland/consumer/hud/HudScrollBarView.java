@@ -26,6 +26,8 @@ public final class HudScrollBarView extends View {
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF mBounds = new RectF();
     private final RectF mThumbBounds = new RectF();
+    private final Path mPath = new Path();
+    private final float[] mRadii = new float[8];
     private final Path mArrowPath1 = new Path();
     private final Path mArrowPath2 = new Path();
 
@@ -79,8 +81,12 @@ public final class HudScrollBarView extends View {
         if (w <= 0 || h <= 0) return;
 
         boolean isHoriz = isHorizontal();
-        float corner = mModel.cornerRadiusDp > 0 ? mModel.cornerRadiusDp * density : Math.min(w, h) * 0.5f;
+        float corner = mModel.cornerRadiusDp * density;
         mBounds.set(2, 2, w - 2, h - 2);
+
+        HudFreeformButtonView.computeRadii(mModel.cornerShape, corner, mRadii);
+        mPath.reset();
+        mPath.addRoundRect(mBounds, mRadii, Path.Direction.CW);
 
         // 1. Background Track
         mPaint.setStyle(Paint.Style.FILL);
@@ -89,14 +95,14 @@ public final class HudScrollBarView extends View {
         int origAlpha = (targetCol >>> 24);
         int finalAlpha = Math.round(mModel.opacity * origAlpha);
         mPaint.setColor((targetCol & 0x00FFFFFF) | (finalAlpha << 24));
-        canvas.drawRoundRect(mBounds, corner, corner, mPaint);
+        canvas.drawPath(mPath, mPaint);
 
         // 2. Outer Border with clean white line C23C479
         if (mModel.borderStrokeWidthDp > 0) {
             mPaint.setStyle(Paint.Style.STROKE);
             mPaint.setStrokeWidth(Math.max(1, Math.round(mModel.borderStrokeWidthDp * density)));
             mPaint.setColor(mModel.borderColor);
-            canvas.drawRoundRect(mBounds, corner, corner, mPaint);
+            canvas.drawPath(mPath, mPaint);
         }
 
         // 3. Arrow indicators and sliding thumb

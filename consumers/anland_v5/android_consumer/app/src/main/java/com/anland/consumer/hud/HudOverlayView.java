@@ -1,9 +1,12 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.HudEditorActivity;
 import com.anland.consumer.R;
 import com.anland.consumer.theme.M3;
 import android.app.AlertDialog;
+import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Canvas;
@@ -154,6 +157,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private int mInsetBottom = 0;
     private int mInsetLeft = 0;
     private int mInsetRight = 0;
+    private int mImeInsetBottom = 0;
 
     private float mTouchDownX;
     private float mTouchDownY;
@@ -439,6 +443,14 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             mHasUnsavedChanges = false;
             setVisibility(VISIBLE);
             updateToolbarMargins();
+            if (mInspectorView != null) {
+                mInspectorView.bringToFront();
+                mInspectorView.setElevation(dp(24));
+            }
+            if (mTopToolbar != null) {
+                mTopToolbar.bringToFront();
+                mTopToolbar.setElevation(dp(20));
+            }
         }
         if (editMode && !mProfile.firstTimeNoticeShown) {
             showFirstTimeNoticeDialog();
@@ -535,6 +547,14 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             mInsetLeft = statusCutout.left;
             mInsetRight = statusCutout.right;
             mInsetBottom = Math.max(getSystemNavigationBarHeight(getContext()), nav.bottom);
+
+            // Track soft keyboard (IME) inset height
+            int imeHeight = insets.getInsets(WindowInsets.Type.ime()).bottom;
+            if (mImeInsetBottom != imeHeight) {
+                mImeInsetBottom = imeHeight;
+                post(this::repositionExistingChildren);
+            }
+
             updateToolbarMargins();
             invalidate();
         }
@@ -928,6 +948,22 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         hotLp.bottomMargin = dp(6);
         root.addView(btnHotkeys, hotLp);
 
+        // Reset to Default Preset
+        Button btnReset = createLayoutActionButton(ctx, getContext().getString(R.string.hud_overlay_reset_default_layout), 0xFF484848, 0xFF80DEEA, () -> {
+            dialog.dismiss();
+            mHasUnsavedChanges = true;
+            HudLayout dst = getActiveLayout();
+            dst.floatingButtons.clear();
+            HudLayout preset = isLandscape ? HudLayoutProfile.createSteamDeckLayout() : HudLayoutProfile.createDefaultPortraitLayout();
+            for (HudButton b : preset.floatingButtons) dst.floatingButtons.add(b.duplicate());
+            selectButton(null, null);
+            rebuildActiveLayout();
+            Toast.makeText(getContext(), R.string.hud_overlay_reset_default_layout, Toast.LENGTH_SHORT).show();
+        });
+        LinearLayout.LayoutParams resetLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38));
+        resetLp.bottomMargin = dp(6);
+        root.addView(btnReset, resetLp);
+
         // Clear Layout (Destructive Red)
         Button btnClear = createLayoutActionButton(ctx, getContext().getString(R.string.hud_editor_clear_layout), 0xFF484848, 0xFFF38BA8, () -> {
             dialog.dismiss();
@@ -1059,6 +1095,38 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         root.addView(row1);
         root.addView(row2);
 
+        // Row 3: 7. EXTRA KEYS BAR, 8. NUMBER ROW (1-0), 9. FUNCTION KEYS (F1-F12)
+        LinearLayout row3 = new LinearLayout(ctx);
+        row3.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams r3lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        r3lp.topMargin = dp(8);
+        row3.setLayoutParams(r3lp);
+
+        View extraKeysCard = createWidgetChoiceCard(ctx, getContext().getString(R.string.hud_editor_widget_extra_keys), getContext().getString(R.string.hud_editor_widget_termux_bar), () -> {
+            dialog.dismiss();
+            if (mIsEditMode) addWidgetOfKind(HudButton.WidgetKind.EXTRA_KEYS);
+        });
+        row3.addView(extraKeysCard, new LinearLayout.LayoutParams(0, dp(58), 1f));
+
+        View numCard = createWidgetChoiceCard(ctx, getContext().getString(R.string.hud_editor_widget_number_row), getContext().getString(R.string.hud_editor_widget_number_bar), () -> {
+            dialog.dismiss();
+            if (mIsEditMode) addWidgetOfKind(HudButton.WidgetKind.NUMBER_ROW);
+        });
+        LinearLayout.LayoutParams numLp = new LinearLayout.LayoutParams(0, dp(58), 1f);
+        numLp.leftMargin = dp(8);
+        row3.addView(numCard, numLp);
+
+        View fnCard = createWidgetChoiceCard(ctx, getContext().getString(R.string.hud_editor_widget_fn_row), getContext().getString(R.string.hud_editor_widget_fn_bar), () -> {
+            dialog.dismiss();
+            if (mIsEditMode) addWidgetOfKind(HudButton.WidgetKind.FN_ROW);
+        });
+        LinearLayout.LayoutParams fnLp = new LinearLayout.LayoutParams(0, dp(58), 1f);
+        fnLp.leftMargin = dp(8);
+        row3.addView(fnCard, fnLp);
+
+        root.addView(row3);
+
         dialog.show();
         boolean isLandscape = ctx.getResources().getConfiguration().orientation
                 == Configuration.ORIENTATION_LANDSCAPE;
@@ -1111,7 +1179,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         final List<HudButton> candidates = new ArrayList<>();
         final List<CharSequence> labels = new ArrayList<>();
         for (HudButton b : getActiveLayout().floatingButtons) {
-            if (b == group || !HudButton.WIDGET_STANDARD.equals(b.widgetType)) continue;
+            if (b == group || (!HudButton.WIDGET_STANDARD.equals(b.widgetType))) continue;
             candidates.add(b);
             boolean hasLabel = b.label != null && !b.label.isEmpty();
             labels.add(hasLabel ? b.label : getContext().getString(R.string.hud_widget_button));
@@ -1123,17 +1191,20 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         }
         showItemChooser(R.string.hud_group_move_in_title,
                 labels.toArray(new CharSequence[0]),
-                which -> moveWidgetIntoGroup(group, candidates.get(which)));
+                which -> moveWidgetIntoGroup(group, candidates.get(which), -1f, -1f));
     }
 
     private void addWidgetOfKind(HudButton.WidgetKind kind) {
         HudButton b = new HudButton();
+        // Default position: Centered on screen for all newly added widgets
+        b.posXPercent = 0.5f;
+        b.posYPercent = 0.5f;
+
         switch (kind) {
             case KEY:
                 b.label = getContext().getString(R.string.hud_overlay_label_key);
                 b.action = HudAction.key(1);
-                b.posXPercent = 0.5f;
-                b.posYPercent = 0.4f;
+                b.borderStrokeWidthDp = 0; // Default stroke=0
                 break;
             case SUPER_GESTURE:
                 b.widgetType = HudButton.WIDGET_SUPER_GESTURE;
@@ -1141,8 +1212,6 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 b.widthDp = 58;
                 b.heightDp = 58;
                 b.cornerRadiusDp = 29;
-                b.posXPercent = 0.5f;
-                b.posYPercent = 0.5f;
                 break;
             case TRACKPOINT:
                 b.widgetType = HudButton.WIDGET_TRACKPOINT;
@@ -1150,8 +1219,6 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 b.widthDp = 60;
                 b.heightDp = 60;
                 b.cornerRadiusDp = 30;
-                b.posXPercent = 0.2f;
-                b.posYPercent = 0.5f;
                 break;
             case TOUCHPAD:
                 b.widgetType = HudButton.WIDGET_TOUCHPAD;
@@ -1159,8 +1226,6 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 b.widthDp = 92;
                 b.heightDp = 92;
                 b.cornerRadiusDp = 18;
-                b.posXPercent = 0.85f;
-                b.posYPercent = 0.65f;
                 break;
             case SCROLLBAR:
                 b.widgetType = HudButton.WIDGET_SCROLLBAR;
@@ -1169,8 +1234,6 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 b.widthDp = 34;
                 b.heightDp = 130;
                 b.cornerRadiusDp = 17;
-                b.posXPercent = 0.95f;
-                b.posYPercent = 0.5f;
                 break;
             case DPAD:
                 b.widgetType = HudButton.WIDGET_DPAD;
@@ -1178,8 +1241,6 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 b.widthDp = 130;
                 b.heightDp = 130;
                 b.cornerRadiusDp = 65;
-                b.posXPercent = 0.15f;
-                b.posYPercent = 0.6f;
                 break;
             case GROUP:
                 b.widgetType = HudButton.WIDGET_GROUP;
@@ -1189,8 +1250,129 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 b.cornerRadiusDp = 14;
                 b.padDp = 8;
                 b.opacity = 0.25f;
+                break;
+            case EXTRA_KEYS:
+                b.widgetType = HudButton.WIDGET_EXTRA_KEYS;
+                b.label = "ExtraKeys";
+                b.widthDp = 360;
+                b.heightDp = 76;
+                b.columns = 8; // Default fixed 2 rows x 8 cols, not auto!
+                b.rows = 2;
+                b.cornerRadiusDp = 10;
+                b.padDp = 5;
+                b.borderStrokeWidthDp = 0; // Default container stroke=0
+                b.opacity = 0.85f;
+                b.attachToKeyboard = true;
                 b.posXPercent = 0.5f;
-                b.posYPercent = 0.5f;
+                b.posYPercent = 0.5f; // Centered on screen
+
+                // Full 2-row Termux-X11 layout (16 keys total):
+                // Row 1: ESC, /, -, HOME, UP, END, PGUP, PREF (⚙)
+                // Row 2: TAB, CTRL, ALT, LEFT, DOWN, RIGHT, PGDN, KEYBOARD (⌨)
+                int[] ekCodes = {
+                        1, 53, 12, 102, 103, 107, 104, 0, // Row 1 (0 = open_settings)
+                        15, 29, 56, 105, 108, 106, 109, 0  // Row 2 (0 = toggle_vk)
+                };
+                String[] ekLabels = {
+                        "ESC", "/", "-", "HOME", "▲", "END", "PGUP", "",
+                        "TAB", "CTRL", "ALT", "◀", "▼", "▶", "PGDN", ""
+                };
+                String[] ekIcons = {
+                        null, null, null, null, HudVectorIcons.ICON_UP, null, null, HudVectorIcons.ICON_SETTINGS,
+                        null, null, null, HudVectorIcons.ICON_LEFT, HudVectorIcons.ICON_DOWN, HudVectorIcons.ICON_RIGHT, null, HudVectorIcons.ICON_KEYBOARD
+                };
+
+                for (int i = 0; i < ekCodes.length; i++) {
+                    HudButton child = new HudButton();
+                    child.widgetType = HudButton.WIDGET_STANDARD;
+                    if (i == 7) {
+                        child.action = HudAction.system("open_settings");
+                    } else if (i == 15) {
+                        boolean isPortrait = getResources().getConfiguration().orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT;
+                        child.action = HudAction.system(isPortrait ? "toggle_ime" : "toggle_vk");
+                    } else if (ekCodes[i] == 29 || ekCodes[i] == 56) {
+                        // Modifier keys: CTRL (29) and ALT (56) act as latching/locking modifiers like Termux-X11!
+                        child.action = HudAction.modifier(ekCodes[i]);
+                    } else {
+                        child.action = HudAction.key(ekCodes[i]);
+                    }
+                    child.label = ekLabels[i];
+                    child.iconId = ekIcons[i];
+                    child.widthDp = 40;
+                    child.heightDp = 34;
+                    child.cornerRadiusDp = 6;
+                    child.borderStrokeWidthDp = 0; // Default stroke=0 for child keys
+                    child.opacity = 0.85f;
+                    child.attachToKeyboard = true;
+                    b.children.add(child);
+                }
+                break;
+
+            case NUMBER_ROW:
+                b.widgetType = HudButton.WIDGET_GROUP;
+                b.label = "Numbers";
+                b.widthDp = 360;
+                b.heightDp = 44;
+                b.columns = 10; // 1 row of 10 digits
+                b.rows = 1;
+                b.cornerRadiusDp = 8;
+                b.padDp = 5;
+                b.borderStrokeWidthDp = 0; // Default container stroke=0
+                b.opacity = 0.85f;
+                b.attachToKeyboard = true;
+                b.posXPercent = 0.5f;
+                b.posYPercent = 0.5f; // Centered on screen
+
+                // 1, 2, 3, 4, 5, 6, 7, 8, 9, 0
+                int[] numCodes = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+                String[] numLabels = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"};
+                for (int i = 0; i < numCodes.length; i++) {
+                    HudButton child = new HudButton();
+                    child.widgetType = HudButton.WIDGET_STANDARD;
+                    child.action = HudAction.key(numCodes[i]);
+                    child.label = numLabels[i];
+                    // Square 1:1 aspect ratio by default (34x34dp)
+                    child.widthDp = 34;
+                    child.heightDp = 34;
+                    child.cornerRadiusDp = 6;
+                    child.borderStrokeWidthDp = 0; // Default stroke=0
+                    child.opacity = 0.85f;
+                    child.attachToKeyboard = true;
+                    b.children.add(child);
+                }
+                break;
+
+            case FN_ROW:
+                b.widgetType = HudButton.WIDGET_GROUP;
+                b.label = "Fn Keys";
+                b.widthDp = 360;
+                b.heightDp = 38;
+                b.columns = 12; // 1 row of 12 function keys
+                b.rows = 1;
+                b.cornerRadiusDp = 8;
+                b.padDp = 5;
+                b.borderStrokeWidthDp = 0; // Default container stroke=0
+                b.opacity = 0.85f;
+                b.attachToKeyboard = true;
+                b.posXPercent = 0.5f;
+                b.posYPercent = 0.5f; // Centered on screen
+
+                // F1 to F12 evdev scancodes: 59 to 70 (F1=59, F2=60 ... F10=68, F11=87, F12=88)
+                int[] fnCodes = {59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 87, 88};
+                for (int i = 0; i < fnCodes.length; i++) {
+                    HudButton child = new HudButton();
+                    child.widgetType = HudButton.WIDGET_STANDARD;
+                    child.action = HudAction.key(fnCodes[i]);
+                    child.label = "F" + (i + 1);
+                    // Square 1:1 aspect ratio by default (28x28dp)
+                    child.widthDp = 28;
+                    child.heightDp = 28;
+                    child.cornerRadiusDp = 6;
+                    child.borderStrokeWidthDp = 0; // Default stroke=0
+                    child.opacity = 0.85f;
+                    child.attachToKeyboard = true;
+                    b.children.add(child);
+                }
                 break;
         }
         avoidOverlap(b);
@@ -1324,11 +1506,11 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 float iconSize = 18f * density;
                 HudVectorIcons.drawIcon(canvas, activeIcon, getWidth() * 0.5f, getHeight() * 0.5f, iconSize, mPaint);
 
-                // Corner indicator dot for SNAP button
+                // Corner indicator dot for SNAP button: place outside at top-right corner of the button
                 if (HudVectorIcons.ICON_SNAP.equals(iconId)) {
                     mPaint.setStyle(Paint.Style.FILL);
                     mPaint.setColor(mSnapEnabled ? 0xFFA39CB8 : 0x44FFFFFF);
-                    canvas.drawCircle(getWidth() - 6f * density, 6f * density, 2.5f * density, mPaint);
+                    canvas.drawCircle(getWidth() - 4.5f * density, 4.5f * density, 2f * density, mPaint);
                 }
             }
         };
@@ -1416,7 +1598,16 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 child.setLayoutParams(lp);
             }
             child.setX(model.posXPercent * pw - w * 0.5f);
-            child.setY(model.posYPercent * ph - h * 0.5f);
+
+            // Compute Y position with soft keyboard (IME) adaptation
+            float normalY = model.posYPercent * ph - h * 0.5f;
+            if (!mIsEditMode && model.attachToKeyboard && mImeInsetBottom > 0) {
+                // Lift button above soft keyboard with 8dp margin
+                float liftedY = ph - mImeInsetBottom - h - 8f * density;
+                child.setY(Math.min(normalY, liftedY));
+            } else {
+                child.setY(normalY);
+            }
         }
     }
 
@@ -1433,6 +1624,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     }
 
     private int mResizeMode = 0; // 0=none, 1=top-left, 2=bottom-right
+    private boolean mIsDraggingWidget = false;
     private float mResizeStartX, mResizeStartY;
     private int mInitialWidthDp, mInitialHeightDp;
     private float mInitialPosX, mInitialPosY;
@@ -1462,11 +1654,17 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     if (mSelectedView != null && mSelectedButton != null) {
                         float bw = mSelectedView.getWidth() > 0 ? mSelectedView.getWidth() : mSelectedButton.widthDp * density;
                         float bh = mSelectedView.getHeight() > 0 ? mSelectedView.getHeight() : mSelectedButton.heightDp * density;
+                        int[] vLoc = new int[2];
+                        mSelectedView.getLocationOnScreen(vLoc);
+                        int[] rLoc = new int[2];
+                        getLocationOnScreen(rLoc);
+                        float selX = vLoc[0] - rLoc[0];
+                        float selY = vLoc[1] - rLoc[1];
                         float pad = 3f * density;
-                        float left = mSelectedView.getX() - pad;
-                        float top = mSelectedView.getY() - pad;
-                        float right = mSelectedView.getX() + bw + pad;
-                        float bottom = mSelectedView.getY() + bh + pad;
+                        float left = selX - pad;
+                        float top = selY - pad;
+                        float right = selX + bw + pad;
+                        float bottom = selY + bh + pad;
                         float hitR = 24f * density;
 
                         // Check Top-Left Anchor
@@ -1542,10 +1740,25 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         return true;
                     }
 
-                    // Empty canvas taps deselect only when the inspector is closed.
+                    // If a widget was just dragged, do NOT trigger tap-selection on child keys underneath!
+                    if (mIsDraggingWidget) {
+                        return true;
+                    }
+
+                    // Check if tapped on a child button inside any container
                     float upDx = event.getRawX() - mTouchDownRawX;
                     float upDy = event.getRawY() - mTouchDownRawY;
                     int touchSlop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
+                    if (upDx * upDx + upDy * upDy <= touchSlop * touchSlop) {
+                        HudButton tappedChild = findChildKeyAt(event.getRawX(), event.getRawY());
+                        if (tappedChild != null) {
+                            View childView = findChildViewForModel(tappedChild);
+                            selectButton(tappedChild, childView);
+                            return true;
+                        }
+                    }
+
+                    // Empty canvas taps deselect only when the inspector is closed.
                     if (upDx * upDx + upDy * upDy <= touchSlop * touchSlop
                             && (mInspectorView == null || mInspectorView.getVisibility() != VISIBLE)) {
                         selectButton(null, null);
@@ -1565,6 +1778,12 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         for (ModState m : mModifiers.values())
             if (m.active) return true;
         return false;
+    }
+
+    @Override
+    public boolean isModifierActive(int evdevCode) {
+        ModState m = mModifiers.get(evdevCode);
+        return m != null && m.active;
     }
 
     @Override
@@ -1600,10 +1819,13 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private void setModifierActive(ModState state, boolean active) {
         state.active = active;
         if (!active) state.locked = false;
-        // Dock strip was removed; floating TrackPoint / SuperGesture buttons
-        // do not surface modifier latch state visually today. A future
-        // floating modifier indicator widget could subscribe to a
-        // listener here if we ever add one.
+        // Invalidate floating container and its children so modifier keys (CTRL, ALT...) update activeColor highlight!
+        if (mFloatingContainer != null) {
+            mFloatingContainer.invalidate();
+            for (int i = 0; i < mFloatingContainer.getChildCount(); i++) {
+                mFloatingContainer.getChildAt(i).invalidate();
+            }
+        }
     }
 
     private void sendWithModifiers(Runnable emit) {
@@ -1689,8 +1911,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         dispatchHudAction(action);
                 });
                 ((HudDpadView) widgetView).setInEditMode(mIsEditMode);
-            } else if (HudButton.WIDGET_GROUP.equals(b.widgetType)) {
+            } else if (HudButton.WIDGET_GROUP.equals(b.widgetType) || HudButton.WIDGET_EXTRA_KEYS.equals(b.widgetType)) {
                 HudGroupView groupView = new HudGroupView(getContext(), b, mKeyButtonListener);
+                groupView.setOnChildSelectListener(this::selectButton);
                 groupView.setInEditMode(mIsEditMode);
                 widgetView = groupView;
             } else {
@@ -1702,6 +1925,20 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
             if (b == mSelectedButton) {
                 mSelectedView = widgetView;
+            } else if (mSelectedButton != null && (HudButton.WIDGET_GROUP.equals(b.widgetType) || HudButton.WIDGET_EXTRA_KEYS.equals(b.widgetType))) {
+                if (b.children != null && b.children.contains(mSelectedButton)) {
+                    // Child button inside this container is selected!
+                    if (widgetView instanceof HudGroupView) {
+                        HudGroupView gv = (HudGroupView) widgetView;
+                        for (int j = 0; j < gv.getChildCount(); j++) {
+                            View cv = gv.getChildAt(j);
+                            if (cv instanceof HudFreeformButtonView && ((HudFreeformButtonView) cv).getModel() == mSelectedButton) {
+                                mSelectedView = cv;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
             // Keep controls that can restore the HUD. Editing shows everything.
             if (mHudHidden && !mIsEditMode && !isKeyboardLayer()) {
@@ -1746,14 +1983,24 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
         if (curPw > 0 && curPh > 0 && dimensionsMatchOrientation) {
             view.setX(model.posXPercent * curPw - w * 0.5f);
-            view.setY(model.posYPercent * curPh - h * 0.5f);
+            float normalY = model.posYPercent * curPh - h * 0.5f;
+            if (!mIsEditMode && model.attachToKeyboard && mImeInsetBottom > 0) {
+                view.setY(Math.min(normalY, curPh - mImeInsetBottom - h - 8f * density));
+            } else {
+                view.setY(normalY);
+            }
         } else {
             post(() -> {
                 int pw = getWidth();
                 int ph = getHeight();
                 if (pw > 0 && ph > 0) {
                     view.setX(model.posXPercent * pw - w * 0.5f);
-                    view.setY(model.posYPercent * ph - h * 0.5f);
+                    float normalY = model.posYPercent * ph - h * 0.5f;
+                    if (!mIsEditMode && model.attachToKeyboard && mImeInsetBottom > 0) {
+                        view.setY(Math.min(normalY, ph - mImeInsetBottom - h - 8f * density));
+                    } else {
+                        view.setY(normalY);
+                    }
                 }
             });
         }
@@ -1775,6 +2022,16 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     view.setTranslationZ(dp(12));
                     mTouchDownX = rawX;
                     mTouchDownY = rawY;
+
+                    // If clicking inside a container, check if quick action pills above it are hit!
+                    if (HudButton.WIDGET_GROUP.equals(model.widgetType) || HudButton.WIDGET_EXTRA_KEYS.equals(model.widgetType)) {
+                        int[] rLoc = new int[2];
+                        getLocationOnScreen(rLoc);
+                        if (handleQuickActionClick(rawX - rLoc[0], rawY - rLoc[1])) {
+                            return true;
+                        }
+                    }
+
                     // Recompute initial position from the percentage model every
                     // time the user starts dragging. View.getX() can be stale
                     // after orientation changes or after rebuildActiveLayout
@@ -1808,6 +2065,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         float dy = rawY - mTouchDownY;
                         if (dx * dx + dy * dy <= touchSlop * touchSlop) return true;
                         dragging[0] = true;
+                        mIsDraggingWidget = true;
                     }
                     mHasUnsavedChanges = true;
                     float targetX = mInitialBtnLeft + (rawX - mTouchDownX);
@@ -1866,16 +2124,30 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     invalidate();
                     if (target != null) {
                         view.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
-                        moveWidgetIntoGroup(target.getModel(), model);
-                    } else if (!dragging[0]) {
+                        moveWidgetIntoGroup(target.getModel(), model, rawX, rawY);
+                    } else if (dragging[0]) {
+                        // Dragging finished: ALWAYS select the dragged widget itself (e.g. the entire container)!
+                        selectButton(model, view);
+                        postDelayed(() -> mIsDraggingWidget = false, 150);
+                    } else {
                         float dx = rawX - mTouchDownX;
                         float dy = rawY - mTouchDownY;
-                        if (dx * dx + dy * dy <= touchSlop * touchSlop) selectButton(model, view);
+                        if (dx * dx + dy * dy <= touchSlop * touchSlop) {
+                            // Tap on container without moving: check if tapped on a specific child key!
+                            HudButton child = findChildKeyAt(rawX, rawY);
+                            if (child != null) {
+                                View childView = findChildViewForModel(child);
+                                selectButton(child, childView);
+                            } else {
+                                selectButton(model, view);
+                            }
+                        }
                     }
                     return true;
                 }
 
                 case MotionEvent.ACTION_CANCEL: {
+                    mIsDraggingWidget = false;
                     view.setTranslationZ(0);
                     setDropTargetGroup(null);
                     clearGuides();
@@ -1959,10 +2231,65 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         if (target != null) target.setDropTarget(true);
     }
 
-    /** Move a standalone key widget into a group container. */
-    private void moveWidgetIntoGroup(HudButton group, HudButton widget) {
+    private HudButton findChildKeyAt(float rawX, float rawY) {
+        if (mFloatingContainer == null) return null;
+        int[] loc = new int[2];
+        for (int i = 0; i < mFloatingContainer.getChildCount(); i++) {
+            View v = mFloatingContainer.getChildAt(i);
+            if (v instanceof HudGroupView) {
+                HudGroupView gv = (HudGroupView) v;
+                for (int j = 0; j < gv.getChildCount(); j++) {
+                    View cv = gv.getChildAt(j);
+                    cv.getLocationOnScreen(loc);
+                    if (rawX >= loc[0] && rawX <= loc[0] + cv.getWidth()
+                            && rawY >= loc[1] && rawY <= loc[1] + cv.getHeight()) {
+                        if (cv instanceof HudFreeformButtonView) {
+                            return ((HudFreeformButtonView) cv).getModel();
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private View findChildViewForModel(HudButton target) {
+        if (mFloatingContainer == null || target == null) return null;
+        for (int i = 0; i < mFloatingContainer.getChildCount(); i++) {
+            View v = mFloatingContainer.getChildAt(i);
+            if (v instanceof HudGroupView) {
+                HudGroupView gv = (HudGroupView) v;
+                for (int j = 0; j < gv.getChildCount(); j++) {
+                    View cv = gv.getChildAt(j);
+                    if (cv instanceof HudFreeformButtonView) {
+                        if (((HudFreeformButtonView) cv).getModel() == target) {
+                            return cv;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private HudButton findParentContainerOf(HudButton child) {
+        if (child == null) return null;
+        HudLayout layout = getActiveLayout();
+        if (layout == null) return null;
+        for (HudButton b : layout.floatingButtons) {
+            if (HudButton.WIDGET_GROUP.equals(b.widgetType) || HudButton.WIDGET_EXTRA_KEYS.equals(b.widgetType)) {
+                if (b.children != null && b.children.contains(child)) {
+                    return b;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Move a standalone key widget into a group container at the dropped slot position. */
+    private void moveWidgetIntoGroup(HudButton group, HudButton widget, float dropRawX, float dropRawY) {
         if (group == null || widget == null || group == widget) return;
-        if (!HudButton.WIDGET_GROUP.equals(group.widgetType)) return;
+        if (!HudButton.WIDGET_GROUP.equals(group.widgetType) && !HudButton.WIDGET_EXTRA_KEYS.equals(group.widgetType)) return;
         if (!HudButton.WIDGET_STANDARD.equals(widget.widgetType)) return;
         HudLayout layout = getActiveLayout();
         if (group == mInspectorSessionButton && layout == mInspectorSessionLayout
@@ -1977,7 +2304,22 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             }
         }
         if (!layout.floatingButtons.remove(widget)) return;
-        group.children.add(widget);
+
+        // Calculate insertion index based on drop coordinate
+        int insertIndex = group.children.size();
+        if (dropRawX >= 0 && dropRawY >= 0 && mFloatingContainer != null) {
+            for (int i = 0; i < mFloatingContainer.getChildCount(); i++) {
+                View child = mFloatingContainer.getChildAt(i);
+                if (child instanceof HudGroupView && ((HudGroupView) child).getModel() == group) {
+                    HudGroupView gv = (HudGroupView) child;
+                    insertIndex = gv.findDropIndex(dropRawX, dropRawY);
+                    break;
+                }
+            }
+        }
+        insertIndex = Math.max(0, Math.min(group.children.size(), insertIndex));
+        group.children.add(insertIndex, widget);
+
         ensureGroupFits(group);
         mHasUnsavedChanges = true;
         if (mSelectedButton == widget) selectButton(null, null);
@@ -2038,7 +2380,19 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         }
         this.mSelectedButton = b;
         this.mSelectedView = v;
-        // Do not auto popup inspector on select to avoid obscuring controls!
+
+        // If selecting a child view inside a container, raise container to highest Z
+        HudButton parentContainer = findParentContainerOf(b);
+        if (parentContainer != null) {
+            for (int i = 0; i < mFloatingContainer.getChildCount(); i++) {
+                View child = mFloatingContainer.getChildAt(i);
+                if (child instanceof HudGroupView && ((HudGroupView) child).getModel() == parentContainer) {
+                    child.setTranslationZ(dp(16));
+                    break;
+                }
+            }
+        }
+
         // Only update inspector if it is already open.
         if (mInspectorView != null && mInspectorView.getVisibility() == VISIBLE) {
             mInspectorView.bindButton(b);
@@ -2128,6 +2482,96 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mInspectorView.setTranslationY(Math.max(0f, targetY));
     }
 
+    private float computeSmartPillY(float left, float top, float right, float bottom,
+                                           float totalW, float pillH, float density) {
+        // If the selected button is a child inside a container (Group / ExtraKeys),
+        // ALWAYS display the quick action pills right above the entire container box!
+        // This ensures the pills are never blocked by any neighboring child keys.
+        HudButton parentContainer = findParentContainerOf(mSelectedButton);
+        if (parentContainer != null && mFloatingContainer != null) {
+            for (int i = 0; i < mFloatingContainer.getChildCount(); i++) {
+                View child = mFloatingContainer.getChildAt(i);
+                if (child instanceof HudGroupView && ((HudGroupView) child).getModel() == parentContainer) {
+                    int[] vLoc = new int[2];
+                    int[] rLoc = new int[2];
+                    child.getLocationOnScreen(vLoc);
+                    getLocationOnScreen(rLoc);
+                    float groupTop = vLoc[1] - rLoc[1];
+                    float candidateAboveGroup = groupTop - pillH - 8f * density;
+                    if (candidateAboveGroup >= 8f * density) {
+                        return candidateAboveGroup;
+                    }
+                }
+            }
+        }
+
+        float bottomCandidateY = bottom + 8f * density;
+        float topCandidateY = top - pillH - 8f * density;
+        float startX = (left + right) * 0.5f - totalW * 0.5f;
+        startX = Math.max(8f * density, Math.min(getWidth() - totalW - 8f * density, startX));
+
+        RectF bottomRect = new RectF(startX, bottomCandidateY, startX + totalW, bottomCandidateY + pillH);
+        RectF topRect = new RectF(startX, topCandidateY, startX + totalW, topCandidateY + pillH);
+
+        // 1. Check screen boundary
+        boolean bottomExceedsScreen = (bottomCandidateY + pillH > getHeight() - 8f * density);
+        boolean topExceedsScreen = (topCandidateY < 8f * density);
+
+        // 2. Check collision against all other widgets and child buttons
+        boolean bottomCollides = bottomExceedsScreen || hasWidgetCollision(bottomRect, mSelectedButton);
+        boolean topCollides = topExceedsScreen || hasWidgetCollision(topRect, mSelectedButton);
+
+        if (!bottomCollides) {
+            return bottomCandidateY; // Bottom is clear: preferred!
+        } else if (!topCollides) {
+            return topCandidateY; // Bottom is obstructed or outside screen, top is clear: flip up!
+        } else {
+            // Both top and bottom collide with other widgets or screen edges:
+            // Prefer whichever has more space or flip to top if bottom is out of screen.
+            return bottomExceedsScreen ? topCandidateY : bottomCandidateY;
+        }
+    }
+
+    private boolean hasWidgetCollision(RectF rect, HudButton exclude) {
+        if (mFloatingContainer == null) return false;
+        int[] vLoc = new int[2];
+        int[] rLoc = new int[2];
+        getLocationOnScreen(rLoc);
+
+        // Check top-level floating widgets
+        for (int i = 0; i < mFloatingContainer.getChildCount(); i++) {
+            View child = mFloatingContainer.getChildAt(i);
+            if (child == null || child.getVisibility() != VISIBLE) continue;
+
+            if (child instanceof HudGroupView) {
+                HudGroupView gv = (HudGroupView) child;
+                // Check each child inside the group
+                for (int j = 0; j < gv.getChildCount(); j++) {
+                    View cv = gv.getChildAt(j);
+                    if (cv instanceof HudFreeformButtonView) {
+                        HudButton bm = ((HudFreeformButtonView) cv).getModel();
+                        if (bm == exclude) continue; // Skip the selected button itself
+                        cv.getLocationOnScreen(vLoc);
+                        float cx = vLoc[0] - rLoc[0];
+                        float cy = vLoc[1] - rLoc[1];
+                        if (RectF.intersects(rect, new RectF(cx, cy, cx + cv.getWidth(), cy + cv.getHeight()))) {
+                            return true;
+                        }
+                    }
+                }
+            } else {
+                child.getLocationOnScreen(vLoc);
+                float cx = vLoc[0] - rLoc[0];
+                float cy = vLoc[1] - rLoc[1];
+                if (mSelectedView == child) continue; // Skip selected view itself
+                if (RectF.intersects(rect, new RectF(cx, cy, cx + child.getWidth(), cy + child.getHeight()))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private boolean handleQuickActionClick(float x, float y) {
         if (mSelectedView == null || mSelectedButton == null) return false;
         float density = getResources().getDisplayMetrics().density;
@@ -2137,18 +2581,42 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             bw = mSelectedButton.widthDp * density;
             bh = mSelectedButton.heightDp * density;
         }
+
+        int[] viewLoc = new int[2];
+        mSelectedView.getLocationOnScreen(viewLoc);
+        int[] rootLoc = new int[2];
+        getLocationOnScreen(rootLoc);
+        float selX = viewLoc[0] - rootLoc[0];
+        float selY = viewLoc[1] - rootLoc[1];
+
         float pad = 3f * density;
-        float left = mSelectedView.getX() - pad;
-        float right = mSelectedView.getX() + bw + pad;
-        float bottom = mSelectedView.getY() + bh + pad;
-        float pillH = 22f * density;
-        float pillW = 46f * density;
-        float pillY = bottom + 8f * density;
-        float gap = 8f * density;
-        float centerX = (left + right) * 0.5f;
-        float p2 = centerX - pillW * 0.5f;
-        float p1 = p2 - gap - pillW;
-        float p3 = p2 + pillW + gap;
+        float left = selX - pad;
+        float right = selX + bw + pad;
+        float top = selY - pad;
+        float bottom = selY + bh + pad;
+
+        float pillH = 24f * density;
+        float pillW = 44f * density;
+        float gap = 6f * density;
+
+        // Check if button is a child inside a container (Group / ExtraKeys)
+        HudButton parentContainer = findParentContainerOf(mSelectedButton);
+        boolean isChildKey = (parentContainer != null);
+        int numPills = isChildKey ? 4 : 3;
+
+        float totalW = numPills * pillW + (numPills - 1) * gap;
+
+        // Smart Flip: check obstacles underneath (other buttons or screen bottom)
+        float pillY = computeSmartPillY(left, top, right, bottom, totalW, pillH, density);
+
+        float startX = (left + right) * 0.5f - totalW * 0.5f;
+        // Clamp startX to screen bounds
+        startX = Math.max(8f * density, Math.min(getWidth() - totalW - 8f * density, startX));
+
+        float p1 = startX; // Custom
+        float p2 = p1 + pillW + gap; // Copy
+        float p3 = p2 + pillW + gap; // Detach (if child) or Delete
+        float p4 = p3 + pillW + gap; // Delete (if child)
 
         if (y >= pillY - 6f * density && y <= pillY + pillH + 6f * density) {
             if (x >= p1 && x <= p1 + pillW) {
@@ -2173,10 +2641,40 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 selectButton(duplicate, null);
                 Toast.makeText(getContext(), R.string.hud_editor_duplicated, Toast.LENGTH_SHORT).show();
                 return true;
-            } else if (x >= p3 && x <= p3 + pillW) {
+            } else if (isChildKey && x >= p3 && x <= p3 + pillW) {
+                // Click "Detach" from container
+                performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
+                parentContainer.children.remove(mSelectedButton);
+
+                int pw = getWidth();
+                int ph = getHeight();
+                if (pw > 0 && ph > 0) {
+                    // Position detached key comfortably ABOVE the parent container so it never overlaps!
+                    float offsetDistanceY = (parentContainer.heightDp * 0.5f + mSelectedButton.heightDp * 0.5f + 16f) * density;
+                    float targetCenterY = (parentContainer.posYPercent * ph) - offsetDistanceY;
+                    if (targetCenterY < mSelectedButton.heightDp * density) {
+                        // If top of screen has no room, place it below the container
+                        targetCenterY = (parentContainer.posYPercent * ph) + offsetDistanceY;
+                    }
+                    mSelectedButton.posXPercent = Math.max(0.08f, Math.min(0.92f, (selX + bw * 0.5f) / pw));
+                    mSelectedButton.posYPercent = Math.max(0.08f, Math.min(0.92f, targetCenterY / ph));
+                }
+                avoidOverlap(mSelectedButton);
+                getActiveLayout().floatingButtons.add(mSelectedButton);
+                mHasUnsavedChanges = true;
+                HudButton detachedBtn = mSelectedButton;
+                rebuildActiveLayout();
+                selectButton(detachedBtn, null);
+                Toast.makeText(getContext(), R.string.hud_editor_detached, Toast.LENGTH_SHORT).show();
+                return true;
+            } else if (x >= (isChildKey ? p4 : p3) && x <= (isChildKey ? p4 : p3) + pillW) {
                 // Click "Delete"
                 performHapticFeedback(android.view.HapticFeedbackConstants.REJECT);
-                getActiveLayout().floatingButtons.remove(mSelectedButton);
+                if (isChildKey) {
+                    parentContainer.children.remove(mSelectedButton);
+                } else {
+                    getActiveLayout().floatingButtons.remove(mSelectedButton);
+                }
                 mHasUnsavedChanges = true;
                 selectButton(null, null);
                 rebuildActiveLayout();
@@ -2206,8 +2704,18 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             for (float gy = step; gy < h; gy += step) {
                 canvas.drawLine(0, gy, w, gy, mGridPaint);
             }
+        }
+    }
 
-            // 3. Draw magnetic guidelines
+    @Override
+    protected void dispatchDraw(Canvas canvas) {
+        super.dispatchDraw(canvas);
+        if (mIsEditMode) {
+            float density = getResources().getDisplayMetrics().density;
+            float w = getWidth();
+            float h = getHeight();
+
+            // 3. Draw magnetic guidelines on top of child widgets
             // 3a. Sibling guides (green) - snap with other buttons / canvas edges
             for (float x : mActiveVerticalGuides) {
                 canvas.drawLine(x, 0, x, h, mGuidePaint);
@@ -2224,18 +2732,29 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             }
 
             // 4. Draw bounding border around selected view (Cobalt blue + 2 Anchor dots + Quick Actions)
-            if (mSelectedView != null && mSelectedButton != null) {
+            // Drawn in dispatchDraw so it ALWAYS appears ON TOP OF all child widgets & containers!
+            // When the custom inspector panel is open, skip drawing this overlay to avoid obscuring the inspector!
+            if (mSelectedView != null && mSelectedButton != null
+                    && (mInspectorView == null || mInspectorView.getVisibility() != VISIBLE)) {
                 float bw = mSelectedView.getWidth();
                 float bh = mSelectedView.getHeight();
                 if (bw <= 0 || bh <= 0) {
                     bw = mSelectedButton.widthDp * density;
                     bh = mSelectedButton.heightDp * density;
                 }
+
+                int[] viewLoc = new int[2];
+                mSelectedView.getLocationOnScreen(viewLoc);
+                int[] rootLoc = new int[2];
+                getLocationOnScreen(rootLoc);
+                float selX = viewLoc[0] - rootLoc[0];
+                float selY = viewLoc[1] - rootLoc[1];
+
                 float pad = 3f * density;
-                float left = mSelectedView.getX() - pad;
-                float top = mSelectedView.getY() - pad;
-                float right = mSelectedView.getX() + bw + pad;
-                float bottom = mSelectedView.getY() + bh + pad;
+                float left = selX - pad;
+                float top = selY - pad;
+                float right = selX + bw + pad;
+                float bottom = selY + bh + pad;
 
                 // 4a. Rectangular Cobalt Border
                 canvas.drawRect(left, top, right, bottom, mSelectBorderPaint);
@@ -2245,15 +2764,28 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 canvas.drawCircle(left, top, dotRadius, mHandleDotPaint);
                 canvas.drawCircle(right, bottom, dotRadius, mHandleDotPaint);
 
-                // 4c. Quick Action Labels underneath: Custom | Copy | Delete (Pill Buttons with Lucide Icons)
+                // 4c. Quick Action Labels: Custom | Copy | [Detach] | Delete (Pill Buttons with Lucide Icons)
                 float pillH = 24f * density;
-                float pillW = 48f * density;
-                float pillY = bottom + 8f * density;
-                float gap = 8f * density;
-                float centerX = (left + right) * 0.5f;
-                float p2 = centerX - pillW * 0.5f;
-                float p1 = p2 - gap - pillW;
-                float p3 = p2 + pillW + gap;
+                float pillW = 44f * density;
+                float gap = 6f * density;
+
+                HudButton parentContainer = findParentContainerOf(mSelectedButton);
+                boolean isChildKey = (parentContainer != null);
+                int numPills = isChildKey ? 4 : 3;
+
+                float totalW = numPills * pillW + (numPills - 1) * gap;
+
+                // Smart Flip: check obstacles underneath (other buttons or screen bottom)
+                float pillY = computeSmartPillY(left, top, right, bottom, totalW, pillH, density);
+
+                float startX = (left + right) * 0.5f - totalW * 0.5f;
+                // Clamp startX to screen bounds
+                startX = Math.max(8f * density, Math.min(w - totalW - 8f * density, startX));
+
+                float p1 = startX; // Custom
+                float p2 = p1 + pillW + gap; // Copy
+                float p3 = p2 + pillW + gap; // Detach (if child) or Delete
+                float p4 = p3 + pillW + gap; // Delete (if child)
 
                 // Custom (Pencil)
                 drawActionPillWithIcon(canvas, p1, pillY, pillW, pillH, 0xFF3A3A3A, 0xFFA39CB8, HudVectorIcons.ICON_CUSTOM, Color.WHITE, density);
@@ -2261,13 +2793,15 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 // Copy (Copy sheets)
                 drawActionPillWithIcon(canvas, p2, pillY, pillW, pillH, 0xFF3A3A3A, 0x33FFFFFF, HudVectorIcons.ICON_COPY, Color.WHITE, density);
 
-                // Delete (Trash can)
-                drawActionPillWithIcon(canvas, p3, pillY, pillW, pillH, 0xFF3A3A3A, 0x55F38BA8, HudVectorIcons.ICON_DELETE, 0xFFF38BA8, density);
-            }
-
-            // 5. Bottom-center daemon status banner (only when we know the host)
-            if (mHost != null) {
-                drawDaemonBanner(canvas, w, h, density);
+                if (isChildKey) {
+                    // Detach / Eject from container (Icon Detach / External Link)
+                    drawActionPillWithIcon(canvas, p3, pillY, pillW, pillH, 0xFF3A3A3A, 0x8880DEEA, HudVectorIcons.ICON_DETACH, 0xFF80DEEA, density);
+                    // Delete (Trash can)
+                    drawActionPillWithIcon(canvas, p4, pillY, pillW, pillH, 0xFF3A3A3A, 0x55F38BA8, HudVectorIcons.ICON_DELETE, 0xFFF38BA8, density);
+                } else {
+                    // Delete (Trash can)
+                    drawActionPillWithIcon(canvas, p3, pillY, pillW, pillH, 0xFF3A3A3A, 0x55F38BA8, HudVectorIcons.ICON_DELETE, 0xFFF38BA8, density);
+                }
             }
         }
     }
@@ -2275,9 +2809,16 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private void drawActionPillWithIcon(Canvas canvas, float x, float y, float w, float h,
                                         int bgColor, int strokeColor, String iconId, int iconColor, float density) {
         RectF r = new RectF(x, y, x + w, y + h);
+
+        // Subtle drop shadow behind the pill so it clearly floats on top of any underlying widgets
+        mQuickActionBgPaint.setStyle(Paint.Style.FILL);
+        mQuickActionBgPaint.setColor(0x66000000);
+        float corner = h * 0.5f;
+        RectF shadow = new RectF(x, y + 2f * density, x + w, y + h + 2f * density);
+        canvas.drawRoundRect(shadow, corner, corner, mQuickActionBgPaint);
+
         mQuickActionBgPaint.setStyle(Paint.Style.FILL);
         mQuickActionBgPaint.setColor(bgColor);
-        float corner = h * 0.5f;
         canvas.drawRoundRect(r, corner, corner, mQuickActionBgPaint);
 
         mQuickActionBgPaint.setStyle(Paint.Style.STROKE);
@@ -2296,6 +2837,17 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         float left = (w - bannerW) / 2f;
         float bottomMargin = Math.max(mInsetBottom, getSystemNavigationBarHeight(getContext())) + 8f * density;
         float top = h - bannerH - bottomMargin;
+
+        // In Edit Mode, if the bottom area has widgets (like ExtraKeys or docks),
+        // flip the daemon banner to the top right underneath the top toolbar!
+        if (mIsEditMode) {
+            RectF bottomArea = new RectF(left - 10f * density, top - 10f * density,
+                    left + bannerW + 10f * density, top + bannerH + 10f * density);
+            if (hasWidgetCollision(bottomArea, null)) {
+                top = (mTopToolbar != null ? mTopToolbar.getBottom() : 0) + 12f * density + mInsetTop;
+            }
+        }
+
         if (top < 16f * density) top = 16f * density;
 
         mBannerFillPaint.setStyle(Paint.Style.FILL);
@@ -2360,6 +2912,10 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             else if ("toggle_vk".equals(action.systemCommand)) mHost.toggleVirtualKeyboard();
             else if ("toggle_hud_hidden".equals(action.systemCommand)) toggleHudHidden();
             else if ("open_settings".equals(action.systemCommand)) mHost.openSettings();
+            else if ("open_editor".equals(action.systemCommand)) {
+                // Activate in-place Live HUD Editor directly on MainActivity without launching external activity!
+                setEditMode(true);
+            }
             else if ("mouse_left".equals(action.systemCommand)) {
                 mHost.sendMouseButton(0x110, true);
                 postDelayed(() -> mHost.sendMouseButton(0x110, false), 50);

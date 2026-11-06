@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
@@ -32,6 +33,8 @@ public final class SuperGestureButtonView extends View {
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF mBounds = new RectF();
+    private final Path mPath = new Path();
+    private final float[] mRadii = new float[8];
 
     private float mDownX;
     private float mDownY;
@@ -81,13 +84,17 @@ public final class SuperGestureButtonView extends View {
         int finalAlpha = Math.round(mModel.opacity * origAlpha);
         mPaint.setColor((targetCol & 0x00FFFFFF) | (finalAlpha << 24));
         float corner = mModel.cornerRadiusDp * density;
-        canvas.drawRoundRect(mBounds, corner, corner, mPaint);
+
+        HudFreeformButtonView.computeRadii(mModel.cornerShape, corner, mRadii);
+        mPath.reset();
+        mPath.addRoundRect(mBounds, mRadii, Path.Direction.CW);
+        canvas.drawPath(mPath, mPaint);
 
         // Border Stroke
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(Math.max(1, Math.round(1.5f * density)));
         mPaint.setColor(0x88FFFFFF);
-        canvas.drawRoundRect(mBounds, corner, corner, mPaint);
+        canvas.drawPath(mPath, mPaint);
 
         // Main Center Text with safe auto font scaling away from chevrons
         mTextPaint.setColor(mIsPressed ? 0xFF11111B : mModel.textColor);

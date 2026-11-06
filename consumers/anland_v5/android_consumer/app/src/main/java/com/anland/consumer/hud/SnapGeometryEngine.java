@@ -190,6 +190,40 @@ public final class SnapGeometryEngine {
                     candidatesY.add(new SnapCandidate(s.top - mGapPx - h, s.top, dAdjT_gap));
                 }
             }
+
+            // -------------------------------------------------------------
+            // 3b. Pair/Inter-sibling Center Alignment (Snap center to gap between 2 siblings)
+            // -------------------------------------------------------------
+            int n = siblings.size();
+            for (int i = 0; i < n; i++) {
+                RectF s1 = siblings.get(i);
+                for (int j = i + 1; j < n; j++) {
+                    RectF s2 = siblings.get(j);
+
+                    // X-axis: Check if s1 and s2 are horizontal neighbors (gap or adjacent)
+                    float leftBound = Math.min(s1.right, s2.right);
+                    float rightBound = Math.max(s1.left, s2.left);
+                    // Either separated by a reasonable gap or nearly flush (< 24dp apart)
+                    if (Math.abs(rightBound - leftBound) <= 24f * mDensity) {
+                        float midX = (leftBound + rightBound) * 0.5f;
+                        float dMidX = Math.abs((x + w * 0.5f) - midX);
+                        if (dMidX < mSnapThresholdPx) {
+                            candidatesX.add(new SnapCandidate(midX - w * 0.5f, midX, dMidX));
+                        }
+                    }
+
+                    // Y-axis: Check if s1 and s2 are vertical neighbors
+                    float topBound = Math.min(s1.bottom, s2.bottom);
+                    float bottomBound = Math.max(s1.top, s2.top);
+                    if (Math.abs(bottomBound - topBound) <= 24f * mDensity) {
+                        float midY = (topBound + bottomBound) * 0.5f;
+                        float dMidY = Math.abs((y + h * 0.5f) - midY);
+                        if (dMidY < mSnapThresholdPx) {
+                            candidatesY.add(new SnapCandidate(midY - h * 0.5f, midY, dMidY));
+                        }
+                    }
+                }
+            }
         }
 
         // -------------------------------------------------------------

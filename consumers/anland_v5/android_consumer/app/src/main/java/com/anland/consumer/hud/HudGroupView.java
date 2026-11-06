@@ -6,7 +6,9 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.DashPathEffect;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.FrameLayout;
 
@@ -27,12 +29,24 @@ public final class HudGroupView extends FrameLayout {
     /** Minimum inner height kept free when the group still has no keys. */
     private static final int EMPTY_MIN_HEIGHT_DP = 48;
 
+    private OnChildSelectListener mChildSelectListener;
+
+    public interface OnChildSelectListener {
+        void onChildSelected(HudButton model, View view);
+    }
+
+    public void setOnChildSelectListener(OnChildSelectListener l) {
+        this.mChildSelectListener = l;
+    }
+
     private final HudButton mModel;
     private final HudFreeformButtonView.ButtonActionListener mListener;
     private final Paint mFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mHintPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF mRect = new RectF();
+    private final Path mPath = new Path();
+    private final float[] mRadii = new float[8];
     private boolean mInEditMode = false;
     private boolean mDropTarget = false;
 
@@ -55,14 +69,26 @@ public final class HudGroupView extends FrameLayout {
         return mModel;
     }
 
+    public int findDropIndex(float rawX, float rawY) {
+        int count = getChildCount();
+        if (count == 0) return 0;
+        int[] loc = new int[2];
+        for (int i = 0; i < count; i++) {
+            View child = getChildAt(i);
+            child.getLocationOnScreen(loc);
+            float cx = loc[0] + child.getWidth() * 0.5f;
+            float cy = loc[1] + child.getHeight() * 0.5f;
+            // If dropping before this child horizontally in same row or above this row
+            if (rawY < loc[1] + child.getHeight() && rawX < cx) {
+                return i;
+            }
+        }
+        return count;
+    }
+
     public void setInEditMode(boolean editMode) {
         mInEditMode = editMode;
-        for (int i = 0; i < getChildCount(); i++) {
-            View child = getChildAt(i);
-            if (child instanceof HudFreeformButtonView)
-                ((HudFreeformButtonView) child).setInEditMode(editMode);
-        }
-        invalidate();
+        rebuildChildren();
     }
 
     /** Highlight the container while a key is dragged over it. */
@@ -96,7 +122,10 @@ public final class HudGroupView extends FrameLayout {
     }
 
     private int padPx() {
-        return Math.max(0, dp(mModel.padDp));
+        // Enforce 4dp outer boundary padding so the container's outer edge is clean and easy to drag
+        int configured = Math.max(0, dp(mModel.padDp));
+        int minMargin = dp(4);
+        return Math.max(configured, minMargin);
     }
 
     /** Widest / tallest child, i.e. the size of one grid cell. */
@@ -114,7 +143,26 @@ public final class HudGroupView extends FrameLayout {
         return max;
     }
 
-    private static int columnCount(int contentWidth, int cellWidth, int gap, int count) {
+    @Override
+    public boolean onInterceptTouchEvent(MotionEvent ev) {
+        if (mInEditMode) {
+            // In edit mode, container intercepts all touch streams so dragging ANYWHERE
+            // (even on child keys) drags the entire container as one unit!
+            // Child key selection is handled via Tap detection when stationary.
+            return true;
+        }
+        return super.onInterceptTouchEvent(ev);
+    }
+
+    private int effectiveColumnCount(int contentWidth, int cellWidth, int gap, int count) {
+        if (mModel != null) {
+            if (mModel.columns > 0) {
+                return Math.max(1, mModel.columns);
+            } else if (mModel.rows > 0) {
+                // If rows specified, derive columns: ceil(count / rows)
+                return Math.max(1, (count + mModel.rows - 1) / mModel.rows);
+            }
+        }
         if (cellWidth <= 0) return Math.max(1, count);
         int cols = (contentWidth + gap) / (cellWidth + gap);
         cols = Math.max(1, Math.min(cols, Math.max(1, count)));
@@ -146,7 +194,7 @@ public final class HudGroupView extends FrameLayout {
         if (count == 0 || cellH <= 0) {
             needed = pad * 2 + dp(EMPTY_MIN_HEIGHT_DP);
         } else {
-            int cols = columnCount(contentWidth, cellW, gap, count);
+            int cols = effectiveColumnCount(contentWidth, cellW, gap, count);
             int rows = (count + cols - 1) / cols;
             needed = pad * 2 + rows * cellH + Math.max(0, rows - 1) * gap;
         }
@@ -163,7 +211,25 @@ public final class HudGroupView extends FrameLayout {
 
         int wSpec = MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY);
         int hSpec = MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY);
-        super.onMeasure(wSpec, hSpec);
+
+        // If columns/rows mode is enabled, measure children with their stretched cell size
+        if (mModel != null && (mModel.columns > 0 || mModel.rows > 0) && count > 0) {
+            int cols = effectiveColumnCount(contentWidth, cellW, gap, count);
+            int rows = (count + cols - 1) / cols;
+            int availW = contentWidth - Math.max(0, cols - 1) * gap;
+            int stretchW = (cols > 0 && availW > 0) ? (availW / cols) : cellW;
+            int availH = height - pad * 2 - Math.max(0, rows - 1) * gap;
+            int stretchH = (rows > 0 && availH > 0) ? (availH / rows) : cellH;
+
+            for (int i = 0; i < count; i++) {
+                getChildAt(i).measure(
+                        MeasureSpec.makeMeasureSpec(stretchW, MeasureSpec.EXACTLY),
+                        MeasureSpec.makeMeasureSpec(stretchH, MeasureSpec.EXACTLY)
+                );
+            }
+        } else {
+            super.onMeasure(wSpec, hSpec);
+        }
         setMeasuredDimension(width, height);
     }
 
@@ -178,8 +244,20 @@ public final class HudGroupView extends FrameLayout {
 
         int cellW = Math.max(1, cellWidth());
         int cellH = Math.max(1, cellHeight());
-        int cols = columnCount(contentWidth, cellW, gap, count);
+        int cols = effectiveColumnCount(contentWidth, cellW, gap, count);
         int rows = (count + cols - 1) / cols;
+
+        // Auto stretch buttons to fill the container evenly when columns/rows are set
+        if (mModel != null && (mModel.columns > 0 || mModel.rows > 0)) {
+            if (cols > 0) {
+                int availW = contentWidth - Math.max(0, cols - 1) * gap;
+                if (availW > 0) cellW = Math.max(1, availW / cols);
+            }
+            if (rows > 0) {
+                int availH = contentHeight - Math.max(0, rows - 1) * gap;
+                if (availH > 0) cellH = Math.max(1, availH / rows);
+            }
+        }
 
         int gridW = cols * cellW + Math.max(0, cols - 1) * gap;
         int gridH = rows * cellH + Math.max(0, rows - 1) * gap;
@@ -192,8 +270,8 @@ public final class HudGroupView extends FrameLayout {
             int col = i % cols;
             int cellLeft = originX + col * (cellW + gap);
             int cellTop = originY + row * (cellH + gap);
-            int cw = child.getMeasuredWidth();
-            int ch = child.getMeasuredHeight();
+            int cw = (mModel != null && (mModel.columns > 0 || mModel.rows > 0)) ? cellW : child.getMeasuredWidth();
+            int ch = (mModel != null && (mModel.columns > 0 || mModel.rows > 0)) ? cellH : child.getMeasuredHeight();
             int cx = cellLeft + (cellW - cw) / 2;
             int cy = cellTop + (cellH - ch) / 2;
             child.layout(cx, cy, cx + cw, cy + ch);
@@ -207,11 +285,15 @@ public final class HudGroupView extends FrameLayout {
         // hiding the desktop behind it.
         float corner = mModel.cornerRadiusDp * getResources().getDisplayMetrics().density;
         mRect.set(1, 1, getWidth() - 1, getHeight() - 1);
+        HudFreeformButtonView.computeRadii(mModel.cornerShape, corner, mRadii);
+        mPath.reset();
+        mPath.addRoundRect(mRect, mRadii, Path.Direction.CW);
+
         mFillPaint.setColor(mModel.bgColor);
-        int alpha = Math.round(Math.min(0.35f, Math.max(0.12f, mModel.opacity)) * 255);
+        int alpha = Math.round(Math.max(0.0f, Math.min(1.0f, mModel.opacity)) * 255);
         if (mDropTarget) alpha = Math.min(255, alpha + 70);
         mFillPaint.setAlpha(alpha);
-        canvas.drawRoundRect(mRect, corner, corner, mFillPaint);
+        canvas.drawPath(mPath, mFillPaint);
 
         if (mInEditMode && getChildCount() == 0) {
             mHintPaint.setColor(0xB3FFFFFF);
@@ -232,19 +314,31 @@ public final class HudGroupView extends FrameLayout {
         float stroke = Math.max(1f, 1.5f * density);
         float corner = mModel.cornerRadiusDp * density;
         mRect.set(stroke, stroke, getWidth() - stroke, getHeight() - stroke);
+        HudFreeformButtonView.computeRadii(mModel.cornerShape, corner, mRadii);
+        mPath.reset();
+        mPath.addRoundRect(mRect, mRadii, Path.Direction.CW);
+
         if (mDropTarget) {
             mBorderPaint.setPathEffect(null);
             mBorderPaint.setStrokeWidth(stroke);
             mBorderPaint.setColor(0xFF80DEEA);
+            canvas.drawPath(mPath, mBorderPaint);
         } else if (mInEditMode) {
-            mBorderPaint.setPathEffect(new DashPathEffect(new float[]{dp(6), dp(4)}, 0));
-            mBorderPaint.setStrokeWidth(stroke);
-            mBorderPaint.setColor(0x8A80DEEA);
+            // Only draw dashed outline in edit mode if borderStrokeWidthDp > 0
+            if (mModel.borderStrokeWidthDp > 0) {
+                mBorderPaint.setPathEffect(new DashPathEffect(new float[]{dp(6), dp(4)}, 0));
+                mBorderPaint.setStrokeWidth(mModel.borderStrokeWidthDp * density);
+                mBorderPaint.setColor(mModel.borderColor != 0 ? mModel.borderColor : 0x8A80DEEA);
+                canvas.drawPath(mPath, mBorderPaint);
+            }
         } else {
-            mBorderPaint.setPathEffect(null);
-            mBorderPaint.setStrokeWidth(Math.max(1f, density));
-            mBorderPaint.setColor(0x33FFFFFF);
+            // Runtime: only draw border if borderStrokeWidthDp > 0
+            if (mModel.borderStrokeWidthDp > 0) {
+                mBorderPaint.setPathEffect(null);
+                mBorderPaint.setStrokeWidth(mModel.borderStrokeWidthDp * density);
+                mBorderPaint.setColor(mModel.borderColor != 0 ? mModel.borderColor : 0x33FFFFFF);
+                canvas.drawPath(mPath, mBorderPaint);
+            }
         }
-        canvas.drawRoundRect(mRect, corner, corner, mBorderPaint);
     }
 }

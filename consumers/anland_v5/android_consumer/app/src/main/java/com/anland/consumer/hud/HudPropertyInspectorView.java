@@ -25,11 +25,8 @@ import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
-import android.widget.Switch;
 import android.widget.TextView;
 import com.anland.consumer.R;
 import com.anland.consumer.theme.M3;
@@ -87,6 +84,12 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private ScrollView mTabStyleView;
 
     // Tab 1: Transform
+    private View mPosXRow;
+    private SeekBar mPosXSeekBar;
+    private TextView mPosXBadge;
+    private View mPosYRow;
+    private SeekBar mPosYSeekBar;
+    private TextView mPosYBadge;
     private View mWidthRow;
     private View mHeightRow;
     private SeekBar mWidthSeekBar;
@@ -98,6 +101,14 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private TextView mCornerBadge;
     private TextView mShapeTitle;
     private HudCornerShapePickerView mShapePickerView;
+
+    // Container column/row count (for WIDGET_GROUP and WIDGET_EXTRA_KEYS)
+    private View mColumnsRow;
+    private SeekBar mColumnsSeekBar;
+    private TextView mColumnsBadge;
+    private View mRowsRow;
+    private SeekBar mRowsSeekBar;
+    private TextView mRowsBadge;
 
     // Tab 2: Label
     private View mLabelPillText;
@@ -114,13 +125,14 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private View mSectionPrimaryAction;
     private View mSectionPopupAction;
     private View mSectionLongPressAction;
-    private RadioGroup mSendModeGroup;
+    private LinearLayout mSendModeRow;
     private Button mBtnPickMainAction;
     private Button mBtnPickPopupAction;
     private Button mBtnPickLongPressAction;
-    private RadioButton mSendImmediately;
-    private RadioButton mSendOnRelease;
-    private Switch mRepeatSwitch;
+    private View mSendPillPress;
+    private View mSendPillRelease;
+    private M3.ToggleView mRepeatToggle;
+    private View mRepeatRow;
     private SeekBar mLongPressSeekBar;
     private TextView mLongPressBadge;
     private View mLongPressDelayRow;
@@ -143,7 +155,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private TextView mOpacityBadge;
     private SeekBar mBorderWidthSeekBar;
     private TextView mBorderWidthBadge;
-    private Switch mHapticSwitch;
+    private M3.ToggleView mHapticToggle;
+    private M3.ToggleView mAttachKeyboardToggle;
     private LinearLayout mColorThemeRow;
     private LinearLayout mStyleVariantSection;
     private LinearLayout mStyleVariantRow;
@@ -165,7 +178,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
     }
 
     private static int sizeMaxDp(HudButton b) {
-        return (b != null && HudButton.WIDGET_GROUP.equals(b.widgetType))
+        return (b != null && (HudButton.WIDGET_GROUP.equals(b.widgetType) || HudButton.WIDGET_EXTRA_KEYS.equals(b.widgetType)))
                 ? GROUP_SIZE_MAX_DP : SIZE_MAX_DP;
     }
 
@@ -463,6 +476,28 @@ public final class HudPropertyInspectorView extends LinearLayout {
         content.setOrientation(VERTICAL);
         content.setPadding(0, 0, dp(14), 0); // Shift content left to make room for scrollbar
 
+        // Position X Slider (0% - 100%)
+        mPosXSeekBar = new SeekBar(getContext());
+        mPosXBadge = createBadgeTextView("50% ✎");
+        mPosXRow = createSliderRow(getContext().getString(R.string.hud_editor_pos_x), mPosXSeekBar, mPosXBadge, 0, 100, "%", val -> {
+            if (mActiveButton != null) {
+                mActiveButton.posXPercent = val / 100f;
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+            }
+        });
+        content.addView(mPosXRow);
+
+        // Position Y Slider (0% - 100%)
+        mPosYSeekBar = new SeekBar(getContext());
+        mPosYBadge = createBadgeTextView("50% ✎");
+        mPosYRow = createSliderRow(getContext().getString(R.string.hud_editor_pos_y), mPosYSeekBar, mPosYBadge, 0, 100, "%", val -> {
+            if (mActiveButton != null) {
+                mActiveButton.posYPercent = val / 100f;
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+            }
+        });
+        content.addView(mPosYRow);
+
         // Width Row
         mWidthSeekBar = new SeekBar(getContext());
         mWidthBadge = createBadgeTextView("75px ✎");
@@ -493,34 +528,39 @@ public final class HudPropertyInspectorView extends LinearLayout {
         });
         content.addView(mHeightRow);
 
-        // Corner Radius Row
-        mCornerSeekBar = new SeekBar(getContext());
-        mCornerBadge = createBadgeTextView("8dp ✎");
-        mCornerRow = createSliderRow(getContext().getString(R.string.hud_editor_corner_radius), mCornerSeekBar, mCornerBadge, 0, 50, "dp", val -> {
+        // Columns split mode for Container / ExtraKeys
+        mColumnsSeekBar = new SeekBar(getContext());
+        mColumnsBadge = createBadgeTextView(getContext().getString(R.string.hud_editor_grid_auto));
+        mColumnsRow = createSliderRow(getContext().getString(R.string.hud_editor_grid_columns), mColumnsSeekBar, mColumnsBadge, 0, 16, "", val -> {
             if (mActiveButton != null) {
-                mActiveButton.cornerRadiusDp = val;
+                mActiveButton.columns = val;
+                if (val > 0 && mActiveButton.rows > 0) {
+                    mActiveButton.rows = 0;
+                    if (mRowsSeekBar != null) syncSliderAndBadge(mRowsSeekBar, mRowsBadge, 0, 0, "");
+                    if (mRowsBadge != null) mRowsBadge.setText(getContext().getString(R.string.hud_editor_grid_auto));
+                }
+                mColumnsBadge.setText(val == 0 ? getContext().getString(R.string.hud_editor_grid_auto) : String.valueOf(val));
                 if (mCallback != null) mCallback.onModelChanged(mActiveButton);
             }
         });
-        content.addView(mCornerRow);
+        content.addView(mColumnsRow);
 
-        // Zalith 8 Corner Shapes Matrix
-        mShapeTitle = new TextView(getContext());
-        mShapeTitle.setText(getContext().getString(R.string.hud_editor_corner_shape));
-        mShapeTitle.setTextColor(Color.WHITE);
-        mShapeTitle.setTextSize(12);
-        mShapeTitle.setTypeface(Typeface.DEFAULT_BOLD);
-        mShapeTitle.setPadding(0, dp(8), 0, dp(4));
-        content.addView(mShapeTitle);
-
-        mShapePickerView = new HudCornerShapePickerView(getContext());
-        mShapePickerView.setOnShapeSelectedListener(shape -> {
+        // Rows split mode for Container / ExtraKeys
+        mRowsSeekBar = new SeekBar(getContext());
+        mRowsBadge = createBadgeTextView(getContext().getString(R.string.hud_editor_grid_auto));
+        mRowsRow = createSliderRow(getContext().getString(R.string.hud_editor_grid_rows), mRowsSeekBar, mRowsBadge, 0, 8, "", val -> {
             if (mActiveButton != null) {
-                mActiveButton.cornerShape = shape;
+                mActiveButton.rows = val;
+                if (val > 0 && mActiveButton.columns > 0) {
+                    mActiveButton.columns = 0;
+                    if (mColumnsSeekBar != null) syncSliderAndBadge(mColumnsSeekBar, mColumnsBadge, 0, 0, "");
+                    if (mColumnsBadge != null) mColumnsBadge.setText(getContext().getString(R.string.hud_editor_grid_auto));
+                }
+                mRowsBadge.setText(val == 0 ? getContext().getString(R.string.hud_editor_grid_auto) : String.valueOf(val));
                 if (mCallback != null) mCallback.onModelChanged(mActiveButton);
             }
         });
-        content.addView(mShapePickerView);
+        content.addView(mRowsRow);
 
         mTabTransformView.addView(content);
         mTabContentContainer.addView(mTabTransformView);
@@ -650,6 +690,74 @@ public final class HudPropertyInspectorView extends LinearLayout {
         tv.setTextColor(active ? Color.WHITE : 0xAAFFFFFF);
     }
 
+    /** Track container shared by the compact Text/Icon and Press/Release switches. */
+    private LinearLayout createSegmentedRow() {
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(HORIZONTAL);
+        row.setGravity(Gravity.CENTER);
+        row.setPadding(dp(4), dp(4), dp(4), dp(4));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(16));
+        bg.setColor(0x33000000);
+        bg.setStroke(dp(1), 0x33FFFFFF);
+        row.setBackground(bg);
+        return row;
+    }
+
+    /**
+     * Build a compact label + custom toggle row.
+     * The summary line is optional and rendered below the label in muted text.
+     */
+    private LinearLayout createToggleRow(String label, String summary, M3.ToggleView toggle) {
+        LinearLayout container = new LinearLayout(getContext());
+        container.setOrientation(VERTICAL);
+        container.setPadding(0, dp(6), 0, dp(6));
+
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView title = new TextView(getContext());
+        title.setText(label);
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(12);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                0, LayoutParams.WRAP_CONTENT, 1f);
+        titleLp.rightMargin = dp(10);
+        row.addView(title, titleLp);
+
+        row.addView(toggle, new LinearLayout.LayoutParams(dp(42), dp(24)));
+        container.addView(row);
+
+        if (summary != null && !summary.isEmpty()) {
+            TextView desc = new TextView(getContext());
+            desc.setText(summary);
+            desc.setTextColor(0xFF888888);
+            desc.setTextSize(10f);
+            desc.setPadding(0, dp(2), dp(42), 0);
+            container.addView(desc);
+        }
+        return container;
+    }
+
+    private void setSendOnRelease(boolean onRelease) {
+        if (mActiveButton == null) return;
+        if (mActiveButton.sendOnRelease == onRelease) {
+            updateSendPills();
+            return;
+        }
+        mActiveButton.sendOnRelease = onRelease;
+        updateSendPills();
+        if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+    }
+
+    private void updateSendPills() {
+        boolean onRelease = mActiveButton != null && mActiveButton.sendOnRelease;
+        if (mSendPillPress != null) updateSegmentedPill(mSendPillPress, !onRelease);
+        if (mSendPillRelease != null) updateSegmentedPill(mSendPillRelease, onRelease);
+    }
+
     private void setLabelMode(boolean isIcon) {
         if (mActiveButton == null) return;
         if (isIcon) {
@@ -745,10 +853,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         grid.setColumnCount(cols);
         grid.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
 
-        // Add None Option first
-        View noneCard = createIconPresetCard(ctx, HudVectorIcons.ICON_NONE, getContext().getString(R.string.hud_editor_none_text));
-        grid.addView(noneCard);
-
+        // Vector Icon Grid (without None card, since segmented switch handles Text vs Icon)
         for (int i = 0; i < HudVectorIcons.ALL_ICONS.length; i++) {
             final String id = HudVectorIcons.ALL_ICONS[i];
             final String lbl = getContext().getString(HudVectorIcons.ICON_LABELS[i]);
@@ -839,39 +944,23 @@ public final class HudPropertyInspectorView extends LinearLayout {
         });
         content.addView(mBtnPickMainAction);
 
-        // Trigger Mode: Down vs Release
-        boolean isLandscape = getContext().getResources().getConfiguration().orientation
-                == Configuration.ORIENTATION_LANDSCAPE;
-        mSendModeGroup = new RadioGroup(getContext());
-        mSendModeGroup.setOrientation(isLandscape ? HORIZONTAL : VERTICAL);
-        mSendImmediately = new RadioButton(getContext());
-        mSendImmediately.setText(R.string.hud_send_immediately);
-        mSendImmediately.setTextColor(0xFFCCCCCC);
-        mSendImmediately.setTextSize(11);
-        mSendOnRelease = new RadioButton(getContext());
-        mSendOnRelease.setText(R.string.hud_send_on_release);
-        mSendOnRelease.setTextColor(0xFFCCCCCC);
-        mSendOnRelease.setTextSize(11);
-        mSendModeGroup.addView(mSendImmediately);
-        mSendModeGroup.addView(mSendOnRelease);
-        mSendModeGroup.setOnCheckedChangeListener((group, checkedId) -> {
-            if (mIsProgrammaticChange || mActiveButton == null) return;
-            mActiveButton.sendOnRelease = (checkedId == mSendOnRelease.getId());
-            if (mCallback != null) mCallback.onModelChanged(mActiveButton);
-        });
-        content.addView(mSendModeGroup);
+        // Trigger Mode: Press vs Release (compact segmented pill)
+        mSendModeRow = createSegmentedRow();
+        mSendPillPress = createSegmentedPill(getContext().getString(R.string.hud_send_mode_press), true, () -> setSendOnRelease(false));
+        mSendPillRelease = createSegmentedPill(getContext().getString(R.string.hud_send_mode_release), false, () -> setSendOnRelease(true));
+        mSendModeRow.addView(mSendPillPress, new LinearLayout.LayoutParams(0, dp(30), 1f));
+        mSendModeRow.addView(mSendPillRelease, new LinearLayout.LayoutParams(0, dp(30), 1f));
+        content.addView(mSendModeRow);
 
-        // Repeat Switch
-        mRepeatSwitch = new Switch(getContext());
-        mRepeatSwitch.setText(R.string.hud_hold_to_repeat);
-        mRepeatSwitch.setTextColor(0xFFCCCCCC);
-        mRepeatSwitch.setTextSize(11);
-        mRepeatSwitch.setOnCheckedChangeListener((v, checked) -> {
+        // Repeat Toggle
+        mRepeatToggle = new M3.ToggleView(getContext());
+        mRepeatToggle.setOnCheckedChangeListener((view, checked) -> {
             if (mIsProgrammaticChange || mActiveButton == null || mActiveButton.action == null) return;
             mActiveButton.action.repeat = checked;
             if (mCallback != null) mCallback.onModelChanged(mActiveButton);
         });
-        content.addView(mRepeatSwitch);
+        mRepeatRow = createToggleRow(getContext().getString(R.string.hud_hold_to_repeat), null, mRepeatToggle);
+        content.addView(mRepeatRow);
 
         // Popup Action (Swipe Up)
         mSectionPopupAction = createSectionHeader(getContext().getString(R.string.hud_editor_popup_action));
@@ -942,6 +1031,30 @@ public final class HudPropertyInspectorView extends LinearLayout {
         }));
         content.addView(mTrackPointOptions);
 
+        // Feedback & System Behavior Section
+        content.addView(createSectionHeader(getContext().getString(R.string.hud_editor_event)));
+
+        // Haptic Feedback Toggle (Moved to Event tab)
+        mHapticToggle = new M3.ToggleView(getContext());
+        mHapticToggle.setOnCheckedChangeListener((view, checked) -> {
+            if (mIsProgrammaticChange || mActiveButton == null) return;
+            mActiveButton.hapticEnabled = checked;
+            if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+        });
+        content.addView(createToggleRow(getContext().getString(R.string.hud_haptic_feedback), null, mHapticToggle));
+
+        // Lift with Soft Keyboard Toggle (ExtraKey mode - Moved to Event tab)
+        mAttachKeyboardToggle = new M3.ToggleView(getContext());
+        mAttachKeyboardToggle.setOnCheckedChangeListener((view, checked) -> {
+            if (mIsProgrammaticChange || mActiveButton == null) return;
+            mActiveButton.attachToKeyboard = checked;
+            if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+        });
+        content.addView(createToggleRow(
+                getContext().getString(R.string.hud_editor_attach_to_keyboard),
+                getContext().getString(R.string.hud_editor_attach_to_keyboard_summary),
+                mAttachKeyboardToggle));
+
         mTabEventView.addView(content);
         mTabContentContainer.addView(mTabEventView);
     }
@@ -980,20 +1093,6 @@ public final class HudPropertyInspectorView extends LinearLayout {
             }
         }));
 
-        // Haptic Feedback Switch
-        mHapticSwitch = new Switch(getContext());
-        mHapticSwitch.setText(R.string.hud_haptic_feedback);
-        mHapticSwitch.setTextColor(Color.WHITE);
-        mHapticSwitch.setTextSize(12);
-        mHapticSwitch.setTypeface(Typeface.DEFAULT_BOLD);
-        mHapticSwitch.setPadding(0, dp(10), 0, dp(10));
-        mHapticSwitch.setOnCheckedChangeListener((v, checked) -> {
-            if (mIsProgrammaticChange || mActiveButton == null) return;
-            mActiveButton.hapticEnabled = checked;
-            if (mCallback != null) mCallback.onModelChanged(mActiveButton);
-        });
-        content.addView(mHapticSwitch);
-
         // Color Theme Presets
         content.addView(createSectionHeader(getContext().getString(R.string.hud_editor_background_color)));
         mColorThemeRow = createColorPresetsRow();
@@ -1012,6 +1111,35 @@ public final class HudPropertyInspectorView extends LinearLayout {
         // Border Color Presets
         content.addView(createSectionHeader(getContext().getString(R.string.hud_editor_border_color)));
         content.addView(createBorderColorPresetsRow());
+
+        // Corner Radius Row (Moved to Style tab)
+        mCornerSeekBar = new SeekBar(getContext());
+        mCornerBadge = createBadgeTextView("8dp ✎");
+        mCornerRow = createSliderRow(getContext().getString(R.string.hud_editor_corner_radius), mCornerSeekBar, mCornerBadge, 0, 50, "dp", val -> {
+            if (mActiveButton != null) {
+                mActiveButton.cornerRadiusDp = val;
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+            }
+        });
+        content.addView(mCornerRow);
+
+        // Zalith 10 Corner Shapes Matrix (Moved to Style tab)
+        mShapeTitle = new TextView(getContext());
+        mShapeTitle.setText(getContext().getString(R.string.hud_editor_corner_shape));
+        mShapeTitle.setTextColor(Color.WHITE);
+        mShapeTitle.setTextSize(12);
+        mShapeTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        mShapeTitle.setPadding(0, dp(8), 0, dp(4));
+        content.addView(mShapeTitle);
+
+        mShapePickerView = new HudCornerShapePickerView(getContext());
+        mShapePickerView.setOnShapeSelectedListener(shape -> {
+            if (mActiveButton != null) {
+                mActiveButton.cornerShape = shape;
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+            }
+        });
+        content.addView(mShapePickerView);
 
         // Widget Style Variant (For D-Pad, Touchpad, Scrollbar)
         mStyleVariantSection = new LinearLayout(getContext());
@@ -1168,7 +1296,13 @@ public final class HudPropertyInspectorView extends LinearLayout {
         row.addView(top);
 
         badge.setClickable(true);
-        badge.setOnClickListener(v -> showNumberInputDialog(label, min, max, unit, bar, badge, consumer));
+        badge.setOnClickListener(v -> {
+            int dynamicMax = max;
+            if (bar == mWidthSeekBar || bar == mHeightSeekBar) {
+                dynamicMax = sizeMaxDp(mActiveButton);
+            }
+            showNumberInputDialog(label, min, dynamicMax, unit, bar, badge, consumer);
+        });
 
         styleAlightMotionSeekBar(bar);
         bar.setMax(max - min);
@@ -1436,7 +1570,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
                 HudButton.WIDGET_DPAD.equals(b.widgetType) ||
                 HudButton.WIDGET_TOUCHPAD.equals(b.widgetType) ||
                 HudButton.WIDGET_SCROLLBAR.equals(b.widgetType) ||
-                HudButton.WIDGET_GROUP.equals(b.widgetType)
+                HudButton.WIDGET_GROUP.equals(b.widgetType) ||
+                HudButton.WIDGET_EXTRA_KEYS.equals(b.widgetType)
         );
         if (mTabButtons != null && mTabButtons.length > 1) {
             mTabButtons[1].setVisibility(isSpecialControl ? GONE : VISIBLE);
@@ -1445,8 +1580,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
             }
         }
 
-        // Hide Event tab entirely for Group (group is just a container)
-        boolean isGroup = b != null && HudButton.WIDGET_GROUP.equals(b.widgetType);
+        // Hide Event tab entirely for Group and ExtraKeys (containers)
+        boolean isGroup = b != null && (HudButton.WIDGET_GROUP.equals(b.widgetType) || HudButton.WIDGET_EXTRA_KEYS.equals(b.widgetType));
         if (mTabButtons != null && mTabButtons.length > 2) {
             mTabButtons[2].setVisibility(isGroup ? GONE : VISIBLE);
             if (isGroup && mCurrentTab == 2) {
@@ -1471,6 +1606,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
             int sizeMax = sizeMaxDp(b);
             mWidthSeekBar.setMax(sizeMax - SIZE_MIN_DP);
             mHeightSeekBar.setMax(sizeMax - SIZE_MIN_DP);
+            syncSliderAndBadge(mPosXSeekBar, mPosXBadge, Math.round(b.posXPercent * 100), 0, "%");
+            syncSliderAndBadge(mPosYSeekBar, mPosYBadge, Math.round(b.posYPercent * 100), 0, "%");
             syncSliderAndBadge(mWidthSeekBar, mWidthBadge, b.widthDp, SIZE_MIN_DP, "px");
             syncSliderAndBadge(mHeightSeekBar, mHeightBadge, b.heightDp, SIZE_MIN_DP, "px");
             syncSliderAndBadge(mCornerSeekBar, mCornerBadge, b.cornerRadiusDp, 0, "dp");
@@ -1502,6 +1639,23 @@ public final class HudPropertyInspectorView extends LinearLayout {
             // D-Pad is always 1:1 square: hide height slider (width drives both)
             if (mHeightRow != null) mHeightRow.setVisibility(isDpad ? GONE : VISIBLE);
 
+            // Container / ExtraKeys column/row splitting controls
+            boolean isContainer = b != null && (HudButton.WIDGET_GROUP.equals(b.widgetType) || HudButton.WIDGET_EXTRA_KEYS.equals(b.widgetType));
+            if (mColumnsRow != null) {
+                mColumnsRow.setVisibility(isContainer ? VISIBLE : GONE);
+                if (isContainer) {
+                    syncSliderAndBadge(mColumnsSeekBar, mColumnsBadge, Math.max(0, Math.min(16, b.columns)), 0, "");
+                    mColumnsBadge.setText(b.columns == 0 ? getContext().getString(R.string.hud_editor_grid_auto) : String.valueOf(b.columns));
+                }
+            }
+            if (mRowsRow != null) {
+                mRowsRow.setVisibility(isContainer ? VISIBLE : GONE);
+                if (isContainer) {
+                    syncSliderAndBadge(mRowsSeekBar, mRowsBadge, Math.max(0, Math.min(8, b.rows)), 0, "");
+                    mRowsBadge.setText(b.rows == 0 ? getContext().getString(R.string.hud_editor_grid_auto) : String.valueOf(b.rows));
+                }
+            }
+
             if (mShapePickerView != null) {
                 mShapePickerView.setSelectedShape(b.cornerShape > 0 ? b.cornerShape : HudButton.CORNER_ALL);
             }
@@ -1517,8 +1671,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
             boolean hideStandardKeys = isTouchpadOrScrollbar || isDpad || isSuperGesture;
             if (mSectionPrimaryAction != null) mSectionPrimaryAction.setVisibility(hideStandardKeys ? GONE : VISIBLE);
             if (mBtnPickMainAction != null) mBtnPickMainAction.setVisibility(hideStandardKeys ? GONE : VISIBLE);
-            if (mSendModeGroup != null) mSendModeGroup.setVisibility(hideStandardKeys ? GONE : VISIBLE);
-            if (mRepeatSwitch != null) mRepeatSwitch.setVisibility(hideStandardKeys ? GONE : VISIBLE);
+            if (mSendModeRow != null) mSendModeRow.setVisibility(hideStandardKeys ? GONE : VISIBLE);
+            if (mRepeatRow != null) mRepeatRow.setVisibility(hideStandardKeys ? GONE : VISIBLE);
             if (mSectionPopupAction != null) mSectionPopupAction.setVisibility(hideStandardKeys ? GONE : VISIBLE);
             if (mBtnPickPopupAction != null) mBtnPickPopupAction.setVisibility(hideStandardKeys ? GONE : VISIBLE);
             if (mSectionLongPressAction != null) mSectionLongPressAction.setVisibility(hideStandardKeys ? GONE : VISIBLE);
@@ -1534,16 +1688,20 @@ public final class HudPropertyInspectorView extends LinearLayout {
             if (mBtnPickLongPressAction != null) {
                 mBtnPickLongPressAction.setText(formatActionBadge(b.longPressAction));
             }
+            if (mLongPressSeekBar != null && mLongPressBadge != null) {
+                int holdMs = b.longPressMs > 0 ? b.longPressMs : 1000;
+                syncSliderAndBadge(mLongPressSeekBar, mLongPressBadge, holdMs, HudButton.LONG_PRESS_MIN_MS, "ms");
+            }
 
-            if (mSendOnRelease != null) {
-                mSendOnRelease.setChecked(b.sendOnRelease);
-                mSendImmediately.setChecked(!b.sendOnRelease);
+            updateSendPills();
+            if (mRepeatToggle != null && b.action != null) {
+                mRepeatToggle.setChecked(b.action.repeat);
             }
-            if (mRepeatSwitch != null && b.action != null) {
-                mRepeatSwitch.setChecked(b.action.repeat);
+            if (mHapticToggle != null) {
+                mHapticToggle.setChecked(b.hapticEnabled);
             }
-            if (mHapticSwitch != null) {
-                mHapticSwitch.setChecked(b.hapticEnabled);
+            if (mAttachKeyboardToggle != null) {
+                mAttachKeyboardToggle.setChecked(b.attachToKeyboard);
             }
 
             boolean isSuper = HudButton.WIDGET_SUPER_GESTURE.equals(b.widgetType)

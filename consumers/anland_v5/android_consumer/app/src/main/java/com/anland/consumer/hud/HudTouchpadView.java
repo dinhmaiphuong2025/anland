@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.os.Handler;
 import android.os.Looper;
@@ -37,6 +38,8 @@ public final class HudTouchpadView extends View {
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF mBounds = new RectF();
+    private final Path mPath = new Path();
+    private final float[] mRadii = new float[8];
 
     private boolean mInEditMode = false;
     private boolean mIsTouching = false;
@@ -113,8 +116,12 @@ public final class HudTouchpadView extends View {
         float density = getResources().getDisplayMetrics().density;
         float w = getWidth();
         float h = getHeight();
-        float corner = (mModel.cornerRadiusDp > 0 ? mModel.cornerRadiusDp : 18f) * density;
+        float corner = mModel.cornerRadiusDp * density;
         mBounds.set(2, 2, w - 2, h - 2);
+
+        HudFreeformButtonView.computeRadii(mModel.cornerShape, corner, mRadii);
+        mPath.reset();
+        mPath.addRoundRect(mBounds, mRadii, Path.Direction.CW);
 
         // 1. Steam Deck Square Matte Surface with Rounded Corners
         mPaint.setStyle(Paint.Style.FILL);
@@ -129,14 +136,14 @@ public final class HudTouchpadView extends View {
             int finalAlpha = Math.round(mModel.opacity * origAlpha);
             mPaint.setColor((targetCol & 0x00FFFFFF) | (finalAlpha << 24));
         }
-        canvas.drawRoundRect(mBounds, corner, corner, mPaint);
+        canvas.drawPath(mPath, mPaint);
 
         // 2. Outer Border Stroke
         if (mModel.borderStrokeWidthDp > 0) {
             mPaint.setStyle(Paint.Style.STROKE);
             mPaint.setStrokeWidth(Math.max(1, Math.round(mModel.borderStrokeWidthDp * density)));
             mPaint.setColor(mModel.borderColor);
-            canvas.drawRoundRect(mBounds, corner, corner, mPaint);
+            canvas.drawPath(mPath, mPaint);
         }
 
         // 3. Inner Tactile Recessed Boundary (Only in Precision Matte)
@@ -155,9 +162,9 @@ public final class HudTouchpadView extends View {
         float cy = h * 0.5f;
 
         if (variant == 1) {
-            // Laptop Style: Draw clean Mouse icon in center
+            // Laptop Style: Draw clean Touchpad icon in center
             mPaint.setColor(Color.WHITE);
-            HudVectorIcons.drawIcon(canvas, HudVectorIcons.ICON_MOUSE_L, cx, cy, 26f * density, mPaint);
+            HudVectorIcons.drawIcon(canvas, HudVectorIcons.ICON_TOUCHPAD, cx, cy, 28f * density, mPaint);
         } else {
             // Precision Crosshair
             float armLen = 7f * density;

@@ -352,6 +352,8 @@
     <string name="hud_color_theme">Tema de Cor:</string>
     <string name="hud_haptic_feedback">Retorno Tátil</string>
     <string name="hud_hold_to_repeat">Repetir enquanto pressionado</string>
+    <string name="hud_send_mode_press">Ao pressionar</string>
+    <string name="hud_send_mode_release">Ao soltar</string>
     <string name="hud_nudge_position">Ajuste Fino da Posição:</string>
     <string name="hud_unassigned">Não Atribuído</string>
     <string name="hud_text_action">Texto: %1$s</string>
@@ -372,9 +374,11 @@
     <string name="hud_tab_mods_system">MODS E SISTEMA</string>
     <string name="hud_tab_combo">COMBO</string>
     <string name="hud_none">Nenhum</string>
-    <string name="hud_system_soft_keyboard">Teclado Virtual do Sistema</string>
+    <string name="hud_system_soft_keyboard">Teclado Soft</string>
     <string name="hud_system_virtual_keyboard">Teclado Virtual</string>
+    <string name="hud_system_toggle_hud_hidden">Ocultar HUD</string>
     <string name="hud_system_settings">Configurações</string>
+    <string name="hud_system_open_editor">Editar HUD</string>
     <string name="hud_system_mouse_left">Mouse Esquerdo</string>
     <string name="hud_system_mouse_right">Mouse Direito</string>
     <string name="hud_system_mouse_middle">Mouse do Meio</string>

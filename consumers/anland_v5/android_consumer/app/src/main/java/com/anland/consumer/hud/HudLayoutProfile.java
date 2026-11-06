@@ -159,8 +159,9 @@ public final class HudLayoutProfile {
 
         // 5. Bottom Left: Settings
         HudButton btnSettings = new HudButton();
-        btnSettings.label = "⚙";
+        btnSettings.iconId = HudVectorIcons.ICON_SETTINGS;
         btnSettings.action = HudAction.system("open_settings");
+        btnSettings.longPressAction = HudAction.system("open_editor");
         btnSettings.widthDp = 42;
         btnSettings.heightDp = 30;
         btnSettings.cornerRadiusDp = 8;
@@ -173,7 +174,7 @@ public final class HudLayoutProfile {
         // 4. Horizontal ScrollBar Widget (placed directly on top of Touchpad)
         HudButton deckScroll = new HudButton();
         deckScroll.widgetType = HudButton.WIDGET_SCROLLBAR;
-        deckScroll.label = "☰";
+        deckScroll.iconId = HudVectorIcons.ICON_MENU;
         deckScroll.trackpointMode = "horizontal";
         deckScroll.trackpointSensitivity = 1.5f;
         deckScroll.trackpointDeadzoneDp = 4;
@@ -187,7 +188,6 @@ public final class HudLayoutProfile {
         // 5. Dedicated Steam Deck Haptic Trackpad
         HudButton deckTrackpad = new HudButton();
         deckTrackpad.widgetType = HudButton.WIDGET_TOUCHPAD;
-        deckTrackpad.label = "TOUCHPAD";
         deckTrackpad.trackpointMode = "mouse";
         deckTrackpad.trackpointSensitivity = 1.4f;
         deckTrackpad.trackpointDeadzoneDp = 4;
@@ -200,8 +200,8 @@ public final class HudLayoutProfile {
 
         // 6. Bottom Right: KB and MENU
         HudButton btnVk = new HudButton();
-        btnVk.label = "KB";
-        btnVk.action = HudAction.system("toggle_vk");
+        btnVk.iconId = HudVectorIcons.ICON_KEYBOARD;
+        btnVk.action = HudAction.system("toggle_ime");
         btnVk.sendOnRelease = true;
         btnVk.longPressAction = HudAction.system("toggle_hud_hidden");
         btnVk.widthDp = 42;
@@ -349,7 +349,7 @@ public final class HudLayoutProfile {
         layout.floatingButtons.add(btnBksp);
 
         HudButton btnVk = new HudButton();
-        btnVk.label = "KB";
+        btnVk.iconId = HudVectorIcons.ICON_KEYBOARD;
         btnVk.action = HudAction.system("toggle_vk");
         btnVk.sendOnRelease = true;
         btnVk.longPressAction = HudAction.system("toggle_hud_hidden");
@@ -361,8 +361,9 @@ public final class HudLayoutProfile {
         layout.floatingButtons.add(btnVk);
 
         HudButton btnSet = new HudButton();
-        btnSet.label = "⚙";
+        btnSet.iconId = HudVectorIcons.ICON_SETTINGS;
         btnSet.action = HudAction.system("open_settings");
+        btnSet.longPressAction = HudAction.system("open_editor");
         btnSet.widthDp = 58;
         btnSet.heightDp = 34;
         btnSet.cornerRadiusDp = 8;

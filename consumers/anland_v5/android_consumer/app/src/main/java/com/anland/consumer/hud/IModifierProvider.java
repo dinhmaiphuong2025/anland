@@ -11,6 +11,7 @@ public interface IModifierProvider {
      * @return True if any latched or locked modifier key is currently active.
      */
     boolean hasActiveModifier();
+    boolean isModifierActive(int evdevCode);
 
     /**
      * Emits the modifier(s) down, the target character down/up, and the modifier(s) up,

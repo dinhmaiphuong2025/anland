@@ -27,6 +27,7 @@ public final class HudVectorIcons {
     public static final String ICON_PASTE = "paste";
     public static final String ICON_DELETE = "delete";
     public static final String ICON_CUSTOM = "custom";
+    public static final String ICON_DETACH = "detach";
     public static final String ICON_SETTINGS = "settings";
 
     // HUD Key Label Icons
@@ -47,13 +48,13 @@ public final class HudVectorIcons {
     public static final String[] ALL_ICONS = new String[]{
             ICON_UP, ICON_DOWN, ICON_LEFT, ICON_RIGHT,
             ICON_MOUSE_L, ICON_MOUSE_R, ICON_COPY, ICON_PASTE,
-            ICON_KEYBOARD, ICON_FULLSCREEN, ICON_MENU, ICON_SETTINGS
+            ICON_KEYBOARD, ICON_KEYBOARD_OFF, ICON_FULLSCREEN, ICON_MENU, ICON_SETTINGS
     };
 
     public static final int[] ICON_LABELS = new int[]{
             R.string.hud_direction_up, R.string.hud_direction_down, R.string.hud_direction_left, R.string.hud_direction_right,
             R.string.hud_editor_icon_mouse_l, R.string.hud_editor_icon_mouse_r, R.string.hud_editor_copy, R.string.hud_editor_icon_paste,
-            R.string.hud_editor_icon_keyboard, R.string.hud_editor_icon_fullscreen, R.string.hud_editor_icon_menu, R.string.hud_editor_icon_settings
+            R.string.hud_editor_icon_keyboard, R.string.hud_editor_icon_keyboard_off, R.string.hud_editor_icon_fullscreen, R.string.hud_editor_icon_menu, R.string.hud_editor_icon_settings
     };
 
     /**
@@ -117,37 +118,25 @@ public final class HudVectorIcons {
                 break;
             }
 
-            case ICON_SNAP: { // Classic U-shaped Magnet (Horseshoe) upright & centered
-                // 2 pole tips at top: left (4..8, 4..8) and right (16..20, 4..8)
-                // Left leg: line down from y=4 to y=14
-                // Right leg: line down from y=4 to y=14
-                // Bottom arc outer: from (4, 14) to (20, 14)
-                // Bottom arc inner: from (8, 14) to (16, 14)
+            case ICON_SNAP: { // Official Lucide magnet (clean upright U horseshoe)
+                // Left leg (outer x=4..8, inner x=8..16)
                 sPath.reset();
-                // Outer U
                 sPath.moveTo(p(cx, 4f, scale), p(cy, 5f, scale));
                 sPath.lineTo(p(cx, 4f, scale), p(cy, 13f, scale));
                 sRect.set(p(cx, 4f, scale), p(cy, 5f, scale), p(cx, 20f, scale), p(cy, 21f, scale));
                 sPath.arcTo(sRect, 180, -180, false);
                 sPath.lineTo(p(cx, 20f, scale), p(cy, 5f, scale));
+                sPath.lineTo(p(cx, 16f, scale), p(cy, 5f, scale));
+                sPath.lineTo(p(cx, 16f, scale), p(cy, 13f, scale));
+                sRect.set(p(cx, 8f, scale), p(cy, 8.5f, scale), p(cx, 16f, scale), p(cy, 16.5f, scale));
+                sPath.arcTo(sRect, 0, 180, false);
+                sPath.lineTo(p(cx, 8f, scale), p(cy, 5f, scale));
+                sPath.close();
                 canvas.drawPath(sPath, paint);
 
-                // Inner U
-                sPath.reset();
-                sPath.moveTo(p(cx, 8.5f, scale), p(cy, 5f, scale));
-                sPath.lineTo(p(cx, 8.5f, scale), p(cy, 13f, scale));
-                sRect.set(p(cx, 8.5f, scale), p(cy, 8.5f, scale), p(cx, 15.5f, scale), p(cy, 15.5f, scale));
-                sPath.arcTo(sRect, 180, -180, false);
-                sPath.lineTo(p(cx, 15.5f, scale), p(cy, 5f, scale));
-                canvas.drawPath(sPath, paint);
-
-                // Top end caps
-                canvas.drawLine(p(cx, 4f, scale), p(cy, 5f, scale), p(cx, 8.5f, scale), p(cy, 5f, scale), paint);
-                canvas.drawLine(p(cx, 15.5f, scale), p(cy, 5f, scale), p(cx, 20f, scale), p(cy, 5f, scale), paint);
-
-                // Magnetic pole bands (lines across tips)
-                canvas.drawLine(p(cx, 4f, scale), p(cy, 9f, scale), p(cx, 8.5f, scale), p(cy, 9f, scale), paint);
-                canvas.drawLine(p(cx, 15.5f, scale), p(cy, 9f, scale), p(cx, 20f, scale), p(cy, 9f, scale), paint);
+                // Magnetic pole tip bands (horizontal lines across pole tips)
+                canvas.drawLine(p(cx, 4f, scale), p(cy, 8.5f, scale), p(cx, 8f, scale), p(cy, 8.5f, scale), paint);
+                canvas.drawLine(p(cx, 16f, scale), p(cy, 8.5f, scale), p(cx, 20f, scale), p(cy, 8.5f, scale), paint);
                 break;
             }
 
@@ -244,18 +233,67 @@ public final class HudVectorIcons {
                 break;
             }
 
-            case ICON_SETTINGS: { // Lucide: settings
+            case ICON_DETACH: { // Lucide: external-link / eject / detach
+                // Top-right arrow pointing outward
+                sPath.reset();
+                sPath.moveTo(p(cx, 15f, scale), p(cy, 3f, scale));
+                sPath.lineTo(p(cx, 21f, scale), p(cy, 3f, scale));
+                sPath.lineTo(p(cx, 21f, scale), p(cy, 9f, scale));
+                canvas.drawPath(sPath, paint);
+                canvas.drawLine(p(cx, 10f, scale), p(cy, 14f, scale), p(cx, 21f, scale), p(cy, 3f, scale), paint);
+
+                // Container box with top-right opening
+                sPath.reset();
+                sPath.moveTo(p(cx, 13f, scale), p(cy, 5f, scale));
+                sPath.lineTo(p(cx, 5f, scale), p(cy, 5f, scale));
+                sPath.lineTo(p(cx, 3f, scale), p(cy, 7f, scale));
+                sPath.lineTo(p(cx, 3f, scale), p(cy, 19f, scale));
+                sPath.lineTo(p(cx, 5f, scale), p(cy, 21f, scale));
+                sPath.lineTo(p(cx, 17f, scale), p(cy, 21f, scale));
+                sPath.lineTo(p(cx, 19f, scale), p(cy, 19f, scale));
+                sPath.lineTo(p(cx, 19f, scale), p(cy, 11f, scale));
+                canvas.drawPath(sPath, paint);
+                break;
+            }
+
+            case ICON_SETTINGS: { // Official Lucide: settings (cog)
+                // <path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" />
+                // <circle cx="12" cy="12" r="3" />
                 canvas.drawCircle(cx, cy, 3f * scale, paint);
-                canvas.drawCircle(cx, cy, 7.5f * scale, paint);
-                for (int a = 0; a < 360; a += 60) {
-                    float rad = (float) Math.toRadians(a);
-                    canvas.drawLine(
-                            cx + (float) Math.cos(rad) * 7.5f * scale,
-                            cy + (float) Math.sin(rad) * 7.5f * scale,
-                            cx + (float) Math.cos(rad) * 10.5f * scale,
-                            cy + (float) Math.sin(rad) * 10.5f * scale,
-                            paint);
+
+                // 6 cog teeth around the gear perimeter with rounded peaks
+                sPath.reset();
+                final float rInner = 6.2f * scale;
+                final float rOuter = 9.2f * scale;
+                final float rValley = 6.8f * scale;
+
+                for (int i = 0; i < 6; i++) {
+                    double angleMid = Math.toRadians(i * 60.0);
+                    double a0 = angleMid - Math.toRadians(20.0);
+                    double a1 = angleMid - Math.toRadians(11.0);
+                    double a2 = angleMid + Math.toRadians(11.0);
+                    double a3 = angleMid + Math.toRadians(20.0);
+
+                    float x0 = cx + (float) (Math.cos(a0) * rValley);
+                    float y0 = cy + (float) (Math.sin(a0) * rValley);
+                    float x1 = cx + (float) (Math.cos(a1) * rOuter);
+                    float y1 = cy + (float) (Math.sin(a1) * rOuter);
+                    float x2 = cx + (float) (Math.cos(a2) * rOuter);
+                    float y2 = cy + (float) (Math.sin(a2) * rOuter);
+                    float x3 = cx + (float) (Math.cos(a3) * rValley);
+                    float y3 = cy + (float) (Math.sin(a3) * rValley);
+
+                    if (i == 0) {
+                        sPath.moveTo(x0, y0);
+                    } else {
+                        sPath.lineTo(x0, y0);
+                    }
+                    sPath.lineTo(x1, y1);
+                    sPath.lineTo(x2, y2);
+                    sPath.lineTo(x3, y3);
                 }
+                sPath.close();
+                canvas.drawPath(sPath, paint);
                 break;
             }
 
@@ -299,28 +337,45 @@ public final class HudVectorIcons {
                 break;
             }
 
-            case ICON_MOUSE_L: { // Lucide: mouse with Left click indicator
-                // <rect x="5" y="2" width="14" height="20" rx="7" />
-                drawLucideRect(canvas, cx, cy, 5f, 2f, 14f, 20f, 7f, scale, paint);
-                // Center divider down to middle
-                canvas.drawLine(p(cx, 12f, scale), p(cy, 2f, scale), p(cx, 12f, scale), p(cy, 9f, scale), paint);
-                // Horizontal divider
-                canvas.drawLine(p(cx, 5f, scale), p(cy, 9f, scale), p(cx, 19f, scale), p(cy, 9f, scale), paint);
-                // Left button highlight filled
+            case ICON_MOUSE_L: { // Official Lucide: mouse-left
+                // <path d="M12 7.318V10" />
+                // <path d="M5 10v5a7 7 0 0 0 14 0V9c0-3.527-2.608-6.515-6-7" />
+                // <circle cx="7" cy="4" r="2" />
+                canvas.drawLine(p(cx, 12f, scale), p(cy, 7.32f, scale), p(cx, 12f, scale), p(cy, 10f, scale), paint);
+
+                sPath.reset();
+                sPath.moveTo(p(cx, 5f, scale), p(cy, 10f, scale));
+                sPath.lineTo(p(cx, 5f, scale), p(cy, 15f, scale));
+                sRect.set(p(cx, 5f, scale), p(cy, 8f, scale), p(cx, 19f, scale), p(cy, 22f, scale));
+                sPath.arcTo(sRect, 180, -180, false);
+                sPath.lineTo(p(cx, 19f, scale), p(cy, 9f, scale));
+                sRect.set(p(cx, 7f, scale), p(cy, 2f, scale), p(cx, 19f, scale), p(cy, 14f, scale));
+                sPath.arcTo(sRect, 0, -90, false);
+                canvas.drawPath(sPath, paint);
+
                 paint.setStyle(Paint.Style.FILL);
-                sRect.set(p(cx, 6f, scale), p(cy, 3f, scale), p(cx, 11f, scale), p(cy, 8f, scale));
-                canvas.drawRoundRect(sRect, 2f * scale, 2f * scale, paint);
+                canvas.drawCircle(p(cx, 7f, scale), p(cy, 4f, scale), 2f * scale, paint);
                 break;
             }
 
-            case ICON_MOUSE_R: { // Lucide: mouse with Right click indicator
-                drawLucideRect(canvas, cx, cy, 5f, 2f, 14f, 20f, 7f, scale, paint);
-                canvas.drawLine(p(cx, 12f, scale), p(cy, 2f, scale), p(cx, 12f, scale), p(cy, 9f, scale), paint);
-                canvas.drawLine(p(cx, 5f, scale), p(cy, 9f, scale), p(cx, 19f, scale), p(cy, 9f, scale), paint);
-                // Right button highlight filled
+            case ICON_MOUSE_R: { // Official Lucide: mouse-right
+                // <path d="M12 7.318V10" />
+                // <path d="M19 10v5a7 7 0 0 1-14 0V9c0-3.527 2.608-6.515 6-7" />
+                // <circle cx="17" cy="4" r="2" />
+                canvas.drawLine(p(cx, 12f, scale), p(cy, 7.32f, scale), p(cx, 12f, scale), p(cy, 10f, scale), paint);
+
+                sPath.reset();
+                sPath.moveTo(p(cx, 19f, scale), p(cy, 10f, scale));
+                sPath.lineTo(p(cx, 19f, scale), p(cy, 15f, scale));
+                sRect.set(p(cx, 5f, scale), p(cy, 8f, scale), p(cx, 19f, scale), p(cy, 22f, scale));
+                sPath.arcTo(sRect, 0, 180, false);
+                sPath.lineTo(p(cx, 5f, scale), p(cy, 9f, scale));
+                sRect.set(p(cx, 5f, scale), p(cy, 2f, scale), p(cx, 17f, scale), p(cy, 14f, scale));
+                sPath.arcTo(sRect, 180, 90, false);
+                canvas.drawPath(sPath, paint);
+
                 paint.setStyle(Paint.Style.FILL);
-                sRect.set(p(cx, 13f, scale), p(cy, 3f, scale), p(cx, 18f, scale), p(cy, 8f, scale));
-                canvas.drawRoundRect(sRect, 2f * scale, 2f * scale, paint);
+                canvas.drawCircle(p(cx, 17f, scale), p(cy, 4f, scale), 2f * scale, paint);
                 break;
             }
 
@@ -370,9 +425,13 @@ public final class HudVectorIcons {
                 break;
             }
 
-            case ICON_TOUCHPAD: { // Lucide-style touchpad
+            case ICON_TOUCHPAD: { // Official Lucide trackpad / touchpad rectangle with bottom button split
+                // Outer touchpad surface
                 drawLucideRect(canvas, cx, cy, 3f, 4f, 18f, 16f, 3f, scale, paint);
-                canvas.drawCircle(cx, cy, 2.5f * scale, paint);
+                // Horizontal divider for lower button zone
+                canvas.drawLine(p(cx, 3f, scale), p(cy, 15f, scale), p(cx, 21f, scale), p(cy, 15f, scale), paint);
+                // Vertical divider separating left and right click zones
+                canvas.drawLine(p(cx, 12f, scale), p(cy, 15f, scale), p(cx, 12f, scale), p(cy, 20f, scale), paint);
                 break;
             }
 
