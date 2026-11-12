@@ -46,6 +46,16 @@ public final class SuperGestureButtonView extends View {
     private boolean mIsPressed;
     private boolean mGestureFired;
     private boolean mInEditMode = false;
+    /** Chevron index the finger leans towards while pressed: 0 up, 1 right, 2 down, 3 left; -1 none. */
+    private int mArmDirection = -1;
+
+    // Cached so onDraw allocates nothing and does not touch the resources object per frame.
+    private float mDensity = 1f;
+    private final Path mChevronPath = new Path();
+    private final Path mInnerPath = new Path();
+    private final RectF mInner = new RectF();
+    private final float[] mInnerRadii = new float[8];
+    private float mChevronWing, mChevronDepth, mChevronInset;
 
     public SuperGestureButtonView(Context context, HudButton model, GestureListener listener) {
         super(context);
@@ -54,7 +64,7 @@ public final class SuperGestureButtonView extends View {
 
         mTextPaint.setColor(Color.WHITE);
         mTextPaint.setTextAlign(Paint.Align.CENTER);
-        mTextPaint.setFakeBoldText(true);
+        mDensity = context.getResources().getDisplayMetrics().density;
     }
 
     public void setInEditMode(boolean editMode) {
@@ -63,6 +73,13 @@ public final class SuperGestureButtonView extends View {
             mIsPressed = false;
             mGestureFired = false;
         }
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        mDensity = getResources().getDisplayMetrics().density;
+        computeChevrons();
     }
 
     @Override
@@ -81,55 +98,83 @@ public final class SuperGestureButtonView extends View {
         float h = getHeight();
         mBounds.set(2, 2, w - 2, h - 2);
 
-        // Background and border are drawn by the design layer. Border width and colour come
-        // from the model so the Style tab actually restyles this widget; the previous
-        // hardcoded 1.5dp white stroke made both style controls look broken here.
-        int targetCol = mIsPressed ? HudColors.primary : mModel.bgColor;
-        float corner = mModel.cornerRadiusDp * density;
+        float d = mDensity;
+        int variant = mModel.styleVariant; // 0 = flat, 1 = classic bevel, 2 = glass outline
+        int baseBg = mModel.bgColor != 0 ? mModel.bgColor : HudColors.surfaceHigh;
+        float corner = mModel.cornerRadiusDp * d;
         float strokePx = mModel.borderStrokeWidthDp > 0
-                ? Math.max(1f, mModel.borderStrokeWidthDp * density)
-                : 0f;
+                ? Math.max(1f, mModel.borderStrokeWidthDp * d)
+                : Math.max(1f, d * 0.75f);
+        int strokeCol = mModel.borderStrokeWidthDp > 0 ? mModel.borderColor : HudColors.outlineMuted;
 
-        HudChrome.drawSurface(canvas, mPaint, mPath, mBounds,
-                mModel.cornerShape, corner, targetCol, mModel.opacity,
-                strokePx, mModel.borderColor);
+        HudChrome.drawSurface(canvas, mPaint, mPath, mBounds, mModel.cornerShape, corner,
+                variant == 2 ? Color.TRANSPARENT : baseBg, mModel.opacity, strokePx, strokeCol);
+
+        // Pressed state is a lilac wash plus a rim, not a fill swap: the label stays readable
+        // and the three styles keep their own body.
+        if (mIsPressed) {
+            mPaint.setStyle(Paint.Style.FILL);
+            mPaint.setColor(HudColors.withAlpha(HudColors.primary, 0x2E));
+            canvas.drawPath(mPath, mPaint);
+            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setStrokeWidth(Math.max(1f, d));
+            mPaint.setColor(HudColors.withAlpha(HudColors.primary, 0x99));
+            mInner.set(mBounds.left + 1.5f * d, mBounds.top + 1.5f * d,
+                    mBounds.right - 1.5f * d, mBounds.bottom - 1.5f * d);
+            HudChrome.computeRadii(mModel.cornerShape, Math.max(1f, corner - 1.5f * d), mInnerRadii);
+            mInnerPath.reset();
+            mInnerPath.addRoundRect(mInner, mInnerRadii, Path.Direction.CW);
+            canvas.drawPath(mInnerPath, mPaint);
+        } else if (variant == 1) {
+            // Classic bevel: recessed hairline, the same treatment as the pad and the D-Pad.
+            float inset = 6f * d;
+            mInner.set(mBounds.left + inset, mBounds.top + inset,
+                    mBounds.right - inset, mBounds.bottom - inset);
+            HudChrome.computeRadii(mModel.cornerShape, Math.max(1f, corner - inset * 0.7f), mInnerRadii);
+            mInnerPath.reset();
+            mInnerPath.addRoundRect(mInner, mInnerRadii, Path.Direction.CW);
+            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setStrokeWidth(Math.max(1f, d));
+            mPaint.setColor(HudColors.withAlpha(HudColors.textPrimary, 0x14));
+            canvas.drawPath(mInnerPath, mPaint);
+        }
 
         // Label: vector icon when one is set, otherwise auto-scaled text.
         boolean hasIcon = mModel.iconId != null
                 && !HudVectorIcons.ICON_NONE.equals(mModel.iconId)
                 && !mModel.iconId.isEmpty();
 
+        int contentColor = mIsPressed ? HudColors.onActive : mModel.textColor;
         if (hasIcon) {
-            mPaint.setColor(mIsPressed ? HudColors.onActive : mModel.textColor);
-            // Leave clearance for the 4-way chevrons drawn along the edges.
-            float iconSize = Math.min(w, h) * 0.30f;
+            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setColor(contentColor);
+            float iconSize = Math.min(w, h) * 0.28f;
             float iconCx = w * 0.5f;
             if (mModel.textAlign == HudButton.ALIGN_LEFT) {
-                iconCx = 8 * density + iconSize * 0.5f;
+                iconCx = 10 * d + iconSize * 0.5f;
             } else if (mModel.textAlign == HudButton.ALIGN_RIGHT) {
-                iconCx = w - 8 * density - iconSize * 0.5f;
+                iconCx = w - 10 * d - iconSize * 0.5f;
             }
             HudVectorIcons.drawIcon(canvas, mModel.iconId, iconCx, h * 0.5f, iconSize, mPaint);
         } else {
-            // Main Center Text with safe auto font scaling away from chevrons
-            mTextPaint.setColor(mIsPressed ? HudColors.onActive : mModel.textColor);
+            mTextPaint.setColor(contentColor);
             String label = mModel.label != null ? mModel.label : "SUPER";
-            float maxTextWidth = Math.max(10 * density, w - 30 * density);
-            float textSize = Math.min(w * 0.20f, Math.min(h * 0.24f, HudType.SUBTITLE_SP * density));
+            float maxTextWidth = Math.max(10 * d, w - 26 * d);
+            float textSize = Math.min(w * 0.20f, Math.min(h * 0.24f, HudType.SUBTITLE_SP * d));
             mTextPaint.setTextSize(textSize);
             float textW = mTextPaint.measureText(label);
             if (textW > maxTextWidth && textW > 0) {
-                textSize = Math.max(7 * density, textSize * (maxTextWidth / textW));
+                textSize = Math.max(7 * d, textSize * (maxTextWidth / textW));
                 mTextPaint.setTextSize(textSize);
             }
             float textY = h * 0.5f - ((mTextPaint.descent() + mTextPaint.ascent()) * 0.5f);
             float textX;
             if (mModel.textAlign == HudButton.ALIGN_LEFT) {
                 mTextPaint.setTextAlign(Paint.Align.LEFT);
-                textX = 14 * density;
+                textX = 12 * d;
             } else if (mModel.textAlign == HudButton.ALIGN_RIGHT) {
                 mTextPaint.setTextAlign(Paint.Align.RIGHT);
-                textX = w - 14 * density;
+                textX = w - 12 * d;
             } else {
                 mTextPaint.setTextAlign(Paint.Align.CENTER);
                 textX = w * 0.5f;
@@ -137,37 +182,42 @@ public final class SuperGestureButtonView extends View {
             canvas.drawText(label, textX, textY, mTextPaint);
         }
 
-        // 4-way outward vector chevrons (Top, Bottom, Left, Right)
-        mPaint.setColor(HudColors.withAlpha(HudColors.primary, 0xCC));
+        // Four chevrons inside the edges. The one the finger is leaning towards lights up, so the
+        // gesture is readable before the swipe threshold is crossed.
+        if (mChevronWing <= 0f) computeChevrons();
         mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(1.8f * density);
+        mPaint.setStrokeWidth(Math.max(1f, d));
         mPaint.setStrokeCap(Paint.Cap.ROUND);
         mPaint.setStrokeJoin(Paint.Join.ROUND);
-
         float cx = w * 0.5f;
         float cy = h * 0.5f;
-        float wing = 2.8f * density;
-        float depth = 2.5f * density;
+        boolean[] active = new boolean[]{
+                mArmDirection == 0, mArmDirection == 1, mArmDirection == 2, mArmDirection == 3};
+        float[][] tips = new float[][]{
+                {cx, mChevronInset}, {w - mChevronInset, cy},
+                {cx, h - mChevronInset}, {mChevronInset, cy}};
+        for (int i = 0; i < 4; i++) {
+            mPaint.setColor(active[i]
+                    ? HudColors.primary
+                    : HudColors.withAlpha(HudColors.primary, 0x66));
+            canvas.save();
+            canvas.translate(tips[i][0], tips[i][1]);
+            canvas.rotate(i * 90f);
+            canvas.drawPath(mChevronPath, mPaint);
+            canvas.restore();
+        }
+    }
 
-        // Up chevron (pointing up)
-        float topTip = 4f * density;
-        canvas.drawLine(cx - wing, topTip + depth, cx, topTip, mPaint);
-        canvas.drawLine(cx, topTip, cx + wing, topTip + depth, mPaint);
-
-        // Down chevron (pointing down)
-        float botTip = h - 4f * density;
-        canvas.drawLine(cx - wing, botTip - depth, cx, botTip, mPaint);
-        canvas.drawLine(cx, botTip, cx + wing, botTip - depth, mPaint);
-
-        // Left chevron (pointing left)
-        float leftTip = 4f * density;
-        canvas.drawLine(leftTip + depth, cy - wing, leftTip, cy, mPaint);
-        canvas.drawLine(leftTip, cy, leftTip + depth, cy + wing, mPaint);
-
-        // Right chevron (pointing right)
-        float rightTip = w - 4f * density;
-        canvas.drawLine(rightTip - depth, cy - wing, rightTip, cy, mPaint);
-        canvas.drawLine(rightTip, cy, rightTip - depth, cy + wing, mPaint);
+    /** One chevron with its tip at the origin opening towards +y, rotated into four edges. */
+    private void computeChevrons() {
+        float d = mDensity;
+        mChevronWing = 2.8f * d;
+        mChevronDepth = 2.5f * d;
+        mChevronInset = 5f * d;
+        mChevronPath.reset();
+        mChevronPath.moveTo(-mChevronWing, mChevronDepth);
+        mChevronPath.lineTo(0f, 0f);
+        mChevronPath.lineTo(mChevronWing, mChevronDepth);
     }
 
     private boolean isHapticEnabled() {
@@ -189,6 +239,7 @@ public final class SuperGestureButtonView extends View {
                 mDownTime = System.currentTimeMillis();
                 mIsPressed = true;
                 mGestureFired = false;
+                mArmDirection = -1;
                 if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
                 invalidate();
                 return true;
@@ -197,9 +248,20 @@ public final class SuperGestureButtonView extends View {
                 if (!mGestureFired) {
                     float dx = x - mDownX;
                     float dy = y - mDownY;
+                    // Lean direction, shown as a lit chevron before the swipe fires.
+                    int arm = -1;
+                    if (Math.abs(dx) > 3 * density || Math.abs(dy) > 3 * density) {
+                        if (Math.abs(dx) > Math.abs(dy)) arm = dx > 0 ? 1 : 3;
+                        else arm = dy > 0 ? 2 : 0;
+                    }
+                    if (arm != mArmDirection) {
+                        mArmDirection = arm;
+                        invalidate();
+                    }
                     if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
                         mGestureFired = true;
                         mIsPressed = false;
+                        mArmDirection = -1;
                         if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.GESTURE_END);
                         invalidate();
                         if (mListener != null) {
@@ -216,6 +278,7 @@ public final class SuperGestureButtonView extends View {
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 mIsPressed = false;
+                mArmDirection = -1;
                 invalidate();
                 if (!mGestureFired && event.getActionMasked() == MotionEvent.ACTION_UP) {
                     long duration = System.currentTimeMillis() - mDownTime;

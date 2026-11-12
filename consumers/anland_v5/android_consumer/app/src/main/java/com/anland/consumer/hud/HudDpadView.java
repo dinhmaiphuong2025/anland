@@ -1,5 +1,6 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.HudChrome;
 import com.anland.consumer.hud.design.HudColors;
 
 import android.content.Context;
@@ -36,8 +37,19 @@ public final class HudDpadView extends View {
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mArmPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mArrowPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF mArmRect = new RectF();
+    private final RectF mBounds = new RectF();
+    private final RectF mInner = new RectF();
+    private final Path mPath = new Path();
+    /** Single arm outline, rotated into each direction at draw time. */
+    private final Path mArmPath = new Path();
+    private final Path mInnerPath = new Path();
+    private final Path mChevronPath = new Path();
+    private final float[] mInnerRadii = new float[8];
+
+    // Geometry is rebuilt on size change; onDraw only draws.
+    private float mDensity = 1f;
+    private float mCx, mCy, mRadius, mArmW, mArmLen, mArmCorner, mGap;
+    private float mChevronOffset, mChevronSize;
 
     private boolean mInEditMode = false;
     private boolean mIsPressed = false;
@@ -54,9 +66,6 @@ public final class HudDpadView extends View {
         this.mModel = model;
         this.mDispatcher = dispatcher;
 
-        mTextPaint.setColor(Color.WHITE);
-        mTextPaint.setTextAlign(Paint.Align.CENTER);
-        mTextPaint.setFakeBoldText(true);
 
         mArrowPaint.setStyle(Paint.Style.FILL);
     }
@@ -83,140 +92,160 @@ public final class HudDpadView extends View {
     }
 
     @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        float density = getResources().getDisplayMetrics().density;
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        mDensity = getResources().getDisplayMetrics().density;
+        computeGeometry();
+    }
+
+    /** One-time geometry for the four arms, the chevrons and the recessed ring. */
+    private void computeGeometry() {
         float w = getWidth();
         float h = getHeight();
         if (w <= 0 || h <= 0) return;
-
-        float cx = w * 0.5f;
-        float cy = h * 0.5f;
+        float d = mDensity;
         float minDim = Math.min(w, h);
-        float radius = minDim * 0.5f - 2f * density;
-        int activeAccent = mModel.activeColor != 0 ? mModel.activeColor : HudColors.primary;
+        mCx = w * 0.5f;
+        mCy = h * 0.5f;
+        mRadius = minDim * 0.5f - 2f * d;
+        mArmW = minDim * 0.28f;
+        mArmLen = mRadius * 0.85f;
+        mGap = 3f * d;
+        mArmCorner = Math.min(8f * d, mArmW * 0.35f);
+        mChevronOffset = mArmLen * 0.62f;
+        mChevronSize = Math.min(mArmW * 0.62f, mRadius * 0.22f);
+
+        // One arm, drawn four times by rotation. The outer end is rounded, the inner end tapers
+        // to a point so the four directions read as four tips meeting at the centre instead of
+        // four blocks butting against each other.
+        float half = mArmW * 0.5f;
+        float left = mCx - half;
+        float right = mCx + half;
+        float top = mCy - mArmLen;
+        float innerY = mCy - mArmW * 0.7f;
+        float tipY = mCy - mGap;
+        mArmPath.reset();
+        mArmPath.moveTo(left, top + mArmCorner);
+        mArmPath.quadTo(left, top, left + mArmCorner, top);
+        mArmPath.lineTo(right - mArmCorner, top);
+        mArmPath.quadTo(right, top, right, top + mArmCorner);
+        mArmPath.lineTo(right, innerY);
+        mArmPath.lineTo(mCx, tipY);
+        mArmPath.lineTo(left, innerY);
+        mArmPath.close();
+
+        float s = mChevronSize;
+        mChevronPath.reset();
+        mChevronPath.moveTo(0f, -s * 0.55f);
+        mChevronPath.lineTo(-s * 0.5f, s * 0.35f);
+        mChevronPath.lineTo(-s * 0.28f, s * 0.35f);
+        mChevronPath.lineTo(0f, -s * 0.1f);
+        mChevronPath.lineTo(s * 0.28f, s * 0.35f);
+        mChevronPath.lineTo(s * 0.5f, s * 0.35f);
+        mChevronPath.close();
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        float w = getWidth();
+        float h = getHeight();
+        if (w <= 0 || h <= 0) return;
+        if (mRadius <= 0f) computeGeometry();
+
+        float d = mDensity;
+        int variant = mModel.styleVariant; // 0 = flat, 1 = classic bevel, 2 = glass outline
+        int accent = mModel.activeColor != 0 ? mModel.activeColor : HudColors.primary;
         int baseBg = mModel.bgColor != 0 ? mModel.bgColor : HudColors.surfaceHigh;
+        float strokePx = mModel.borderStrokeWidthDp > 0
+                ? Math.max(1f, mModel.borderStrokeWidthDp * d)
+                : Math.max(1f, d * 0.75f);
+        int strokeCol = mModel.borderStrokeWidthDp > 0 ? mModel.borderColor : HudColors.outlineMuted;
+        boolean glass = variant == 2;
 
-        // 1. Outer Circular Bezel / Dish
-        mPaint.setStyle(Paint.Style.FILL);
-        int variant = mModel.styleVariant; // 0=Alight Motion Flat, 1=Classic Dish, 2=Outlined Floating
+        mBounds.set(2f, 2f, w - 2f, h - 2f);
+        HudChrome.drawSurface(canvas, mPaint, mPath, mBounds, mModel.cornerShape, mRadius,
+                glass ? Color.TRANSPARENT : baseBg, mModel.opacity, strokePx, strokeCol);
 
-        if (variant == 2) {
-            // Outlined Floating (Minimalist Transparent)
-            mPaint.setColor(Color.TRANSPARENT);
-        } else {
-            mPaint.setColor(baseBg);
-        }
-        mPaint.setAlpha(Math.round(mModel.opacity * 255));
-        canvas.drawCircle(cx, cy, radius, mPaint);
-
-        // Outer Bezel Rim
-        if (mModel.borderStrokeWidthDp > 0) {
-            mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setStrokeWidth(Math.max(1, Math.round(mModel.borderStrokeWidthDp * density)));
-            mPaint.setColor(mModel.borderColor);
-            canvas.drawCircle(cx, cy, radius, mPaint);
-        }
-
-        // Inner Tactile Bevel Ring (Only in Classic Dish mode)
+        // Classic bevel carries the recessed hairline; the flat style has nothing inside the
+        // border, and the glass style is transparent by definition.
         if (variant == 1) {
-            float innerBevelR = radius * 0.88f;
-            mPaint.setStrokeWidth(1.0f * density);
-            mPaint.setColor(HudColors.ripple);
-            canvas.drawCircle(cx, cy, innerBevelR, mPaint);
+            float inset = 6f * d;
+            mInner.set(mBounds.left + inset, mBounds.top + inset,
+                    mBounds.right - inset, mBounds.bottom - inset);
+            HudChrome.computeRadii(mModel.cornerShape, Math.max(2f, mRadius - inset), mInnerRadii);
+            mInnerPath.reset();
+            mInnerPath.addRoundRect(mInner, mInnerRadii, Path.Direction.CW);
+            mPaint.setStyle(Paint.Style.STROKE);
+            mPaint.setStrokeWidth(Math.max(1f, d));
+            mPaint.setColor(HudColors.withAlpha(HudColors.textPrimary, 0x14));
+            canvas.drawPath(mInnerPath, mPaint);
         }
 
-        // 2. Sculpted Cross Arms (Top, Bottom, Left, Right)
-        float armWidth = minDim * 0.32f;
-        float armLength = radius * 0.85f;
-        float armCorner = 8f * density;
-
-        // Draw Vertical Cross Bar
-        mArmRect.set(cx - armWidth * 0.5f, cy - armLength, cx + armWidth * 0.5f, cy + armLength);
-        mArmPaint.setStyle(Paint.Style.FILL);
-        mArmPaint.setColor(HudColors.surfaceTint);
-        canvas.drawRoundRect(mArmRect, armCorner, armCorner, mArmPaint);
-
-        // Draw Horizontal Cross Bar
-        mArmRect.set(cx - armLength, cy - armWidth * 0.5f, cx + armLength, cy + armWidth * 0.5f);
-        canvas.drawRoundRect(mArmRect, armCorner, armCorner, mArmPaint);
-
-        // Draw Active Arm Highlights
-        if (mUpActive) {
-            drawActiveArmSegment(canvas, cx - armWidth * 0.5f, cy - armLength, cx + armWidth * 0.5f, cy, armCorner, activeAccent);
+        // Arms: one tapered path, rotated into the four directions.
+        int armStroke = HudColors.withAlpha(HudColors.textPrimary, 0x59);
+        for (int i = 0; i < 4; i++) {
+            int rot = i * 90;               // 0 = up, then clockwise
+            boolean active = (i == 0 && mUpActive)
+                    || (i == 1 && mRightActive)
+                    || (i == 2 && mDownActive)
+                    || (i == 3 && mLeftActive);
+            canvas.save();
+            canvas.rotate(rot, mCx, mCy);
+            if (glass) {
+                if (active) {
+                    mArmPaint.setStyle(Paint.Style.FILL);
+                    mArmPaint.setColor(HudColors.withAlpha(accent, 0x33));
+                    canvas.drawPath(mArmPath, mArmPaint);
+                }
+                mArmPaint.setStyle(Paint.Style.STROKE);
+                mArmPaint.setStrokeWidth(Math.max(1f, d));
+                mArmPaint.setColor(active ? accent : armStroke);
+                canvas.drawPath(mArmPath, mArmPaint);
+            } else {
+                mArmPaint.setStyle(Paint.Style.FILL);
+                mArmPaint.setColor(active ? HudColors.withAlpha(accent, 0xD9)
+                        : (variant == 1 ? HudColors.surfaceInset : HudColors.surfaceTint));
+                canvas.drawPath(mArmPath, mArmPaint);
+                if (active) {
+                    mArmPaint.setStyle(Paint.Style.STROKE);
+                    mArmPaint.setStrokeWidth(Math.max(1f, d));
+                    mArmPaint.setColor(accent);
+                    canvas.drawPath(mArmPath, mArmPaint);
+                }
+            }
+            canvas.restore();
         }
-        if (mDownActive) {
-            drawActiveArmSegment(canvas, cx - armWidth * 0.5f, cy, cx + armWidth * 0.5f, cy + armLength, armCorner, activeAccent);
+
+        // Single centre dot as the thumb's anchor; the old pivot dish and jewel were two marks
+        // for the same job.
+        if (!glass) {
+            mPaint.setStyle(Paint.Style.FILL);
+            mPaint.setColor(HudColors.withAlpha(HudColors.textPrimary, mIsPressed ? 0x4D : 0x33));
+            canvas.drawCircle(mCx, mCy, 2f * d, mPaint);
         }
-        if (mLeftActive) {
-            drawActiveArmSegment(canvas, cx - armLength, cy - armWidth * 0.5f, cx, cy + armWidth * 0.5f, armCorner, activeAccent);
+
+        // Chevrons.
+        mArrowPaint.setStyle(Paint.Style.FILL);
+        for (int dir = DIR_UP; dir <= DIR_RIGHT; dir++) {
+            boolean active = (dir == DIR_UP && mUpActive)
+                    || (dir == DIR_DOWN && mDownActive)
+                    || (dir == DIR_LEFT && mLeftActive)
+                    || (dir == DIR_RIGHT && mRightActive);
+            float tx = mCx;
+            float ty = mCy;
+            float rot = 0f;
+            if (dir == DIR_UP) ty -= mChevronOffset;
+            else if (dir == DIR_DOWN) { ty += mChevronOffset; rot = 180f; }
+            else if (dir == DIR_LEFT) { tx -= mChevronOffset; rot = 270f; }
+            else { tx += mChevronOffset; rot = 90f; }
+            mArrowPaint.setColor(active ? accent : HudColors.withAlpha(HudColors.textPrimary, 0x73));
+            canvas.save();
+            canvas.translate(tx, ty);
+            canvas.rotate(rot);
+            canvas.drawPath(mChevronPath, mArrowPaint);
+            canvas.restore();
         }
-        if (mRightActive) {
-            drawActiveArmSegment(canvas, cx, cy - armWidth * 0.5f, cx + armLength, cy + armWidth * 0.5f, armCorner, activeAccent);
-        }
-
-        // Cross Arm Outlines
-        mArmPaint.setStyle(Paint.Style.STROKE);
-        mArmPaint.setStrokeWidth(1.2f * density);
-        mArmPaint.setColor(HudColors.withAlpha(HudColors.textPrimary, 0x44));
-        mArmRect.set(cx - armWidth * 0.5f, cy - armLength, cx + armWidth * 0.5f, cy + armLength);
-        canvas.drawRoundRect(mArmRect, armCorner, armCorner, mArmPaint);
-        mArmRect.set(cx - armLength, cy - armWidth * 0.5f, cx + armLength, cy + armWidth * 0.5f);
-        canvas.drawRoundRect(mArmRect, armCorner, armCorner, mArmPaint);
-
-        // 3. Directional Chevrons
-        float arrowOffset = armLength * 0.65f;
-        float arrowSize = minDim * 0.12f;
-
-        // UP
-        drawChevron(canvas, cx, cy - arrowOffset, arrowSize, 0, mUpActive, activeAccent);
-        // DOWN
-        drawChevron(canvas, cx, cy + arrowOffset, arrowSize, 180, mDownActive, activeAccent);
-        // LEFT
-        drawChevron(canvas, cx - arrowOffset, cy, arrowSize, 270, mLeftActive, activeAccent);
-        // RIGHT
-        drawChevron(canvas, cx + arrowOffset, cy, arrowSize, 90, mRightActive, activeAccent);
-
-        // 4. Center Concave Pivot Dish
-        float pivotR = armWidth * 0.36f;
-        mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mIsPressed ? HudColors.surfaceInset : HudColors.surfaceInsetDeep);
-        canvas.drawCircle(cx, cy, pivotR, mPaint);
-        mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(1.2f * density);
-        mPaint.setColor(mIsPressed ? activeAccent : HudColors.withAlpha(HudColors.primary, 0x44));
-        canvas.drawCircle(cx, cy, pivotR, mPaint);
-
-        // Center jewel dot
-        mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mIsPressed ? activeAccent : HudColors.withAlpha(HudColors.textPrimary, 0x66));
-        canvas.drawCircle(cx, cy, 3f * density, mPaint);
-    }
-
-    private void drawActiveArmSegment(Canvas canvas, float l, float t, float r, float b, float corner, int color) {
-        mArmRect.set(l, t, r, b);
-        mArmPaint.setStyle(Paint.Style.FILL);
-        mArmPaint.setColor(color);
-        mArmPaint.setAlpha(100);
-        canvas.drawRoundRect(mArmRect, corner, corner, mArmPaint);
-    }
-
-    private void drawChevron(Canvas canvas, float cx, float cy, float size, float rotation, boolean active, int activeColor) {
-        Path path = new Path();
-        path.moveTo(0, -size * 0.55f);
-        path.lineTo(-size * 0.5f, size * 0.35f);
-        path.lineTo(-size * 0.28f, size * 0.35f);
-        path.lineTo(0, -size * 0.1f);
-        path.lineTo(size * 0.28f, size * 0.35f);
-        path.lineTo(size * 0.5f, size * 0.35f);
-        path.close();
-
-        canvas.save();
-        canvas.translate(cx, cy);
-        canvas.rotate(rotation);
-        mArrowPaint.setColor(active ? activeColor : HudColors.withAlpha(HudColors.textPrimary, 0xDD));
-        canvas.drawPath(path, mArrowPaint);
-        canvas.restore();
     }
 
     @Override
