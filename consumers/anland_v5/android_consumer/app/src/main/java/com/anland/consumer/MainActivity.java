@@ -2681,8 +2681,12 @@ public class MainActivity extends Activity
                 || action == MotionEvent.ACTION_POINTER_DOWN;
 
         if (isDown) {
+            // With the touch lock on, a finger that misses every HUD control still belongs to
+            // the overlay: the event is swallowed instead of becoming an absolute touch on the
+            // desktop, which is what made a resting palm click things by accident.
+            boolean touchLocked = mHudOverlay != null && mHudOverlay.isTouchLockActive();
             if (!isTabletTool(ev.getToolType(index))
-                    && isOverlayControlAt(ev.getX(index), ev.getY(index)))
+                    && (touchLocked || isOverlayControlAt(ev.getX(index), ev.getY(index))))
                 grabbedOverlayPointers.add(pointerId);
             else
                 grabbedOverlayPointers.remove(pointerId);

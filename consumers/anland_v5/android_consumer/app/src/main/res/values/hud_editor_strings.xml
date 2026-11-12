@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="hud_editor_drag_mode">Drag style</string>
+    <string name="hud_editor_drag_double_tap">Double tap</string>
+    <string name="hud_editor_drag_hold">Hold</string>
+    <string name="hud_editor_touch_lock">Touch lock</string>
+    <string name="hud_editor_touch_lock_summary">Desktop ignores touches outside the HUD; the pad is the only pointer</string>
     <string name="hud_combo_empty_pick">Pick at least one key</string>
     <string name="hud_combo_summary_empty">No keys yet - tap a key below</string>
     <string name="hud_editor_reserve_space">Reserve bottom space</string>

@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="hud_editor_drag_mode">拖曳方式</string>
+    <string name="hud_editor_drag_double_tap">雙擊</string>
+    <string name="hud_editor_drag_hold">長按</string>
+    <string name="hud_editor_touch_lock">觸控鎖定</string>
+    <string name="hud_editor_touch_lock_summary">桌面忽略 HUD 以外的觸控，僅觸控板可移動指標</string>
     <string name="hud_combo_empty_pick">請至少選擇一個按鍵</string>
     <string name="hud_combo_summary_empty">還沒有按鍵 — 點擊下方按鍵</string>
     <string name="hud_editor_reserve_space">預留底部空間</string>

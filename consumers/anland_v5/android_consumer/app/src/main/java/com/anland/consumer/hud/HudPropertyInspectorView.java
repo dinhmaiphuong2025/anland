@@ -177,6 +177,10 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private SeekBar mBorderWidthSeekBar;
     private TextView mBorderWidthBadge;
     private HudToggleView mHapticToggle;
+    private HudToggleView mTouchLockToggle;
+    private LinearLayout mDragModeRow;
+    private TextView mPillDragDouble;
+    private TextView mPillDragHold;
     private View mHapticRow;
     private HudToggleView mAttachKeyboardToggle;
     private LinearLayout mColorThemeRow;
@@ -926,6 +930,15 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mTabContentContainer.addView(mTabLabelView);
     }
 
+    /** Switches the pad between double-tap drag and hold-to-drag. */
+    private void applyDragMode(int mode) {
+        if (mActiveButton == null) return;
+        mActiveButton.dragMode = mode;
+        updateSegmentedPill(mPillDragDouble, mode == HudButton.DRAG_DOUBLE_TAP);
+        updateSegmentedPill(mPillDragHold, mode == HudButton.DRAG_HOLD);
+        if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+    }
+
     private View createSegmentedPill(String title, boolean active, Runnable onClick) {
         TextView tv = new TextView(getContext());
         tv.setText(title);
@@ -1289,6 +1302,30 @@ public final class HudPropertyInspectorView extends LinearLayout {
                 if (mCallback != null) mCallback.onModelChanged(mActiveButton);
             }
         }));
+        // Drag style: double tap then drag (classic) or hold then drag.
+        mDragModeRow = createSegmentedRow();
+        mPillDragDouble = (TextView) createSegmentedPill(
+                getContext().getString(R.string.hud_editor_drag_double_tap), true,
+                () -> applyDragMode(HudButton.DRAG_DOUBLE_TAP));
+        mPillDragHold = (TextView) createSegmentedPill(
+                getContext().getString(R.string.hud_editor_drag_hold), false,
+                () -> applyDragMode(HudButton.DRAG_HOLD));
+        mDragModeRow.addView(mPillDragDouble, new LinearLayout.LayoutParams(0, dp(30), 1f));
+        mDragModeRow.addView(mPillDragHold, new LinearLayout.LayoutParams(0, dp(30), 1f));
+        mTrackPointOptions.addView(createSectionHeader(getContext().getString(R.string.hud_editor_drag_mode)));
+        mTrackPointOptions.addView(mDragModeRow);
+
+        mTouchLockToggle = new HudToggleView(getContext());
+        mTouchLockToggle.setOnCheckedChangeListener((view, checked) -> {
+            if (mIsProgrammaticChange || mActiveButton == null) return;
+            mActiveButton.touchLock = checked;
+            if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+        });
+        mTrackPointOptions.addView(createToggleRow(
+                getContext().getString(R.string.hud_editor_touch_lock),
+                getContext().getString(R.string.hud_editor_touch_lock_summary),
+                mTouchLockToggle));
+
         content.addView(mTrackPointOptions);
 
         // Feedback & System Behavior Section
@@ -2079,6 +2116,13 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
             boolean isPointer = HudButton.WIDGET_TOUCHPAD.equals(b.widgetType);
             mTrackPointOptions.setVisibility(isPointer ? VISIBLE : GONE);
+            if (isPointer) {
+                if (mTouchLockToggle != null) mTouchLockToggle.setChecked(b.touchLock);
+                if (mPillDragDouble != null) {
+                    updateSegmentedPill(mPillDragDouble, b.dragMode == HudButton.DRAG_DOUBLE_TAP);
+                    updateSegmentedPill(mPillDragHold, b.dragMode == HudButton.DRAG_HOLD);
+                }
+            }
         } finally {
             mIsProgrammaticChange = false;
         }

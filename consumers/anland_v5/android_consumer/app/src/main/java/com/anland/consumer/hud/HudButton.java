@@ -145,6 +145,17 @@ public final class HudButton {
 
     // Per-button haptic feedback toggle (default: enabled)
     public boolean hapticEnabled = true;
+    /**
+     * Touchpad only. While set, the desktop receives no absolute touch at all: every finger
+     * that does not land on a HUD control is swallowed, so the pad is the only pointer. This
+     * is what the fixed-frame pad is for - one-handed use without mis-taps on the desktop.
+     * Off by default: it is opt-in per pad, in either orientation.
+     */
+    public boolean touchLock = false;
+    /** Touchpad drag style: 0 = double tap then drag, 1 = hold then drag. */
+    public static final int DRAG_DOUBLE_TAP = 0;
+    public static final int DRAG_HOLD = 1;
+    public int dragMode = DRAG_DOUBLE_TAP;
 
     // Attach to soft keyboard (ExtraKey mode: lifts above soft keyboard when open)
     public boolean attachToKeyboard = false;
@@ -245,6 +256,8 @@ public final class HudButton {
             obj.put("dpad_right", actionJSON(dpadRightAction));
         }
         obj.put("haptic_enabled", hapticEnabled);
+        obj.put("touch_lock", touchLock);
+        obj.put("drag_mode", dragMode);
         obj.put("attach_to_keyboard", attachToKeyboard);
         if (WIDGET_GROUP.equals(widgetType) || WIDGET_EXTRA_KEYS.equals(widgetType)) {
             obj.put("pad_dp", padDp);
@@ -323,6 +336,9 @@ public final class HudButton {
         if ("stick_left".equals(b.trackpointMode) || "stick_right".equals(b.trackpointMode))
             b.trackpointMode = MODE_MOUSE;
         b.hapticEnabled = obj.optBoolean("haptic_enabled", true);
+        // Opt-in per pad; profiles written before the switch existed load as off.
+        b.touchLock = obj.optBoolean("touch_lock", false);
+        b.dragMode = obj.optInt("drag_mode", DRAG_DOUBLE_TAP);
         b.attachToKeyboard = obj.optBoolean("attach_to_keyboard", false);
 
         if (WIDGET_GROUP.equals(b.widgetType) || WIDGET_EXTRA_KEYS.equals(b.widgetType)) {

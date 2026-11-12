@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="hud_editor_drag_mode">Estilo de arrasto</string>
+    <string name="hud_editor_drag_double_tap">Toque duplo</string>
+    <string name="hud_editor_drag_hold">Segurar</string>
+    <string name="hud_editor_touch_lock">Bloquear toque</string>
+    <string name="hud_editor_touch_lock_summary">O desktop ignora toques fora do HUD; o touchpad é o único ponteiro</string>
     <string name="hud_combo_empty_pick">Escolha pelo menos uma tecla</string>
     <string name="hud_combo_summary_empty">Nenhuma tecla ainda - toque em uma abaixo</string>
     <string name="hud_editor_reserve_space">Reservar espaço inferior</string>

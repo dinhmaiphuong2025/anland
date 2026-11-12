@@ -1443,9 +1443,10 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             case TOUCHPAD:
                 b.widgetType = HudButton.WIDGET_TOUCHPAD;
                 b.label = getContext().getString(R.string.hud_overlay_label_touchpad);
-                b.widthDp = 92;
-                b.heightDp = 92;
-                b.cornerRadiusDp = 46;
+                // 70dp fits inside a thumb's reach without covering the desktop it moves.
+                b.widthDp = 70;
+                b.heightDp = 70;
+                b.cornerRadiusDp = 12;
                 break;
             case SCROLLBAR:
                 b.widgetType = HudButton.WIDGET_SCROLLBAR;
@@ -1665,6 +1666,26 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
      * to the desktop; empty space inside a group container is *not* a control,
      * it must fall through to the desktop like any other hole.
      */
+    /**
+     * True when a touchpad widget in the active layout asked for the touch lock. The host
+     * then stops forwarding touches that miss every HUD control, so a palm resting on the
+     * display cannot click the desktop.
+     */
+    public boolean isTouchLockActive() {
+        if (getVisibility() != VISIBLE) return false;
+        HudLayout layout = getActiveLayout();
+        if (layout == null) return false;
+        return hasLockedPad(layout.floatingButtons) || hasLockedPad(layout.dockItems);
+    }
+
+    private static boolean hasLockedPad(java.util.List<HudButton> buttons) {
+        if (buttons == null) return false;
+        for (HudButton b : buttons) {
+            if (b != null && HudButton.WIDGET_TOUCHPAD.equals(b.widgetType) && b.touchLock) return true;
+        }
+        return false;
+    }
+
     public boolean isControlAt(float x, float y) {
         if (getVisibility() != VISIBLE) return false;
         return findControlAt(this, x, y) != null;
@@ -2043,6 +2064,10 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             }
             return true;
         }
+        // Touch lock: this method is only reached by a gesture that missed every HUD control,
+        // so consuming it here is what keeps the desktop from receiving an absolute touch.
+        // Children (pad, keys, keyboard) already took their own events before this point.
+        if (isTouchLockActive()) return true;
         return super.onTouchEvent(event);
     }
 
