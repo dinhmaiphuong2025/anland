@@ -11,6 +11,8 @@
     <string name="hud_editor_snap">Encaixe</string>
     <string name="hud_editor_snap_on">Encaixe magnético ativado</string>
     <string name="hud_editor_snap_off">Encaixe magnético desativado</string>
+    <string name="hud_editor_undo">Desfazer</string>
+    <string name="hud_editor_redo">Refazer</string>
     <string name="hud_editor_select_layout">Selecionar layout</string>
     <string name="hud_editor_layout_number">Layout %1$d</string>
     <string name="hud_editor_preset_actions">Ações predefinidas</string>

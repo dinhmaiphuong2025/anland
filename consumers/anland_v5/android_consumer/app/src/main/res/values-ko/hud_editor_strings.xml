@@ -11,6 +11,8 @@
     <string name="hud_editor_snap">맞춤</string>
     <string name="hud_editor_snap_on">자석 맞춤 켜짐</string>
     <string name="hud_editor_snap_off">자석 맞춤 꺼짐</string>
+    <string name="hud_editor_undo">실행 취소</string>
+    <string name="hud_editor_redo">다시 실행</string>
     <string name="hud_editor_select_layout">레이아웃 선택</string>
     <string name="hud_editor_layout_number">레이아웃 %1$d</string>
     <string name="hud_editor_preset_actions">프리셋 작업</string>

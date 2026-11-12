@@ -29,6 +29,8 @@ public final class HudVectorIcons {
     public static final String ICON_CUSTOM = "custom";
     public static final String ICON_DETACH = "detach";
     public static final String ICON_SETTINGS = "settings";
+    public static final String ICON_UNDO = "undo";
+    public static final String ICON_REDO = "redo";
 
     // HUD Key Label Icons
     public static final String ICON_UP = "up";
@@ -185,6 +187,44 @@ public final class HudVectorIcons {
                 break;
             }
 
+            case ICON_UNDO: { // Lucide: undo-2
+                // <path d="M9 14 4 9l5-5" />
+                // <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" />
+                sPath.reset();
+                sPath.moveTo(p(cx, 9f, scale), p(cy, 14f, scale));
+                sPath.lineTo(p(cx, 4f, scale), p(cy, 9f, scale));
+                sPath.lineTo(p(cx, 9f, scale), p(cy, 4f, scale));
+                canvas.drawPath(sPath, paint);
+
+                sPath.reset();
+                sPath.moveTo(p(cx, 4f, scale), p(cy, 9f, scale));
+                sPath.lineTo(p(cx, 14.5f, scale), p(cy, 9f, scale));
+                // 180 degrees of the 5.5 radius arc: top -> right -> bottom of the hook.
+                sRect.set(p(cx, 9f, scale), p(cy, 9f, scale), p(cx, 20f, scale), p(cy, 20f, scale));
+                sPath.arcTo(sRect, -90f, 180f, false);
+                sPath.lineTo(p(cx, 11f, scale), p(cy, 20f, scale));
+                canvas.drawPath(sPath, paint);
+                break;
+            }
+            case ICON_REDO: { // Lucide: redo-2
+                // <path d="m15 14 5-5-5-5" />
+                // <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13" />
+                sPath.reset();
+                sPath.moveTo(p(cx, 15f, scale), p(cy, 14f, scale));
+                sPath.lineTo(p(cx, 20f, scale), p(cy, 9f, scale));
+                sPath.lineTo(p(cx, 15f, scale), p(cy, 4f, scale));
+                canvas.drawPath(sPath, paint);
+
+                sPath.reset();
+                sPath.moveTo(p(cx, 20f, scale), p(cy, 9f, scale));
+                sPath.lineTo(p(cx, 9.5f, scale), p(cy, 9f, scale));
+                // Mirrored hook: negative sweep so the arc bulges to the left.
+                sRect.set(p(cx, 4f, scale), p(cy, 9f, scale), p(cx, 15f, scale), p(cy, 20f, scale));
+                sPath.arcTo(sRect, -90f, -180f, false);
+                sPath.lineTo(p(cx, 13f, scale), p(cy, 20f, scale));
+                canvas.drawPath(sPath, paint);
+                break;
+            }
             case ICON_EXIT: { // Lucide: log-out
                 // <path d="m16 17 5-5-5-5" />
                 // <path d="M21 12H9" />

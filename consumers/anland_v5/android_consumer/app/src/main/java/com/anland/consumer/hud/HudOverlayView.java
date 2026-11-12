@@ -91,6 +91,13 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
 
     private boolean mIsEditMode = false;
     private boolean mHasUnsavedChanges = false;
+    /* Undo/redo for the live editor. Snapshots are whole-layout JSON blobs,
+     * committed on a short debounce so a drag or resize gesture costs one
+     * history step instead of one per motion event. */
+    private final HudHistory mHistory = new HudHistory(40);
+    private boolean mHistoryCommitPosted = false;
+    private View mUndoToolButton = null;
+    private View mRedoToolButton = null;
     // Runtime "clean screen" mode: everything is hidden except the KB key, so
     // the way back is always on screen. Persisted across restarts.
     private boolean mHudHidden = false;
@@ -332,6 +339,10 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     }
 
     public void loadProfile() {
+        // A reload replaces every model instance; snapshots from the previous
+        // profile must not be replayed onto the new objects.
+        mHistory.clear();
+        dropPendingHistoryCommit();
         String json = mPrefs.getString(PREF_KEY_PROFILE, null);
         mProfile = HudLayoutProfile.fromJSON(json);
         if (mProfile == null) {
@@ -377,6 +388,8 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     public void cancelEditMode() {
         if (!mIsEditMode) return;
         mHasUnsavedChanges = false;
+        mHistory.clear();
+        dropPendingHistoryCommit();
         // Reload saved profile from disk to discard all uncommitted in-memory edits
         loadProfile();
         selectButton(null, null);
@@ -444,6 +457,8 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mTopToolbar.setVisibility(editMode ? VISIBLE : GONE);
         if (!editMode) {
             selectButton(null, null);
+            mHistory.clear();
+            dropPendingHistoryCommit();
             // Tell the host we are leaving the editor so it can clear the
             // editor-only flags. If we do not, a deferred-finish timer
             // armed for the editor path can fire after the user is already
@@ -452,6 +467,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             if (mHost != null) mHost.onEditModeExited();
         }
         rebuildActiveLayout();
+        // The saved state is the base of the undo stack for this session.
+        if (editMode) mHistory.reset(serializeActiveLayout());
+        updateUndoRedoButtons();
         invalidate();
     }
 
@@ -551,6 +569,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     public void setLayer(int layer) {
         if (mLayer == layer) return;
         mLayer = layer;
+        // Each layer has its own layout; the stack must not cross them.
+        mHistory.clear();
+        dropPendingHistoryCommit();
         selectButton(null, null);
         rebuildActiveLayout();
         invalidate();
@@ -585,6 +606,133 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mPrefs.edit().putInt(PREF_KEY_LAYOUT_SLOT, slot).apply();
         rebuildActiveLayout();
         invalidate();
+    }
+
+    /* ---- Undo / redo ----------------------------------------------------
+     * One snapshot is the entire active layout serialized to JSON. HudLayout
+     * already round-trips through JSON, so restoring a state is a parse plus an
+     * in-place copy; no per-operation inverse is needed.
+     */
+
+    /** Debounced snapshot of an edit; see markLayoutDirty(). */
+    private final Runnable mHistoryCommit = new Runnable() {
+        @Override public void run() {
+            mHistoryCommitPosted = false;
+            if (!mIsEditMode) return;
+            mHistory.record(serializeActiveLayout());
+            updateUndoRedoButtons();
+        }
+    };
+
+    /**
+     * Single entry point for "the active layout changed". Every mutating path
+     * calls this instead of flipping the flag directly, so the undo stack and
+     * the unsaved-changes flag always agree.
+     *
+     * <p>The snapshot is deferred: a drag emits dozens of changes per gesture,
+     * but the whole gesture should cost one history step.
+     */
+    private void markLayoutDirty() {
+        setUnsavedChanges(true);
+        if (!mIsEditMode) return;
+        removeCallbacks(mHistoryCommit);
+        mHistoryCommitPosted = true;
+        postDelayed(mHistoryCommit, 400);
+    }
+
+    /** Central setter for the unsaved-changes flag, shared by the edit and history paths. */
+    private void setUnsavedChanges(boolean unsaved) {
+        mHasUnsavedChanges = unsaved;
+    }
+
+    /** The active layout as a JSON string, or null when it cannot be serialized. */
+    private String serializeActiveLayout() {
+        try {
+            return getActiveLayout().toJSON().toString();
+        } catch (org.json.JSONException e) {
+            return null;
+        }
+    }
+
+    private void dropPendingHistoryCommit() {
+        mHistoryCommitPosted = false;
+        removeCallbacks(mHistoryCommit);
+    }
+
+    /** Folds an edit that is still inside its debounce window into the stack. */
+    private void flushPendingHistoryCommit() {
+        if (!mHistoryCommitPosted) return;
+        dropPendingHistoryCommit();
+        mHistory.record(serializeActiveLayout());
+    }
+
+    /**
+     * Restores a snapshotted state into the active layout object. The layout
+     * instance itself is kept and refilled, because the profile, the built-view
+     * bookkeeping and the inspector all hold references to it.
+     */
+    private void applyHistorySnapshot(String json) {
+        if (json == null) return;
+        HudLayout restored;
+        try {
+            restored = HudLayout.fromJSON(new org.json.JSONObject(json));
+        } catch (org.json.JSONException e) {
+            return;
+        }
+        selectButton(null, null);
+        if (mInspectorView != null) {
+            mInspectorView.setVisibility(GONE);
+            mInspectorView.bindButton(null);
+        }
+        // The inspector session holds a live reference to the layout that is
+        // about to be refilled; close it so a later "cancel" cannot write the
+        // pre-undo model back.
+        beginInspectorSession(null);
+        HudLayout active = getActiveLayout();
+        active.dockEnabled = restored.dockEnabled;
+        active.dockScrollable = restored.dockScrollable;
+        active.dockHeightDp = restored.dockHeightDp;
+        active.dockBgColor = restored.dockBgColor;
+        active.dockItems.clear();
+        active.dockItems.addAll(restored.dockItems);
+        active.floatingButtons.clear();
+        active.floatingButtons.addAll(restored.floatingButtons);
+        dropPendingHistoryCommit();
+        setUnsavedChanges(true);
+        rebuildActiveLayout();
+        updateUndoRedoButtons();
+    }
+
+    /** Steps the active layout back one history entry. No-op outside the editor. */
+    public void undo() {
+        if (!mIsEditMode) return;
+        flushPendingHistoryCommit();
+        String snapshot = mHistory.undo();
+        if (snapshot != null) applyHistorySnapshot(snapshot);
+        else updateUndoRedoButtons();
+    }
+
+    /** Steps the active layout forward one history entry. No-op outside the editor. */
+    public void redo() {
+        if (!mIsEditMode) return;
+        flushPendingHistoryCommit();
+        String snapshot = mHistory.redo();
+        if (snapshot != null) applyHistorySnapshot(snapshot);
+        else updateUndoRedoButtons();
+    }
+
+    /** Dims the toolbar arrows that currently have nothing to step to. */
+    private void updateUndoRedoButtons() {
+        if (mUndoToolButton != null) {
+            boolean canUndo = mHistory.canUndo();
+            mUndoToolButton.setAlpha(canUndo ? 1f : 0.4f);
+            mUndoToolButton.setEnabled(canUndo);
+        }
+        if (mRedoToolButton != null) {
+            boolean canRedo = mHistory.canRedo();
+            mRedoToolButton.setAlpha(canRedo ? 1f : 0.4f);
+            mRedoToolButton.setEnabled(canRedo);
+        }
     }
 
     public static int getSystemStatusBarHeight(Context ctx) {
@@ -718,19 +866,19 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         mInspectorView = new HudPropertyInspectorView(getContext(), new HudPropertyInspectorView.InspectorCallback() {
             @Override
             public void onModelChanged(HudButton button) {
-                mHasUnsavedChanges = true;
+                markLayoutDirty();
                 rebuildActiveLayout();
             }
             @Override
             public void onDeleteRequested(HudButton button) {
-                mHasUnsavedChanges = true;
+                markLayoutDirty();
                 getActiveLayout().floatingButtons.remove(button);
                 selectButton(null, null);
                 rebuildActiveLayout();
             }
             @Override
             public void onDuplicateRequested(HudButton button) {
-                mHasUnsavedChanges = true;
+                markLayoutDirty();
                 HudButton dup = button.duplicate();
                 getActiveLayout().floatingButtons.add(dup);
                 rebuildActiveLayout();
@@ -742,7 +890,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 // while the modal picker is open to eliminate background clutter.
                 mInspectorView.setVisibility(GONE);
                 HudKeyPickerDialog.show(getContext(), (action, displayLabel) -> {
-                    mHasUnsavedChanges = true;
+                    markLayoutDirty();
                     switch (targetSlot) {
                         case 0:
                             button.action = action;
@@ -794,7 +942,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     // Children are arranged automatically by HudGroupView; the
                     // container only has to be large enough for the new grid.
                     ensureGroupFits(group);
-                    mHasUnsavedChanges = true;
+                    markLayoutDirty();
                     mInspectorView.setVisibility(VISIBLE);
                     selectButton(group, null);
                     rebuildActiveLayout();
@@ -818,7 +966,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 child.posXPercent = Math.min(0.95f, group.posXPercent + 0.08f);
                 child.posYPercent = Math.min(0.95f, group.posYPercent + 0.10f);
                 getActiveLayout().floatingButtons.add(child);
-                mHasUnsavedChanges = true;
+                markLayoutDirty();
                 selectButton(group, null);
                 rebuildActiveLayout();
                 bindInspector(group);
@@ -832,7 +980,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 HudKeyPickerDialog.show(getContext(), (action, displayLabel) -> {
                     child.action = action;
                     if (displayLabel != null) child.label = displayLabel;
-                    mHasUnsavedChanges = true;
+                    markLayoutDirty();
                     mInspectorView.setVisibility(VISIBLE);
                     bindGroupView(group);
                     bindInspector(group);
@@ -843,7 +991,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             public void onGroupChildRemoveRequested(HudButton group, HudButton child) {
                 if (group == null || child == null) return;
                 group.children.remove(child);
-                mHasUnsavedChanges = true;
+                markLayoutDirty();
                 bindGroupView(group);
                 bindInspector(group);
             }
@@ -889,6 +1037,12 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
             Toast.makeText(getContext(), mSnapEnabled ? R.string.hud_editor_snap_on : R.string.hud_editor_snap_off, Toast.LENGTH_SHORT).show();
         });
 
+        // Undo / redo step through the full-layout snapshots of this edit session.
+        mUndoToolButton = addTool(bar, getContext().getString(R.string.hud_editor_undo),
+                HudVectorIcons.ICON_UNDO, Color.WHITE, true, this::undo);
+        mRedoToolButton = addTool(bar, getContext().getString(R.string.hud_editor_redo),
+                HudVectorIcons.ICON_REDO, Color.WHITE, true, this::redo);
+
         addTool(bar, getContext().getString(R.string.hud_overlay_toolbar_layout),
                 HudVectorIcons.ICON_LAYOUT, Color.WHITE, true, this::showLayoutOptionsChooser);
 
@@ -901,6 +1055,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         exitBg.setStroke(dp(1), HudColors.withAlpha(HudColors.danger, 0x44));
         btnExit.setBackground(exitBg);
 
+        updateUndoRedoButtons();
         return bar;
     }
 
@@ -990,7 +1145,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         // Load Productivity Preset
         Button btnProd = createLayoutActionButton(ctx, getContext().getString(R.string.hud_editor_productivity_layout), HudColors.surfaceHighest, Color.WHITE, () -> {
             dialog.dismiss();
-            mHasUnsavedChanges = true;
+            markLayoutDirty();
             HudLayout dst = getActiveLayout();
             dst.floatingButtons.clear();
             HudLayout preset = HudLayoutProfile.createProductivityLayout(isLandscape);
@@ -1006,7 +1161,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         // User Portrait Hotkeys Layout
         Button btnHotkeys = createLayoutActionButton(ctx, getContext().getString(R.string.hud_editor_portrait_layout), HudColors.surfaceHighest, Color.WHITE, () -> {
             dialog.dismiss();
-            mHasUnsavedChanges = true;
+            markLayoutDirty();
             HudLayout dst = getActiveLayout();
             dst.floatingButtons.clear();
             HudLayout preset = HudLayoutProfile.createPortraitHotkeysLayout();
@@ -1022,7 +1177,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         // Reset to Default Preset
         Button btnReset = createLayoutActionButton(ctx, getContext().getString(R.string.hud_overlay_reset_default_layout), HudColors.surfaceHighest, HudColors.primary, () -> {
             dialog.dismiss();
-            mHasUnsavedChanges = true;
+            markLayoutDirty();
             HudLayout dst = getActiveLayout();
             dst.floatingButtons.clear();
             HudLayout preset = isLandscape ? HudLayoutProfile.createDefaultLandscapeLayout() : HudLayoutProfile.createDefaultPortraitLayout();
@@ -1038,7 +1193,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         // Clear Layout (Destructive Red)
         Button btnClear = createLayoutActionButton(ctx, getContext().getString(R.string.hud_editor_clear_layout), HudColors.surfaceHighest, HudColors.danger, () -> {
             dialog.dismiss();
-            mHasUnsavedChanges = true;
+            markLayoutDirty();
             HudLayout dst = getActiveLayout();
             dst.floatingButtons.clear();
             selectButton(null, null);
@@ -1431,7 +1586,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         for (HudButton child : b.children) applyNewWidgetStyle(child);
         avoidOverlap(b);
         getActiveLayout().floatingButtons.add(b);
-        mHasUnsavedChanges = true;
+        markLayoutDirty();
         rebuildActiveLayout();
         selectButton(b, null);
     }
@@ -1852,7 +2007,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 case MotionEvent.ACTION_UP:
                     if (mResizeMode != 0) {
                         mResizeMode = 0;
-                        mHasUnsavedChanges = true;
+                        markLayoutDirty();
                         rebuildActiveLayout();
                         return true;
                     }
@@ -2199,7 +2354,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     // Moving a key inside a container: the container stays put and only the key
                     // moves. GRID drags the view and snaps on release, FREE follows the finger.
                     if (mDragChild != null) {
-                        mHasUnsavedChanges = true;
+                        markLayoutDirty();
                         if (mDragChildGrid) {
                             if (mDragChildView != null) {
                                 mDragChildView.setTranslationX(rawX - mTouchDownX);
@@ -2220,7 +2375,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         return true;
                     }
 
-                    mHasUnsavedChanges = true;
+                    markLayoutDirty();
                     float targetX = mInitialBtnLeft + (rawX - mTouchDownX);
                     float targetY = mInitialBtnTop + (rawY - mTouchDownY);
                     float snappedX = targetX;
@@ -2537,7 +2692,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         if (occupant != null) {
             occupant.gridSlot = vacated >= 0 && vacated != slot ? vacated : firstFreeSlot(group);
         }
-        mHasUnsavedChanges = true;
+        markLayoutDirty();
         HudGroupView gv = groupViewFor(group);
         if (gv != null) {
             gv.rebuildChildren();
@@ -2608,7 +2763,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         }
 
         ensureGroupFits(group);
-        mHasUnsavedChanges = true;
+        markLayoutDirty();
         if (mSelectedButton == widget) selectButton(null, null);
         else if (mSelectedButton == group) bindInspector(group);
         rebuildActiveLayout();
@@ -2770,7 +2925,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                     int originalIndex = Math.min(mInspectorMovedIndices.get(i), layout.floatingButtons.size());
                     layout.floatingButtons.add(originalIndex, original);
                 }
-                if (changed) mHasUnsavedChanges = true;
+                if (changed) markLayoutDirty();
             }
         }
         selectButton(null, null);
@@ -2998,7 +3153,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 duplicate.posXPercent = Math.min(0.95f, duplicate.posXPercent + 0.05f);
                 duplicate.posYPercent = Math.min(0.95f, duplicate.posYPercent + 0.05f);
                 getActiveLayout().floatingButtons.add(duplicate);
-                mHasUnsavedChanges = true;
+                markLayoutDirty();
                 rebuildActiveLayout();
                 selectButton(duplicate, null);
                 Toast.makeText(getContext(), R.string.hud_editor_duplicated, Toast.LENGTH_SHORT).show();
@@ -3023,7 +3178,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 }
                 avoidOverlap(mSelectedButton);
                 getActiveLayout().floatingButtons.add(mSelectedButton);
-                mHasUnsavedChanges = true;
+                markLayoutDirty();
                 HudButton detachedBtn = mSelectedButton;
                 rebuildActiveLayout();
                 selectButton(detachedBtn, null);
@@ -3037,7 +3192,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                 } else {
                     getActiveLayout().floatingButtons.remove(mSelectedButton);
                 }
-                mHasUnsavedChanges = true;
+                markLayoutDirty();
                 selectButton(null, null);
                 rebuildActiveLayout();
                 Toast.makeText(getContext(), R.string.hud_editor_deleted, Toast.LENGTH_SHORT).show();

@@ -11,6 +11,8 @@
     <string name="hud_editor_snap">吸附</string>
     <string name="hud_editor_snap_on">已開啟磁吸</string>
     <string name="hud_editor_snap_off">已關閉磁吸</string>
+    <string name="hud_editor_undo">復原</string>
+    <string name="hud_editor_redo">重做</string>
     <string name="hud_editor_select_layout">選擇佈局</string>
     <string name="hud_editor_layout_number">佈局 %1$d</string>
     <string name="hud_editor_preset_actions">預設操作</string>
