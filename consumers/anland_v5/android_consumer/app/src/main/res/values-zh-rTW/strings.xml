@@ -251,7 +251,6 @@
     <string name="hud_overlay_layout_cleared">配置已清除</string>
     <string name="hud_overlay_add_standard_key_button">標準按鍵按鈕</string>
     <string name="hud_overlay_add_super_gesture_nub">Super 手勢區</string>
-    <string name="hud_overlay_add_trackpoint">TrackPoint（滑鼠 / 捲動）</string>
     <string name="hud_overlay_add_steam_deck_trackpad">Steam Deck 觸控板（觸控板 / 滑鼠）</string>
     <string name="hud_overlay_add_scroll_bar">捲軸（垂直 / 水平）</string>
     <string name="hud_overlay_add_dpad">方向鍵（滑動十字）</string>
@@ -276,7 +275,6 @@
     <string name="hud_overlay_toolbar_exit">離開</string>
     <string name="hud_overlay_label_key">按鍵</string>
     <string name="hud_overlay_label_super">SUPER</string>
-    <string name="hud_overlay_label_mouse">滑鼠</string>
     <string name="hud_overlay_label_touchpad">觸控板</string>
     <string name="hud_overlay_label_scroll">捲動</string>
     <string name="hud_overlay_label_dpad">方向鍵</string>
@@ -311,7 +309,6 @@
     <string name="hud_dock_button_properties">停駐按鈕屬性</string>
     <string name="hud_widget_button">按鈕</string>
     <string name="hud_widget_super_gesture">SUPER 手勢</string>
-    <string name="hud_widget_trackpoint">軌跡點</string>
     <string name="hud_widget_touchpad">觸控板</string>
     <string name="hud_widget_scrollbar">捲軸</string>
     <string name="hud_widget_dpad">方向鍵</string>

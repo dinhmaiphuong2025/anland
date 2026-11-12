@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="hud_combo_empty_pick">Pick at least one key</string>
+    <string name="hud_combo_summary_empty">No keys yet - tap a key below</string>
+    <string name="hud_editor_reserve_space">Reserve bottom space</string>
+    <string name="hud_editor_reserve_space_hint">Shrink the display so the keys never cover it</string>
     <string name="hud_editor_snap">Snap</string>
     <string name="hud_editor_snap_on">Magnet snap on</string>
     <string name="hud_editor_snap_off">Magnet snap off</string>
@@ -32,6 +36,10 @@
     <string name="hud_editor_grid_columns">Columns Split</string>
     <string name="hud_editor_grid_rows">Rows Split</string>
     <string name="hud_editor_grid_auto">Auto</string>
+    <string name="hud_editor_layout_mode">Child layout</string>
+    <string name="hud_editor_layout_grid">Grid</string>
+    <string name="hud_editor_layout_free">Free</string>
+    <string name="hud_editor_apply_size_all">Apply size to all keys</string>
     <string name="hud_editor_detached">Detached from container</string>
     <string name="hud_editor_transform">Transform</string>
     <string name="hud_editor_label">Label</string>
@@ -96,4 +104,27 @@
     <string name="hud_editor_icon_fullscreen">Fullscreen</string>
     <string name="hud_editor_icon_menu">Menu</string>
     <string name="hud_editor_icon_settings">Settings</string>
+    <string name="hud_editor_icon_home">Home</string>
+    <string name="hud_editor_icon_enter">Enter</string>
+    <string name="hud_editor_icon_backspace">Backspace</string>
+    <string name="hud_editor_icon_power">Power</string>
+    <string name="hud_editor_icon_lock">Lock</string>
+    <string name="hud_editor_icon_search">Search</string>
+    <string name="hud_editor_icon_refresh">Refresh</string>
+    <string name="hud_editor_icon_volume_up">Vol +</string>
+    <string name="hud_editor_icon_mute">Mute</string>
+    <string name="hud_editor_icon_play">Play</string>
+    <string name="hud_editor_icon_pause">Pause</string>
+    <string name="hud_editor_icon_brightness">Brightness</string>
+    <string name="hud_editor_icon_window">Window</string>
+    <string name="hud_editor_icon_browser">Browser</string>
+    <string name="hud_editor_icon_terminal">Terminal</string>
+    <string name="hud_editor_icon_editor">Editor</string>
+    <string name="hud_editor_icon_close">Close</string>
+    <string name="hud_editor_icon_super">Super</string>
+    <string name="hud_editor_icon_alt">Alt</string>
+    <string name="hud_editor_icon_tab">Tab</string>
+    <string name="hud_editor_icon_desktop">Desktop</string>
+    <string name="hud_editor_icon_pointer">Pointer</string>
+    <string name="hud_editor_icon_hand">Hand</string>
 </resources>

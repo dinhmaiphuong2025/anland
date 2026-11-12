@@ -1,7 +1,10 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.HudColors;
+
+import com.anland.consumer.hud.design.HudType;
+
 import com.anland.consumer.R;
-import com.anland.consumer.theme.M3;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
@@ -149,25 +152,25 @@ public final class ComboBuilderView {
             if (i == mActiveSlot) {
                 GradientDrawable d = new GradientDrawable();
                 d.setCornerRadius(dp(ctx, 8));
-                d.setColor(0xFFA39CB8); // Lilac pastel
+                d.setColor(HudColors.primary); // Lilac pastel
                 mSlotLabels[i].setBackground(d);
                 mSlotLabels[i].setTextColor(Color.WHITE);
                 mSlotLabels[i].setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
             } else if (mSlotCodes[i] != 0) {
                 GradientDrawable d = new GradientDrawable();
                 d.setCornerRadius(dp(ctx, 8));
-                d.setColor(0xFF484848);
-                d.setStroke(dp(ctx, 1), 0xFFA39CB8);
+                d.setColor(HudColors.surfaceHighest);
+                d.setStroke(dp(ctx, 1), HudColors.primarySoft);
                 mSlotLabels[i].setBackground(d);
                 mSlotLabels[i].setTextColor(Color.WHITE);
                 mSlotLabels[i].setTypeface(android.graphics.Typeface.DEFAULT);
             } else {
                 GradientDrawable d = new GradientDrawable();
                 d.setCornerRadius(dp(ctx, 8));
-                d.setColor(0xFF2E2E2E);
-                d.setStroke(dp(ctx, 1), 0x33FFFFFF);
+                d.setColor(HudColors.surfaceLow);
+                d.setStroke(dp(ctx, 1), HudColors.ripple);
                 mSlotLabels[i].setBackground(d);
-                mSlotLabels[i].setTextColor(0xFF888888);
+                mSlotLabels[i].setTextColor(HudColors.textDisabled);
                 mSlotLabels[i].setTypeface(android.graphics.Typeface.DEFAULT);
             }
         }
@@ -193,7 +196,14 @@ public final class ComboBuilderView {
         for (int i = 0; i < MAX_SLOTS; i++) {
             if (mSlotCodes[i] != 0) arr[n++] = mSlotCodes[i];
         }
-        if (n == 0) return;
+        if (n == 0) {
+            // Silent return looked like a dead button; say why nothing happened.
+            if (mPreview != null) {
+                android.widget.Toast.makeText(mPreview.getContext(),
+                        R.string.hud_combo_empty_pick, android.widget.Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
         int[] packed = new int[n];
         System.arraycopy(arr, 0, packed, 0, n);
         HudAction action = HudAction.combo(packed);
@@ -223,7 +233,9 @@ public final class ComboBuilderView {
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
 
-        // Add content directly into host with MATCH_PARENT so weight=1f pins actions at the bottom
+        // No outer ScrollView: it pushed CLEAR / APPLY below the viewport. The key grid keeps
+        // weight=1f and scrolls internally, so the action row stays pinned at the bottom. The key
+        // cells have an explicit height, so they cannot collapse inside the weighted area.
         host.addView(buildContent(ctx), new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
     }
@@ -238,22 +250,23 @@ public final class ComboBuilderView {
         for (int i = 0; i < MAX_SLOTS; i++) {
             TextView slot = new TextView(ctx);
             slot.setText(slotLabel(ctx, i + 1));
+            // Same shape as the Gold build: slim 32dp pill with the label aligned to the start.
             slot.setTextSize(isLandscape ? 11f : 12f);
             slot.setAllCaps(false);
-            slot.setTextColor(0xFF888888);
-            slot.setGravity(Gravity.CENTER);
-            slot.setPadding(dp(ctx, 4), 0, dp(ctx, 4), 0);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(ctx, 36), 1f);
+            slot.setTextColor(HudColors.textDisabled);
+            slot.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+            slot.setPadding(dp(ctx, 10), 0, dp(ctx, 6), 0);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(ctx, 32), 1f);
             if (i > 0) lp.leftMargin = dp(ctx, 6);
             slotRow.addView(slot, lp);
             mSlotLabels[i] = slot;
             final int slotIndex = i;
-            slot.setOnClickListener(v -> {
-                if (mActiveSlot == slotIndex && mSlotCodes[slotIndex] != 0) {
-                    clearSlot(slotIndex);
-                } else {
-                    setActiveSlot(slotIndex);
-                }
+            // Tap always selects the slot. It used to clear a filled active slot, which made the
+            // combo disappear just by touching the slot you were editing.
+            slot.setOnClickListener(v -> setActiveSlot(slotIndex));
+            slot.setOnLongClickListener(v -> {
+                clearSlot(slotIndex);
+                return true;
             });
         }
         refreshActiveSlot();
@@ -278,7 +291,7 @@ public final class ComboBuilderView {
         GradientDrawable thumb = new GradientDrawable();
         thumb.setShape(GradientDrawable.RECTANGLE);
         thumb.setCornerRadius(dp(ctx, 4));
-        thumb.setColor(0xFFA39CB8); // Lilac pastel
+        thumb.setColor(HudColors.primary); // Lilac pastel
         thumb.setSize(dp(ctx, 4), dp(ctx, 36));
         keyScroll.setVerticalScrollbarThumbDrawable(thumb);
 
@@ -315,16 +328,17 @@ public final class ComboBuilderView {
                 k.setTextColor(Color.WHITE);
                 GradientDrawable kBg = new GradientDrawable();
                 kBg.setCornerRadius(dp(ctx, 8));
-                kBg.setColor(0xFF484848);
-                kBg.setStroke(dp(ctx, 1), 0x33FFFFFF);
+                kBg.setColor(HudColors.surfaceHighest);
+                kBg.setStroke(dp(ctx, 1), HudColors.ripple);
                 k.setBackground(kBg);
-                k.setMinHeight(dp(ctx, isLandscape ? 40 : 48));
+                k.setMinHeight(dp(ctx, isLandscape ? 40 : 44));
                 k.setPadding(dp(ctx, 4), dp(ctx, 2), dp(ctx, 4), dp(ctx, 2));
                 k.setSingleLine(true);
                 k.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 k.setGravity(Gravity.CENTER);
                 k.setIncludeFontPadding(false);
-                LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                // Explicit height: minHeight was ignored and every key rendered as a flat pill.
+                LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(0, dp(ctx, isLandscape ? 40 : 44), 1f);
                 if (col > 0) blp.leftMargin = hSpacing;
                 k.setLayoutParams(blp);
                 k.setOnClickListener(v -> {
@@ -350,28 +364,28 @@ public final class ComboBuilderView {
 
         Button btnClear = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
         btnClear.setText(ctx.getString(R.string.hud_combo_clear_all));
-        btnClear.setTextSize(12);
+        btnClear.setTextSize(HudType.LABEL_SP);
         btnClear.setAllCaps(true);
         btnClear.setTextColor(Color.WHITE);
         GradientDrawable clrBg = new GradientDrawable();
         clrBg.setCornerRadius(dp(ctx, 12));
-        clrBg.setColor(0xFF878787); // Grey button
+        clrBg.setColor(HudColors.textDisabled); // Grey button
         btnClear.setBackground(clrBg);
-        btnClear.setMinHeight(dp(ctx, 32));
+        btnClear.setMinHeight(dp(ctx, 40));
         btnClear.setOnClickListener(v -> clear());
         actions.addView(btnClear, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         Button btnApply = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
         btnApply.setText(ctx.getString(R.string.hud_combo_apply));
-        btnApply.setTextSize(12);
+        btnApply.setTextSize(HudType.LABEL_SP);
         btnApply.setAllCaps(true);
         btnApply.setTextColor(Color.WHITE);
         btnApply.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         GradientDrawable appBg = new GradientDrawable();
         appBg.setCornerRadius(dp(ctx, 12));
-        appBg.setColor(0xFFA39CB8); // Lilac pastel
+        appBg.setColor(HudColors.primary); // Lilac pastel
         btnApply.setBackground(appBg);
-        btnApply.setMinHeight(dp(ctx, 32));
+        btnApply.setMinHeight(dp(ctx, 40));
         btnApply.setOnClickListener(v -> commit());
         LinearLayout.LayoutParams alp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         alp.leftMargin = dp(ctx, 8);

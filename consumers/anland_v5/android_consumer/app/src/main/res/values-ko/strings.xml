@@ -265,7 +265,6 @@
     <string name="hud_overlay_layout_cleared">레이아웃 지워짐</string>
     <string name="hud_overlay_add_standard_key_button">표준 키 버튼</string>
     <string name="hud_overlay_add_super_gesture_nub">Super 제스처 넙</string>
-    <string name="hud_overlay_add_trackpoint">TrackPoint (마우스 / 스크롤)</string>
     <string name="hud_overlay_add_steam_deck_trackpad">Steam Deck 트랙패드 (터치패드 / 마우스)</string>
     <string name="hud_overlay_add_scroll_bar">스크롤 바 (세로 / 가로)</string>
     <string name="hud_overlay_add_dpad">방향 패드 (슬라이딩 십자)</string>
@@ -290,7 +289,6 @@
     <string name="hud_overlay_toolbar_exit">종료</string>
     <string name="hud_overlay_label_key">키</string>
     <string name="hud_overlay_label_super">SUPER</string>
-    <string name="hud_overlay_label_mouse">마우스</string>
     <string name="hud_overlay_label_touchpad">터치패드</string>
     <string name="hud_overlay_label_scroll">스크롤</string>
     <string name="hud_overlay_label_dpad">방향 패드</string>
@@ -311,7 +309,6 @@
     <string name="hud_dock_button_properties">독 버튼 속성</string>
     <string name="hud_widget_button">버튼</string>
     <string name="hud_widget_super_gesture">SUPER 제스처</string>
-    <string name="hud_widget_trackpoint">트랙포인트</string>
     <string name="hud_widget_touchpad">터치패드</string>
     <string name="hud_widget_scrollbar">스크롤바</string>
     <string name="hud_widget_dpad">방향 패드</string>

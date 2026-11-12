@@ -93,7 +93,6 @@
     <string name="hud_overlay_layout_cleared">Layout Cleared</string>
     <string name="hud_overlay_add_standard_key_button">Standard Key Button</string>
     <string name="hud_overlay_add_super_gesture_nub">Super Gesture Nub</string>
-    <string name="hud_overlay_add_trackpoint">TrackPoint (Mouse / Scroll)</string>
     <string name="hud_overlay_add_steam_deck_trackpad">Steam Deck Trackpad (Touchpad / Mouse)</string>
     <string name="hud_overlay_add_scroll_bar">Scroll Bar (Vertical / Horizontal)</string>
     <string name="hud_overlay_add_dpad">D-Pad (Sliding Cross)</string>
@@ -118,7 +117,6 @@
     <string name="hud_overlay_toolbar_exit">EXIT</string>
     <string name="hud_overlay_label_key">KEY</string>
     <string name="hud_overlay_label_super">SUPER</string>
-    <string name="hud_overlay_label_mouse">MOUSE</string>
     <string name="hud_overlay_label_touchpad">TOUCHPAD</string>
     <string name="hud_overlay_label_scroll">SCROLL</string>
     <string name="hud_overlay_label_dpad">D-PAD</string>
@@ -329,7 +327,6 @@
     <string name="hud_dock_button_properties">DOCK BUTTON PROPERTIES</string>
     <string name="hud_widget_button">BUTTON</string>
     <string name="hud_widget_super_gesture">SUPER GESTURE</string>
-    <string name="hud_widget_trackpoint">TRACKPOINT</string>
     <string name="hud_widget_touchpad">TOUCHPAD</string>
     <string name="hud_widget_scrollbar">SCROLLBAR</string>
     <string name="hud_widget_dpad">D-PAD</string>

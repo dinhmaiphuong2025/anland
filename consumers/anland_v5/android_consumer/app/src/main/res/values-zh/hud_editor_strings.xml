@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="hud_combo_empty_pick">请至少选择一个按键</string>
+    <string name="hud_combo_summary_empty">还没有按键 — 点击下方按键</string>
+    <string name="hud_editor_reserve_space">预留底部空间</string>
+    <string name="hud_editor_reserve_space_hint">缩小显示区域，按键不会遮住画面</string>
     <string name="hud_editor_snap">吸附</string>
     <string name="hud_editor_snap_on">已开启磁吸</string>
     <string name="hud_editor_snap_off">已关闭磁吸</string>
@@ -32,6 +36,10 @@
     <string name="hud_editor_grid_columns">分列模式</string>
     <string name="hud_editor_grid_rows">分行模式</string>
     <string name="hud_editor_grid_auto">自动</string>
+    <string name="hud_editor_layout_mode">子项布局</string>
+    <string name="hud_editor_layout_grid">网格</string>
+    <string name="hud_editor_layout_free">自由</string>
+    <string name="hud_editor_apply_size_all">应用尺寸到所有按键</string>
     <string name="hud_editor_detached">已移出容器</string>
     <string name="hud_editor_transform">变换</string>
     <string name="hud_editor_label">标签</string>
@@ -96,4 +104,27 @@
     <string name="hud_editor_icon_fullscreen">全屏</string>
     <string name="hud_editor_icon_menu">菜单</string>
     <string name="hud_editor_icon_settings">设置</string>
+    <string name="hud_editor_icon_home">主页</string>
+    <string name="hud_editor_icon_enter">回车</string>
+    <string name="hud_editor_icon_backspace">退格</string>
+    <string name="hud_editor_icon_power">电源</string>
+    <string name="hud_editor_icon_lock">锁定</string>
+    <string name="hud_editor_icon_search">搜索</string>
+    <string name="hud_editor_icon_refresh">刷新</string>
+    <string name="hud_editor_icon_volume_up">音量+</string>
+    <string name="hud_editor_icon_mute">静音</string>
+    <string name="hud_editor_icon_play">播放</string>
+    <string name="hud_editor_icon_pause">暂停</string>
+    <string name="hud_editor_icon_brightness">亮度</string>
+    <string name="hud_editor_icon_window">窗口</string>
+    <string name="hud_editor_icon_browser">浏览器</string>
+    <string name="hud_editor_icon_terminal">终端</string>
+    <string name="hud_editor_icon_editor">编辑器</string>
+    <string name="hud_editor_icon_close">关闭</string>
+    <string name="hud_editor_icon_super">Super</string>
+    <string name="hud_editor_icon_alt">Alt</string>
+    <string name="hud_editor_icon_tab">Tab</string>
+    <string name="hud_editor_icon_desktop">桌面</string>
+    <string name="hud_editor_icon_pointer">指针</string>
+    <string name="hud_editor_icon_hand">手势</string>
 </resources>

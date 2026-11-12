@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="hud_combo_empty_pick">Escolha pelo menos uma tecla</string>
+    <string name="hud_combo_summary_empty">Nenhuma tecla ainda - toque em uma abaixo</string>
+    <string name="hud_editor_reserve_space">Reservar espaço inferior</string>
+    <string name="hud_editor_reserve_space_hint">Reduz a tela para as teclas não cobrirem o conteúdo</string>
+    <string name="hud_editor_layout_mode">Layout dos filhos</string>
+    <string name="hud_editor_layout_grid">Grade</string>
+    <string name="hud_editor_layout_free">Livre</string>
+    <string name="hud_editor_apply_size_all">Aplicar tamanho a todas as teclas</string>
     <string name="hud_editor_snap">Encaixe</string>
     <string name="hud_editor_snap_on">Encaixe magnético ativado</string>
     <string name="hud_editor_snap_off">Encaixe magnético desativado</string>
@@ -90,4 +98,27 @@
     <string name="hud_editor_icon_fullscreen">Tela cheia</string>
     <string name="hud_editor_icon_menu">Menu</string>
     <string name="hud_editor_icon_settings">Configurações</string>
+    <string name="hud_editor_icon_home">Início</string>
+    <string name="hud_editor_icon_enter">Enter</string>
+    <string name="hud_editor_icon_backspace">Backspace</string>
+    <string name="hud_editor_icon_power">Energia</string>
+    <string name="hud_editor_icon_lock">Bloquear</string>
+    <string name="hud_editor_icon_search">Pesquisar</string>
+    <string name="hud_editor_icon_refresh">Atualizar</string>
+    <string name="hud_editor_icon_volume_up">Vol +</string>
+    <string name="hud_editor_icon_mute">Mudo</string>
+    <string name="hud_editor_icon_play">Reproduzir</string>
+    <string name="hud_editor_icon_pause">Pausar</string>
+    <string name="hud_editor_icon_brightness">Brilho</string>
+    <string name="hud_editor_icon_window">Janela</string>
+    <string name="hud_editor_icon_browser">Navegador</string>
+    <string name="hud_editor_icon_terminal">Terminal</string>
+    <string name="hud_editor_icon_editor">Editor</string>
+    <string name="hud_editor_icon_close">Fechar</string>
+    <string name="hud_editor_icon_super">Super</string>
+    <string name="hud_editor_icon_alt">Alt</string>
+    <string name="hud_editor_icon_tab">Tab</string>
+    <string name="hud_editor_icon_desktop">Área de trabalho</string>
+    <string name="hud_editor_icon_pointer">Ponteiro</string>
+    <string name="hud_editor_icon_hand">Mão</string>
 </resources>

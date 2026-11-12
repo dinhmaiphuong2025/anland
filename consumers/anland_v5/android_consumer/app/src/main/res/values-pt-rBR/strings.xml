@@ -233,7 +233,6 @@
     <string name="hud_overlay_layout_cleared">Layout Limpo</string>
     <string name="hud_overlay_add_standard_key_button">Botão de Tecla Padrão</string>
     <string name="hud_overlay_add_super_gesture_nub">Nub de Gesto Super</string>
-    <string name="hud_overlay_add_trackpoint">TrackPoint (Mouse / Rolagem)</string>
     <string name="hud_overlay_add_steam_deck_trackpad">Trackpad do Steam Deck (Touchpad / Mouse)</string>
     <string name="hud_overlay_add_scroll_bar">Barra de Rolagem (Vertical / Horizontal)</string>
     <string name="hud_overlay_add_dpad">D-Pad (Cruz Deslizante)</string>
@@ -258,7 +257,6 @@
     <string name="hud_overlay_toolbar_exit">SAIR</string>
     <string name="hud_overlay_label_key">TECLA</string>
     <string name="hud_overlay_label_super">SUPER</string>
-    <string name="hud_overlay_label_mouse">MOUSE</string>
     <string name="hud_overlay_label_touchpad">TOUCHPAD</string>
     <string name="hud_overlay_label_scroll">ROLAGEM</string>
     <string name="hud_overlay_label_dpad">D-PAD</string>
@@ -324,7 +322,6 @@
     <string name="hud_dock_button_properties">PROPRIEDADES DO BOTÃO DA DOCA</string>
     <string name="hud_widget_button">BOTÃO</string>
     <string name="hud_widget_super_gesture">GESTO SUPER</string>
-    <string name="hud_widget_trackpoint">TRACKPOINT</string>
     <string name="hud_widget_touchpad">TOUCHPAD</string>
     <string name="hud_widget_scrollbar">BARRA DE ROLAGEM</string>
     <string name="hud_widget_dpad">D-PAD</string>

@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="hud_combo_empty_pick">請至少選擇一個按鍵</string>
+    <string name="hud_combo_summary_empty">還沒有按鍵 — 點擊下方按鍵</string>
+    <string name="hud_editor_reserve_space">預留底部空間</string>
+    <string name="hud_editor_reserve_space_hint">縮小顯示區域，按鍵不會遮住畫面</string>
+    <string name="hud_editor_layout_mode">子項佈局</string>
+    <string name="hud_editor_layout_grid">網格</string>
+    <string name="hud_editor_layout_free">自由</string>
+    <string name="hud_editor_apply_size_all">套用尺寸到所有按鍵</string>
     <string name="hud_editor_snap">吸附</string>
     <string name="hud_editor_snap_on">已開啟磁吸</string>
     <string name="hud_editor_snap_off">已關閉磁吸</string>
@@ -90,4 +98,27 @@
     <string name="hud_editor_icon_fullscreen">全螢幕</string>
     <string name="hud_editor_icon_menu">選單</string>
     <string name="hud_editor_icon_settings">設定</string>
+    <string name="hud_editor_icon_home">主頁</string>
+    <string name="hud_editor_icon_enter">Enter</string>
+    <string name="hud_editor_icon_backspace">退格</string>
+    <string name="hud_editor_icon_power">電源</string>
+    <string name="hud_editor_icon_lock">鎖定</string>
+    <string name="hud_editor_icon_search">搜尋</string>
+    <string name="hud_editor_icon_refresh">重新整理</string>
+    <string name="hud_editor_icon_volume_up">音量+</string>
+    <string name="hud_editor_icon_mute">靜音</string>
+    <string name="hud_editor_icon_play">播放</string>
+    <string name="hud_editor_icon_pause">暫停</string>
+    <string name="hud_editor_icon_brightness">亮度</string>
+    <string name="hud_editor_icon_window">視窗</string>
+    <string name="hud_editor_icon_browser">瀏覽器</string>
+    <string name="hud_editor_icon_terminal">終端機</string>
+    <string name="hud_editor_icon_editor">編輯器</string>
+    <string name="hud_editor_icon_close">關閉</string>
+    <string name="hud_editor_icon_super">Super</string>
+    <string name="hud_editor_icon_alt">Alt</string>
+    <string name="hud_editor_icon_tab">Tab</string>
+    <string name="hud_editor_icon_desktop">桌面</string>
+    <string name="hud_editor_icon_pointer">指標</string>
+    <string name="hud_editor_icon_hand">手勢</string>
 </resources>

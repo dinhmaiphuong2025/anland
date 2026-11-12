@@ -1,7 +1,12 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.widget.HudBackArrowView;
+
+import com.anland.consumer.hud.design.HudColors;
+
+import com.anland.consumer.hud.design.HudType;
+
 import com.anland.consumer.R;
-import com.anland.consumer.theme.M3;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.graphics.Color;
@@ -80,8 +85,8 @@ public final class HudKeyPickerDialog {
         root.setPadding(dp(context, 16), dp(context, 14), dp(context, 16), dp(context, 14));
         GradientDrawable rootBg = new GradientDrawable();
         rootBg.setCornerRadius(dp(context, 20));
-        rootBg.setColor(0xFF484848); // Charcoal Alight Motion
-        rootBg.setStroke(dp(context, 1), 0x33FFFFFF);
+        rootBg.setColor(HudColors.surfaceHighest); // Charcoal Alight Motion
+        rootBg.setStroke(dp(context, 1), HudColors.ripple);
         root.setBackground(rootBg);
 
         // Header Row: Back Button on left + Tabs in the middle + Title/Slots
@@ -100,20 +105,20 @@ public final class HudKeyPickerDialog {
         btnBack.setGravity(Gravity.CENTER_VERTICAL);
         GradientDrawable backBg = new GradientDrawable();
         backBg.setCornerRadius(dp(context, 10));
-        backBg.setColor(0xFF3A3A3A);
-        backBg.setStroke(dp(context, 1), 0x33FFFFFF);
+        backBg.setColor(HudColors.surface);
+        backBg.setStroke(dp(context, 1), HudColors.ripple);
         btnBack.setBackground(backBg);
         btnBack.setPadding(dp(context, 8), dp(context, 4), dp(context, 10), dp(context, 4));
         btnBack.setClickable(true);
         btnBack.setOnClickListener(v -> dialog.dismiss());
 
-        M3.BackArrowView backArrow = new M3.BackArrowView(context);
+        HudBackArrowView backArrow = new HudBackArrowView(context);
         backArrow.setColor(Color.WHITE);
         btnBack.addView(backArrow);
 
         TextView backText = new TextView(context);
         backText.setText(context.getString(R.string.hud_picker_back));
-        backText.setTextSize(11.5f);
+        backText.setTextSize(HudType.CAPTION_SP);
         backText.setTypeface(Typeface.DEFAULT_BOLD);
         backText.setTextColor(Color.WHITE);
         backText.setPadding(dp(context, 6), 0, 0, 0);
@@ -147,14 +152,14 @@ public final class HudKeyPickerDialog {
         // Search filter input
         EditText searchInput = new EditText(context);
         searchInput.setHint(context.getString(R.string.hud_picker_search));
-        searchInput.setHintTextColor(0xFF888888);
+        searchInput.setHintTextColor(HudColors.textDisabled);
         searchInput.setTextColor(Color.WHITE);
-        searchInput.setTextSize(12);
+        searchInput.setTextSize(HudType.LABEL_SP);
         searchInput.setSingleLine(true);
         GradientDrawable sBg = new GradientDrawable();
         sBg.setCornerRadius(dp(context, 8));
-        sBg.setColor(0xFF3A3A3A);
-        sBg.setStroke(dp(context, 1), 0x33FFFFFF);
+        sBg.setColor(HudColors.surface);
+        sBg.setStroke(dp(context, 1), HudColors.ripple);
         searchInput.setBackground(sBg);
         searchInput.setPadding(dp(context, 10), dp(context, 4), dp(context, 10), dp(context, 4));
         subHeader.addView(searchInput, new FrameLayout.LayoutParams(
@@ -285,8 +290,8 @@ public final class HudKeyPickerDialog {
     private static Button createTabButton(Context ctx, String text) {
         Button b = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
         b.setText(text);
-        b.setTextSize(11.5f);
-        b.setTextColor(0xFFC3C3CD);
+        b.setTextSize(HudType.CAPTION_SP);
+        b.setTextColor(HudColors.textMuted);
         b.setPadding(dp(ctx, 4), dp(ctx, 4), dp(ctx, 4), dp(ctx, 4));
         b.setBackgroundColor(Color.TRANSPARENT);
         b.setAllCaps(true);
@@ -310,10 +315,10 @@ public final class HudKeyPickerDialog {
                 b.setTypeface(Typeface.DEFAULT_BOLD);
                 GradientDrawable tabBg = new GradientDrawable();
                 tabBg.setCornerRadius(dp(b.getContext(), 12));
-                tabBg.setColor(0xFFA39CB8); // Lilac pastel Alight Motion
+                tabBg.setColor(HudColors.primary); // Lilac pastel Alight Motion
                 b.setBackground(tabBg);
             } else {
-                b.setTextColor(0xFFC3C3CD);
+                b.setTextColor(HudColors.textMuted);
                 b.setTypeface(Typeface.DEFAULT);
                 b.setBackgroundColor(Color.TRANSPARENT);
             }
@@ -343,7 +348,7 @@ public final class HudKeyPickerDialog {
         GradientDrawable thumb = new GradientDrawable();
         thumb.setShape(GradientDrawable.RECTANGLE);
         thumb.setCornerRadius(dp(ctx, 4));
-        thumb.setColor(0xFFA39CB8); // Lilac pastel
+        thumb.setColor(HudColors.primary); // Lilac pastel
         thumb.setSize(dp(ctx, 4), dp(ctx, 36));
         scroll.setVerticalScrollbarThumbDrawable(thumb);
 
@@ -381,18 +386,21 @@ public final class HudKeyPickerDialog {
                 btn.setTextColor(Color.WHITE);
                 GradientDrawable btnBg = new GradientDrawable();
                 btnBg.setCornerRadius(dp(ctx, 8));
-                btnBg.setColor(0xFF484848); // Charcoal button matching modifier
-                btnBg.setStroke(dp(ctx, 1), 0x33FFFFFF);
+                btnBg.setColor(HudColors.surfaceHighest); // Charcoal button matching modifier
+                btnBg.setStroke(dp(ctx, 1), HudColors.ripple);
                 btn.setBackground(btnBg);
                 btn.setPadding(dp(ctx, 4), dp(ctx, 2), dp(ctx, 4), dp(ctx, 2));
-                btn.setMinHeight(dp(ctx, isLandscape ? 40 : 48));
+                // Touch-sized cells: 40dp read as squashed rows on a phone in landscape.
+                btn.setMinHeight(dp(ctx, isLandscape ? 40 : 44));
                 btn.setSingleLine(true);
                 btn.setEllipsize(android.text.TextUtils.TruncateAt.END);
                 btn.setGravity(Gravity.CENTER);
                 btn.setIncludeFontPadding(false);
                 btn.setTextSize(isLandscape ? 11f : 12f);
+                // Explicit height: the platform Button style kept collapsing wrap_content to a
+                // flat pill, and minHeight alone was not honoured under this dialog theme.
                 LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
-                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                        0, dp(ctx, isLandscape ? 40 : 44), 1f);
                 if (col > 0) btnLp.leftMargin = hSpacing;
                 btn.setLayoutParams(btnLp);
                 btn.setOnClickListener(v -> {
