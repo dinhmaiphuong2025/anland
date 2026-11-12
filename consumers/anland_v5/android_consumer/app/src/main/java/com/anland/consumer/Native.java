@@ -15,11 +15,26 @@ import android.view.Surface;
  * argument; the public wrappers below thread it in. Call {@link #destroy()} when the
  * window is torn down.
  */
-public final class Native {
+/**
+ * JNI bridge to the Anland daemon.
+ *
+ * NOTE: {@code NoopNative} stubs every public method of this class for the editor-only (no
+ * daemon) mode. When you add a public method here, add the matching override in NoopNative —
+ * otherwise offline mode calls JNI with a zero handle and crashes.
+ */
+public class Native {
     private long handle;
 
     public Native() {
         handle = nativeCreate();
+    }
+
+    /**
+     * For hosts that must exist without a native pipeline (the offline HUD editor): the subclass
+     * overrides every member, so no native instance is allocated.
+     */
+    protected Native(boolean allocateNative) {
+        if (allocateNative) handle = nativeCreate();
     }
 
     /** Release the native instance. Idempotent; the object is unusable afterwards. */

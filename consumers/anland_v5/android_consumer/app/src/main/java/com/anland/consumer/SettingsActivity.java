@@ -910,7 +910,28 @@ public class SettingsActivity extends Activity {
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit()
                     .putBoolean(KEY_USE_HUD_OVERLAY, true)
                     .apply();
-            startActivity(new Intent(this, HudEditorActivity.class));
+            DesktopWindows.Editor editor = DesktopWindows.editor();
+            if (editor != null) {
+                // Edit on the desktop that is already on screen (primary or secondary window).
+                // Launching MainActivity here would focus or create the primary window instead,
+                // i.e. a different session showing no desktop.
+                Activity desktop = DesktopWindows.window();
+                if (desktop != null) {
+                    android.app.ActivityManager am =
+                            (android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+                    if (am != null) am.moveTaskToFront(desktop.getTaskId(), 0);
+                }
+                editor.enterHudEditor();
+                finish();
+            } else {
+                // No desktop running: open the same window in editor-only mode. There is one
+                // editor implementation, so the offline door cannot drift from the live one.
+                Intent editorOnly = new Intent(this, MainActivity.class);
+                editorOnly.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                editorOnly.putExtra(MainActivity.EXTRA_EDIT_HUD, true);
+                startActivity(editorOnly);
+                finish();
+            }
         });
         root.addView(editHudButton, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));

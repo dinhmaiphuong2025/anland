@@ -1,6 +1,7 @@
 package com.anland.consumer;
 
 import android.Manifest;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.Notification;
@@ -37,6 +38,7 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.view.animation.DecelerateInterpolator;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.FrameLayout;
 import android.util.DisplayMetrics;   // ADDED
@@ -45,9 +47,12 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 public class MainActivity extends Activity
-        implements SurfaceHolder.Callback, SystemIME.Host, ImmersiveMode.Host {
+        implements SurfaceHolder.Callback, SystemIME.Host, ImmersiveMode.Host,
+        DesktopWindows.Editor {
     private static final String TAG = "Anland";
     private static final String KEY_USE_HUD_OVERLAY = "use_hud_overlay";
+    /** Opens this window straight into the HUD editor, even without a daemon. */
+    public static final String EXTRA_EDIT_HUD = "com.anland.consumer.extra.EDIT_HUD";
 
     private SurfaceView surfaceView;
     private boolean surfaceReady = false;
@@ -142,6 +147,9 @@ public class MainActivity extends Activity
     // Set when onCreate found the target socket missing and bounced to Settings
     // (no pipeline was ever initialized). Makes onPause/onResume no-op-and-exit.
     private boolean mForceSettings = false;
+    // True when this window runs the HUD editor with no daemon: the same window, the same
+    // overlay, only the pipeline is a no-op. There is no second editor Activity any more.
+    private boolean mEditorOnly = false;
     private static final String KEY_ACCESSIBILITY_ENABLED = "accessibility_key_intercept";
     // Linux input-event-codes.h: KEY_BACK (the browser-back key).
     // When on, the soft keyboard floats over the display instead of shrinking
@@ -159,7 +167,13 @@ public class MainActivity extends Activity
     private SystemIME systemIme;
     private int mImeBottom = 0;   // last IME bottom inset
     private com.anland.consumer.hud.HudOverlayView mHudOverlay;
+    // Edit-mode keyboard layer toggle, same control the standalone editor toolbar exposed:
+    // the floating keyboard owns the second HUD layer, so its layout is dragged here.
+    private View mEditorLayerButton;
+    private boolean mEditorKeyboardLayer = false;
     private FrameLayout mRoot;    // content root, host of the HUD overlay
+    // Animates the surface bottom inset so IME / reserved-bar changes slide instead of snapping.
+    private ValueAnimator mBottomInsetAnimator;
     // Pointer ids of the grabbed evdev stream that belong to the HUD or the
     // floating keyboard rather than to the desktop.
     private final java.util.HashSet<Integer> grabbedOverlayPointers = new java.util.HashSet<>();
@@ -411,6 +425,7 @@ public class MainActivity extends Activity
     // socket is still a live socket. The daemon can go down after launch, so
     // re-check on every (re)connect; if it is gone, report it and exit the window.
     private void startNative(android.view.Surface surface) {
+        if (mEditorOnly) return;
         if (!isSocketFile(resolveSocketPath())) {
             android.widget.Toast.makeText(this, "Deamon Down",
                     android.widget.Toast.LENGTH_SHORT).show();
@@ -678,6 +693,81 @@ public class MainActivity extends Activity
         mRegisteredSocket = sock;
     }
 
+    /**
+     * Opens the HUD editor on this window. Settings calls this on the window that is actually
+     * on screen, so the editor always lands on the running desktop instead of a fresh session.
+     */
+    @Override
+    public void enterHudEditor() {
+        if (mHudOverlay == null) return;
+        // Same entry point as the bound open_editor key: reload, drop stale selection, edit.
+        mHudOverlay.openEditor();
+        mHudOverlay.post(this::installEditorKeyboardLayer);
+    }
+
+    /**
+     * Restores the keyboard layer toggle the standalone editor toolbar used to carry. The
+     * floating keyboard holds the second HUD layer, so its split halves are dragged from here
+     * instead of from a separate Activity (which no longer opens while a desktop is running).
+     */
+    private void installEditorKeyboardLayer() {
+        if (mHudOverlay == null || virtualKeyboardView == null) return;
+        virtualKeyboardView.setSplitDragEnabled(true);
+        if (mEditorLayerButton == null) {
+            mEditorLayerButton = mHudOverlay.addToolbarButton(
+                    getString(R.string.keyboard_layer_to_keyboard),
+                    com.anland.consumer.hud.HudVectorIcons.ICON_KEYBOARD,
+                    () -> setEditorKeyboardLayer(!mEditorKeyboardLayer));
+        }
+        updateEditorLayerButton();
+    }
+
+    private void setEditorKeyboardLayer(boolean keyboardLayer) {
+        if (mHudOverlay == null || virtualKeyboardView == null) return;
+        mEditorKeyboardLayer = keyboardLayer;
+        if (keyboardLayer) {
+            virtualKeyboardView.updateScreenSize();
+            virtualKeyboardView.bringToFront();
+            positionVirtualKeyboard();
+            virtualKeyboardView.setVisibility(View.VISIBLE);
+            virtualKeyboardView.refreshKeyboardPreferences();
+        } else {
+            virtualKeyboardView.setVisibility(View.GONE);
+        }
+        // setLayer() rebuilds the active layout, so each layer shows its own widgets.
+        mHudOverlay.setLayer(keyboardLayer
+                ? com.anland.consumer.hud.HudOverlayView.LAYER_KEYBOARD
+                : com.anland.consumer.hud.HudOverlayView.LAYER_HUD);
+        mHudOverlay.setVisibility(View.VISIBLE);
+        updateEditorLayerButton();
+    }
+
+    private void updateEditorLayerButton() {
+        if (mEditorLayerButton == null || mHudOverlay == null) return;
+        mHudOverlay.updateToolbarButtonIcon(mEditorLayerButton,
+                mEditorKeyboardLayer
+                        ? com.anland.consumer.hud.HudVectorIcons.ICON_KEYBOARD_OFF
+                        : com.anland.consumer.hud.HudVectorIcons.ICON_KEYBOARD,
+                getString(mEditorKeyboardLayer
+                        ? R.string.keyboard_layer_to_hud
+                        : R.string.keyboard_layer_to_keyboard));
+    }
+
+    /** Leaving the editor drops the keyboard layer so runtime visibility rules take over. */
+    private void exitEditorKeyboardLayer() {
+        mEditorKeyboardLayer = false;
+        if (virtualKeyboardView != null) {
+            virtualKeyboardView.setSplitDragEnabled(false);
+            if (virtualKeyboardView.getVisibility() == View.VISIBLE) {
+                virtualKeyboardView.setVisibility(View.GONE);
+            }
+        }
+        if (mHudOverlay != null) {
+            mHudOverlay.setLayer(com.anland.consumer.hud.HudOverlayView.LAYER_HUD);
+        }
+        applyHudVisibility();
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -712,6 +802,8 @@ public class MainActivity extends Activity
         // pipeline. If it is not: a parameter launch has nowhere to fall back to
         // (toast and quit); a plain launcher start bounces to Settings so the user
         // can fix the path.
+        boolean wantsEditor = getIntent() != null
+                && getIntent().getBooleanExtra(EXTRA_EDIT_HUD, false);
         if (!isSocketFile(resolveSocketPath())) {
             if (mSocketOverride != null) {
                 android.widget.Toast.makeText(this, "Socket Not Found",
@@ -719,15 +811,22 @@ public class MainActivity extends Activity
                 finishAndRemoveTask();
                 return;
             }
-            mForceSettings = true;
-            startActivity(new Intent(this, SettingsActivity.class));
-            return;
+            if (!wantsEditor) {
+                // No pipeline can run without the socket, so bounce to Settings and let the
+                // user fix the path there.
+                mForceSettings = true;
+                startActivity(new Intent(this, SettingsActivity.class));
+                return;
+            }
+            // Editing was requested: keep this window and run it without a pipeline.
+            mEditorOnly = true;
         }
 
         sInstance = this;
 
-        // Each window owns its own native pipeline.
-        mNative = new Native();
+        // Each window owns its own native pipeline. Offline the calls go to a no-op instance, so
+        // no call site needs a null check and nothing has to remember the offline case.
+        mNative = mEditorOnly ? new NoopNative() : new Native();
         setTaskDescription(new ActivityManager.TaskDescription(mWindowName));
 
         clipboard = new Clipboard(this, mNative);
@@ -859,16 +958,28 @@ public class MainActivity extends Activity
             @Override public void onLayoutSaved() {
                 if (mRoot != null) relayout();
             }
+            @Override public void onHudInsetsChanged() {
+                // A reserved bottom bar moved, appeared or was lifted by the IME: the surface
+                // has to follow, otherwise it stays hidden behind the keys.
+                relayout();
+            }
             @Override public boolean isNativeReady() {
                 return mNative != null && surfaceReady;
             }
-            @Override public void onEditModeExited() {}
+            @Override public void onEditModeExited() {
+                exitEditorKeyboardLayer();
+            }
         });
         root.addView(mHudOverlay, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
         mHudOverlay.post(() -> {
-            if (mHudOverlay != null) mHudOverlay.rebuildActiveLayout();
+            if (mHudOverlay == null) return;
+            mHudOverlay.rebuildActiveLayout();
+            if (mEditorOnly) {
+                mHudOverlay.openEditor();
+                installEditorKeyboardLayer();
+            }
         });
 
         // ADDED: Create VirtualKeyboardView (hidden initially)
@@ -1861,6 +1972,10 @@ public class MainActivity extends Activity
             return;
         }
 
+        // Publish this window as the one Settings should edit on. SecondaryActivity inherits
+        // this, so whichever desktop window is on screen wins.
+        DesktopWindows.onResumed(this);
+
         tabletInputManager = getSystemService(InputManager.class);
         if (tabletInputManager != null && !tabletDeviceListenerRegistered) {
             tabletInputManager.registerInputDeviceListener(tabletDeviceListener, lifecycleHandler);
@@ -2243,32 +2358,70 @@ public class MainActivity extends Activity
             cancelOverlayTouches();
         }
         mHudOverlay.setVisibility(next);
+        // A reserved bottom bar changes how much of the surface must stay clear.
+        relayout();
     }
 
     // Recompute the surface bottom margin from the current IME inset.
     // Floating mode: the soft keyboard overlays the display, so the surface
     // keeps its full size (target 0). Default mode: shrink it above the IME.
     private void relayout() {
-        int target = mKeyboardFloating ? 0 : mImeBottom;
+        applySurfaceBottomInset(computeSurfaceBottomInset(), true);
+    }
 
-        FrameLayout.LayoutParams lp =
-            (FrameLayout.LayoutParams) surfaceView.getLayoutParams();
-        
+    /**
+     * How much the surface must stay clear of the bottom edge: the IME inset, or the strip a
+     * HUD bar has claimed by reserving space — whichever reaches higher.
+     */
+    private int computeSurfaceBottomInset() {
+        int ime = mKeyboardFloating ? 0 : mImeBottom;
+        int reserved = mHudOverlay != null ? mHudOverlay.getReservedBottomPx() : 0;
+        return Math.max(ime, reserved);
+    }
+
+    /**
+     * Apply the bottom inset now or with a short slide. Animating it is what makes the soft
+     * keyboard opening/closing (and a reserved key bar appearing) look continuous instead of the
+     * surface snapping to its new size in one frame.
+     */
+    private void applySurfaceBottomInset(int target, boolean animate) {
+        if (surfaceView == null) return;
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) surfaceView.getLayoutParams();
+        if (lp == null) return;
+        if (mBottomInsetAnimator != null) {
+            mBottomInsetAnimator.cancel();
+            mBottomInsetAnimator = null;
+        }
+        int current = lp.bottomMargin;
+        if (!animate || current == target) {
+            setSurfaceBottomMargin(target);
+            return;
+        }
+        ValueAnimator animator = ValueAnimator.ofInt(current, target);
+        animator.setDuration(180L);
+        animator.setInterpolator(new DecelerateInterpolator());
+        animator.addUpdateListener(a -> setSurfaceBottomMargin((int) a.getAnimatedValue()));
+        mBottomInsetAnimator = animator;
+        animator.start();
+    }
+
+    private void setSurfaceBottomMargin(int inset) {
+        if (surfaceView == null) return;
+        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) surfaceView.getLayoutParams();
+        if (lp == null) return;
+        if (lp.bottomMargin == inset) return;
         if (autoStretch) {
             lp.width = FrameLayout.LayoutParams.MATCH_PARENT;
             lp.height = FrameLayout.LayoutParams.MATCH_PARENT;
             lp.gravity = Gravity.NO_GRAVITY;
             lp.leftMargin = 0;
             lp.topMargin = 0;
-            if (lp.bottomMargin != target) {
-                lp.bottomMargin = target;
-                surfaceView.setLayoutParams(lp);
-            }
+            lp.bottomMargin = inset;
+            surfaceView.setLayoutParams(lp);
         } else {
-            lp.bottomMargin = target;
+            lp.bottomMargin = inset;
             adjustSurfaceViewLayout(lp);
         }
-        
     }
     
     private void adjustSurfaceViewLayout(FrameLayout.LayoutParams lp) {
