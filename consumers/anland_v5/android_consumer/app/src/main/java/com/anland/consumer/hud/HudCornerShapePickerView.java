@@ -1,5 +1,11 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.HudColors;
+
+import com.anland.consumer.hud.design.HudType;
+
+import com.anland.consumer.hud.design.HudChrome;
+
 import android.content.Context;
 import com.anland.consumer.R;
 import android.graphics.Canvas;
@@ -31,12 +37,12 @@ public final class HudCornerShapePickerView extends LinearLayout {
         void onShapeSelected(int shape);
     }
 
-    private static final int BG_NORMAL = 0xFF3A3A3A;
-    private static final int BG_ACTIVE = 0xFF4E495C;
-    private static final int STROKE_NORMAL = 0xFF5A5A5A;
-    private static final int STROKE_ACTIVE = 0xFF80DEEA; // Cyan accent
-    private static final int SHAPE_NORMAL = 0xFFD2D2DC;
-    private static final int SHAPE_ACTIVE = 0xFFA39CB8; // Lilac pastel
+    private static final int BG_NORMAL = HudColors.surface;
+    private static final int BG_ACTIVE = HudColors.primaryDeep;
+    private static final int STROKE_NORMAL = HudColors.outlineMuted;
+    private static final int STROKE_ACTIVE = HudColors.primary; // Lilac accent
+    private static final int SHAPE_NORMAL = HudColors.textMuted;
+    private static final int SHAPE_ACTIVE = HudColors.primary; // Lilac pastel
 
     private final ShapeCardView[] mCards = new ShapeCardView[10];
     private int mSelectedShape = HudButton.CORNER_ALL;
@@ -165,7 +171,7 @@ public final class HudCornerShapePickerView extends LinearLayout {
 
             mTitleView = new TextView(context);
             mTitleView.setText(title);
-            mTitleView.setTextSize(9);
+            mTitleView.setTextSize(HudType.MICRO_SP);
             mTitleView.setGravity(Gravity.CENTER);
             mTitleView.setSingleLine(true);
             mTitleView.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -180,7 +186,7 @@ public final class HudCornerShapePickerView extends LinearLayout {
         public void setSelected(boolean selected) {
             super.setSelected(selected);
             updateCardBackground(selected);
-            mTitleView.setTextColor(selected ? Color.WHITE : 0xFFC3C3CD);
+            mTitleView.setTextColor(selected ? Color.WHITE : HudColors.textMuted);
             mIconPreview.setActive(selected);
         }
 
@@ -222,7 +228,7 @@ public final class HudCornerShapePickerView extends LinearLayout {
 
             mBounds.set(1, 1, w - 1, h - 1);
             float r = Math.min(w, h) * 0.45f;
-            HudFreeformButtonView.computeRadii(mShape, r, mRadii);
+            HudChrome.computeRadii(mShape, r, mRadii);
 
             mPath.reset();
             mPath.addRoundRect(mBounds, mRadii, Path.Direction.CW);

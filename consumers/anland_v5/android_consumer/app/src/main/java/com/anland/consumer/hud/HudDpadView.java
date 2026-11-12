@@ -1,5 +1,7 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.HudColors;
+
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -92,8 +94,8 @@ public final class HudDpadView extends View {
         float cy = h * 0.5f;
         float minDim = Math.min(w, h);
         float radius = minDim * 0.5f - 2f * density;
-        int activeAccent = mModel.activeColor != 0 ? mModel.activeColor : 0xFFA39CB8;
-        int baseBg = mModel.bgColor != 0 ? mModel.bgColor : 0xFF424242;
+        int activeAccent = mModel.activeColor != 0 ? mModel.activeColor : HudColors.primary;
+        int baseBg = mModel.bgColor != 0 ? mModel.bgColor : HudColors.surfaceHigh;
 
         // 1. Outer Circular Bezel / Dish
         mPaint.setStyle(Paint.Style.FILL);
@@ -101,7 +103,7 @@ public final class HudDpadView extends View {
 
         if (variant == 2) {
             // Outlined Floating (Minimalist Transparent)
-            mPaint.setColor(0x00000000);
+            mPaint.setColor(Color.TRANSPARENT);
         } else {
             mPaint.setColor(baseBg);
         }
@@ -120,7 +122,7 @@ public final class HudDpadView extends View {
         if (variant == 1) {
             float innerBevelR = radius * 0.88f;
             mPaint.setStrokeWidth(1.0f * density);
-            mPaint.setColor(0x33FFFFFF);
+            mPaint.setColor(HudColors.ripple);
             canvas.drawCircle(cx, cy, innerBevelR, mPaint);
         }
 
@@ -132,7 +134,7 @@ public final class HudDpadView extends View {
         // Draw Vertical Cross Bar
         mArmRect.set(cx - armWidth * 0.5f, cy - armLength, cx + armWidth * 0.5f, cy + armLength);
         mArmPaint.setStyle(Paint.Style.FILL);
-        mArmPaint.setColor(0x33000000);
+        mArmPaint.setColor(HudColors.surfaceTint);
         canvas.drawRoundRect(mArmRect, armCorner, armCorner, mArmPaint);
 
         // Draw Horizontal Cross Bar
@@ -156,7 +158,7 @@ public final class HudDpadView extends View {
         // Cross Arm Outlines
         mArmPaint.setStyle(Paint.Style.STROKE);
         mArmPaint.setStrokeWidth(1.2f * density);
-        mArmPaint.setColor(0x44FFFFFF);
+        mArmPaint.setColor(HudColors.withAlpha(HudColors.textPrimary, 0x44));
         mArmRect.set(cx - armWidth * 0.5f, cy - armLength, cx + armWidth * 0.5f, cy + armLength);
         canvas.drawRoundRect(mArmRect, armCorner, armCorner, mArmPaint);
         mArmRect.set(cx - armLength, cy - armWidth * 0.5f, cx + armLength, cy + armWidth * 0.5f);
@@ -178,16 +180,16 @@ public final class HudDpadView extends View {
         // 4. Center Concave Pivot Dish
         float pivotR = armWidth * 0.36f;
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mIsPressed ? 0x6622283A : 0xDD1B1D2B);
+        mPaint.setColor(mIsPressed ? HudColors.surfaceInset : HudColors.surfaceInsetDeep);
         canvas.drawCircle(cx, cy, pivotR, mPaint);
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(1.2f * density);
-        mPaint.setColor(mIsPressed ? activeAccent : 0x4480DEEA);
+        mPaint.setColor(mIsPressed ? activeAccent : HudColors.withAlpha(HudColors.primary, 0x44));
         canvas.drawCircle(cx, cy, pivotR, mPaint);
 
         // Center jewel dot
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mIsPressed ? activeAccent : 0x66FFFFFF);
+        mPaint.setColor(mIsPressed ? activeAccent : HudColors.withAlpha(HudColors.textPrimary, 0x66));
         canvas.drawCircle(cx, cy, 3f * density, mPaint);
     }
 
@@ -212,7 +214,7 @@ public final class HudDpadView extends View {
         canvas.save();
         canvas.translate(cx, cy);
         canvas.rotate(rotation);
-        mArrowPaint.setColor(active ? activeColor : 0xDDFFFFFF);
+        mArrowPaint.setColor(active ? activeColor : HudColors.withAlpha(HudColors.textPrimary, 0xDD));
         canvas.drawPath(path, mArrowPaint);
         canvas.restore();
     }

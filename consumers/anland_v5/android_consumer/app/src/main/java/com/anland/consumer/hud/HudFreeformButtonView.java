@@ -1,5 +1,10 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.HudColors;
+
+import com.anland.consumer.hud.design.HudChrome;
+import com.anland.consumer.hud.design.HudType;
+
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -129,47 +134,6 @@ public final class HudFreeformButtonView extends View {
         mRepeatHandler.removeCallbacks(mRepeatTick);
     }
 
-    public static void computeRadii(int shape, float r, float[] outRadii) {
-        // [Top-Left x, y, Top-Right x, y, Bottom-Right x, y, Bottom-Left x, y]
-        java.util.Arrays.fill(outRadii, 0f);
-        switch (shape) {
-            case HudButton.CORNER_TOP_LEFT:
-                outRadii[0] = r; outRadii[1] = r;
-                break;
-            case HudButton.CORNER_TOP_RIGHT:
-                outRadii[2] = r; outRadii[3] = r;
-                break;
-            case HudButton.CORNER_BOTTOM_LEFT:
-                outRadii[6] = r; outRadii[7] = r;
-                break;
-            case HudButton.CORNER_BOTTOM_RIGHT:
-                outRadii[4] = r; outRadii[5] = r;
-                break;
-            case HudButton.CORNER_LEFT_BOTH:
-                outRadii[0] = r; outRadii[1] = r;
-                outRadii[6] = r; outRadii[7] = r;
-                break;
-            case HudButton.CORNER_RIGHT_BOTH:
-                outRadii[2] = r; outRadii[3] = r;
-                outRadii[4] = r; outRadii[5] = r;
-                break;
-            case HudButton.CORNER_TOP_BOTH:
-                outRadii[0] = r; outRadii[1] = r;
-                outRadii[2] = r; outRadii[3] = r;
-                break;
-            case HudButton.CORNER_BOTTOM_BOTH:
-                outRadii[4] = r; outRadii[5] = r;
-                outRadii[6] = r; outRadii[7] = r;
-                break;
-            case HudButton.CORNER_ALL:
-                java.util.Arrays.fill(outRadii, r);
-                break;
-            case HudButton.CORNER_NONE:
-            default:
-                break;
-        }
-    }
-
     public HudButton getModel() {
         return mModel;
     }
@@ -211,44 +175,36 @@ public final class HudFreeformButtonView extends View {
             }
         }
 
-        // Fill
-        mPaint.setStyle(Paint.Style.FILL);
+        // Fill and stroke are owned by the design layer so every widget renders identically.
         int baseColor = (mIsPressed || isModifierActive) ? mModel.activeColor : mModel.bgColor;
-        int origAlpha = (baseColor >>> 24);
-        int finalAlpha = Math.round(mModel.opacity * origAlpha);
-        mPaint.setColor((baseColor & 0x00FFFFFF) | (finalAlpha << 24));
         float corner = mModel.cornerRadiusDp * density;
-
-        computeRadii(mModel.cornerShape, corner, mRadii);
-        mPath.reset();
-        mPath.addRoundRect(mBounds, mRadii, Path.Direction.CW);
-        canvas.drawPath(mPath, mPaint);
-
-        // Stroke
-        if (mModel.borderStrokeWidthDp > 0) {
-            mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setStrokeWidth(Math.max(1, Math.round(mModel.borderStrokeWidthDp * density)));
-            mPaint.setColor(mModel.borderColor);
-            canvas.drawPath(mPath, mPaint);
-        }
+        float strokePx = mModel.borderStrokeWidthDp > 0
+                ? Math.max(1f, mModel.borderStrokeWidthDp * density)
+                : 0f;
+        HudChrome.drawSurface(canvas, mPaint, mPath, mBounds,
+                mModel.cornerShape, corner, baseColor, mModel.opacity,
+                strokePx, mModel.borderColor);
 
         // Text or Icon
         if (mModel.iconId != null && !HudVectorIcons.ICON_NONE.equals(mModel.iconId) && !mModel.iconId.isEmpty()) {
-            mPaint.setColor(mIsPressed ? 0xFF11111B : mModel.textColor);
+            mPaint.setColor(mIsPressed ? HudColors.onActive : mModel.textColor);
             float iconSize = Math.min(w, h) * 0.46f;
             HudVectorIcons.drawIcon(canvas, mModel.iconId, w * 0.5f, h * 0.5f, iconSize, mPaint);
         } else {
             // Text with auto font scaling and alignment
-            mTextPaint.setColor(mIsPressed ? 0xFF11111B : mModel.textColor);
+            mTextPaint.setColor(mIsPressed ? HudColors.onActive : mModel.textColor);
             String label = mModel.label != null ? mModel.label : "BTN";
             float maxTextWidth = w - 4 * density; // Compact 2dp margin
             // Target font size: 12dp, scaling gently with button size
-            float baseTextSize = Math.max(11f * density, Math.min(13.5f * density, Math.min(w, h) * 0.40f));
+            float baseTextSize = Math.max(HudType.CAPTION_SP * density,
+                    Math.min(HudType.BODY_SP * density, Math.min(w, h) * 0.40f));
             mTextPaint.setTextSize(baseTextSize);
             float textW = mTextPaint.measureText(label);
             if (textW > maxTextWidth && textW > 0) {
-                // If text overflows, scale down but never below 10dp to ensure HOME/PGDN/PGUP stay legible
-                mTextPaint.setTextSize(Math.max(10.2f * density, baseTextSize * (maxTextWidth / textW)));
+                // If text overflows, scale down but never below the legibility floor
+                // so HOME/PGDN/PGUP stay readable.
+                mTextPaint.setTextSize(Math.max(HudType.KEY_LABEL_FLOOR_SP * density,
+                        baseTextSize * (maxTextWidth / textW)));
             }
             float textY = h * 0.5f - ((mTextPaint.descent() + mTextPaint.ascent()) * 0.5f);
 
@@ -269,7 +225,7 @@ public final class HudFreeformButtonView extends View {
         // Secondary popup glyph dot if configured
         if (mModel.popupAction != null) {
             mPaint.setStyle(Paint.Style.FILL);
-            mPaint.setColor(0xCC80DEEA);
+            mPaint.setColor(HudColors.withAlpha(HudColors.primary, 0xCC));
             canvas.drawCircle(w - 7 * density, 7 * density, 2.5f * density, mPaint);
         }
     }

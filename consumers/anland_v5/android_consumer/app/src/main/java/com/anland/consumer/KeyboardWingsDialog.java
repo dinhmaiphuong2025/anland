@@ -1,5 +1,9 @@
 package com.anland.consumer;
 
+import com.anland.consumer.hud.design.HudChrome;
+import com.anland.consumer.hud.design.HudColors;
+import com.anland.consumer.hud.design.HudShape;
+
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
@@ -12,7 +16,6 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import com.anland.consumer.hud.HudAction;
-import com.anland.consumer.theme.M3;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -88,7 +91,7 @@ public final class KeyboardWingsDialog {
         header.setText(R.string.keyboard_wings_title);
         header.setTextSize(18);
         header.setTypeface(Typeface.DEFAULT_BOLD);
-        header.setTextColor(M3.COLOR_TEXT_PRIMARY);
+        header.setTextColor(HudColors.textPrimary);
         header.setPadding(0, 0, 0, dp(activity, 12));
         content.addView(header);
 
@@ -111,18 +114,18 @@ public final class KeyboardWingsDialog {
                     activity.getResources().getDisplayMetrics().widthPixels - dp(activity, 24));
             int height = Math.min(dp(activity, 520),
                     activity.getResources().getDisplayMetrics().heightPixels - dp(activity, 40));
-            dialog.getWindow().setBackgroundDrawable(M3.shape(activity, M3.RADIUS_CARD,
-                    M3.COLOR_SURFACE, M3.COLOR_BORDER_STRONG, 1f));
+            dialog.getWindow().setBackgroundDrawable(HudChrome.shape(activity, HudShape.CARD_DP,
+                    HudColors.surface, HudColors.outlineStrong, 1f));
             dialog.getWindow().setLayout(width, height);
         }
         Button done = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
         if (done != null) {
-            done.setTextColor(0xFFA39CB8);
+            done.setTextColor(0xFF9D85C2);
             done.setAllCaps(false);
         }
         Button reset = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
         if (reset != null) {
-            reset.setTextColor(M3.COLOR_TEXT_MUTED);
+            reset.setTextColor(HudColors.textMuted);
             reset.setAllCaps(false);
         }
     }
@@ -150,9 +153,9 @@ public final class KeyboardWingsDialog {
                 button.setText(labels[index]);
                 button.setAllCaps(false);
                 button.setTextSize(12);
-                button.setTextColor(M3.COLOR_TEXT_PRIMARY);
-                button.setBackground(M3.createRippleDrawable(activity, M3.RADIUS_CHIP,
-                        M3.COLOR_SURFACE_HIGHEST, 0x44FFFFFF, M3.COLOR_BORDER_SUBTLE));
+                button.setTextColor(HudColors.textPrimary);
+                button.setBackground(HudChrome.ripple(activity, HudShape.BUTTON_DP,
+                        HudColors.surfaceHighest, HudColors.withAlpha(HudColors.textPrimary, 0x44), HudColors.outlineSubtle));
                 button.setMinHeight(dp(activity, 44));
                 button.setOnClickListener(v ->
                         showPicker(activity, index, button, onChanged));

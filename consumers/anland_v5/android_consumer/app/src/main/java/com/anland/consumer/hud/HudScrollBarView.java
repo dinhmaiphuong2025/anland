@@ -1,7 +1,11 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.HudColors;
+import com.anland.consumer.hud.design.HudChrome;
+
 import android.content.Context;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
@@ -84,31 +88,33 @@ public final class HudScrollBarView extends View {
         float corner = mModel.cornerRadiusDp * density;
         mBounds.set(2, 2, w - 2, h - 2);
 
-        HudFreeformButtonView.computeRadii(mModel.cornerShape, corner, mRadii);
-        mPath.reset();
-        mPath.addRoundRect(mBounds, mRadii, Path.Direction.CW);
+        // 1. Background track and 2. outer border are drawn by the design layer.
+        // Style variants: 0 = solid track with arrows, 1 = minimal bar, 2 = outline only.
+        // The inspector exposes these chips for the scrollbar, so the view has to honour them;
+        // previously styleVariant was never read here and every chip looked dead.
+        int variant = mModel.styleVariant;
+        boolean showArrows = variant == 0;
+        boolean slimThumb = variant != 0;
+        boolean outlineOnly = variant == 2;
 
-        // 1. Background Track
-        mPaint.setStyle(Paint.Style.FILL);
-        int baseBg = mModel.bgColor != 0 ? mModel.bgColor : 0xFF424242;
-        int targetCol = mIsTouching ? 0xFFA39CB8 : baseBg;
-        int origAlpha = (targetCol >>> 24);
-        int finalAlpha = Math.round(mModel.opacity * origAlpha);
-        mPaint.setColor((targetCol & 0x00FFFFFF) | (finalAlpha << 24));
-        canvas.drawPath(mPath, mPaint);
-
-        // 2. Outer Border with clean white line C23C479
-        if (mModel.borderStrokeWidthDp > 0) {
-            mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setStrokeWidth(Math.max(1, Math.round(mModel.borderStrokeWidthDp * density)));
-            mPaint.setColor(mModel.borderColor);
-            canvas.drawPath(mPath, mPaint);
-        }
+        int baseBg = mModel.bgColor != 0 ? mModel.bgColor : HudColors.surfaceHigh;
+        int targetCol = mIsTouching ? HudColors.primary : baseBg;
+        float strokePx = mModel.borderStrokeWidthDp > 0
+                ? Math.max(1f, mModel.borderStrokeWidthDp * density)
+                : 0f;
+        int surfaceFill = outlineOnly ? Color.TRANSPARENT : targetCol;
+        float surfaceStroke = outlineOnly && strokePx <= 0f ? Math.max(1f, density) : strokePx;
+        int surfaceStrokeColor = outlineOnly && mModel.borderColor == 0
+                ? HudColors.outlineStrong
+                : mModel.borderColor;
+        HudChrome.drawSurface(canvas, mPaint, mPath, mBounds,
+                mModel.cornerShape, corner, surfaceFill, mModel.opacity,
+                surfaceStroke, surfaceStrokeColor);
 
         // 3. Arrow indicators and sliding thumb
-        int activeAccent = mModel.activeColor != 0 ? mModel.activeColor : 0xFFA39CB8;
+        int activeAccent = mModel.activeColor != 0 ? mModel.activeColor : HudColors.primary;
         mPaint.setStyle(Paint.Style.FILL);
-        mPaint.setColor(mIsTouching ? activeAccent : 0xAA80DEEA);
+        mPaint.setColor(mIsTouching ? activeAccent : HudColors.withAlpha(HudColors.primary, 0xAA));
 
         if (!isHoriz) {
             // ===== VERTICAL =====
@@ -117,45 +123,54 @@ public final class HudScrollBarView extends View {
             float arrowSize = Math.min(w * 0.30f, 8f * density);
 
             // Top Arrow (▲)
-            mArrowPath1.reset();
-            mArrowPath1.moveTo(cx, arrowPad);
-            mArrowPath1.lineTo(cx - arrowSize, arrowPad + arrowSize * 1.1f);
-            mArrowPath1.lineTo(cx + arrowSize, arrowPad + arrowSize * 1.1f);
-            mArrowPath1.close();
-            canvas.drawPath(mArrowPath1, mPaint);
+            if (showArrows) {
+                mArrowPath1.reset();
+                mArrowPath1.moveTo(cx, arrowPad);
+                mArrowPath1.lineTo(cx - arrowSize, arrowPad + arrowSize * 1.1f);
+                mArrowPath1.lineTo(cx + arrowSize, arrowPad + arrowSize * 1.1f);
+                mArrowPath1.close();
+                canvas.drawPath(mArrowPath1, mPaint);
 
-            // Bottom Arrow (▼)
-            mArrowPath2.reset();
-            mArrowPath2.moveTo(cx, h - arrowPad);
-            mArrowPath2.lineTo(cx - arrowSize, h - arrowPad - arrowSize * 1.1f);
-            mArrowPath2.lineTo(cx + arrowSize, h - arrowPad - arrowSize * 1.1f);
-            mArrowPath2.close();
-            canvas.drawPath(mArrowPath2, mPaint);
+                // Bottom Arrow (▼)
+                mArrowPath2.reset();
+                mArrowPath2.moveTo(cx, h - arrowPad);
+                mArrowPath2.lineTo(cx - arrowSize, h - arrowPad - arrowSize * 1.1f);
+                mArrowPath2.lineTo(cx + arrowSize, h - arrowPad - arrowSize * 1.1f);
+                mArrowPath2.close();
+                canvas.drawPath(mArrowPath2, mPaint);
+            }
 
             // Sliding Thumb Pill
-            float reservedEnds = arrowPad + arrowSize * 1.1f + 4f * density;
+            float reservedEnds = showArrows
+                    ? arrowPad + arrowSize * 1.1f + 4f * density
+                    : 4f * density;
             float availableTrack = h - 2 * reservedEnds;
             float thumbH = Math.max(18f * density, Math.min(availableTrack * 0.40f, 40f * density));
-            float thumbW = Math.max(8f * density, w - 8f * density);
+            float thumbW = slimThumb
+                    ? Math.max(6f * density, w * 0.45f)
+                    : Math.max(8f * density, w - 8f * density);
             float maxTravel = (availableTrack - thumbH) * 0.5f;
             if (maxTravel < 0) maxTravel = 0;
             mThumbOffset = Math.max(-maxTravel, Math.min(maxTravel, mThumbOffset));
             float thumbY = (h - thumbH) * 0.5f + mThumbOffset;
 
-            mThumbBounds.set(4f * density, thumbY, 4f * density + thumbW, thumbY + thumbH);
-            mPaint.setColor(mIsTouching ? 0xEE80DEEA : 0x6680DEEA);
+            mThumbBounds.set(slimThumb ? (w - thumbW) * 0.5f : 4f * density, thumbY,
+                    (slimThumb ? (w - thumbW) * 0.5f : 4f * density) + thumbW, thumbY + thumbH);
+            mPaint.setColor(mIsTouching ? HudColors.withAlpha(HudColors.primary, 0xEE) : HudColors.withAlpha(HudColors.primary, 0x66));
             canvas.drawRoundRect(mThumbBounds, thumbW * 0.5f, thumbW * 0.5f, mPaint);
 
-            // Tactile grip grooves on thumb
-            mPaint.setColor(mIsTouching ? 0xFFFFFFFF : 0x88FFFFFF);
-            mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setStrokeWidth(1.2f * density);
-            float thumbCy = thumbY + thumbH * 0.5f;
-            float lineW = thumbW * 0.35f;
-            canvas.drawLine(cx - lineW, thumbCy - 3f * density, cx + lineW, thumbCy - 3f * density, mPaint);
-            canvas.drawLine(cx - lineW, thumbCy, cx + lineW, thumbCy, mPaint);
-            canvas.drawLine(cx - lineW, thumbCy + 3f * density, cx + lineW, thumbCy + 3f * density, mPaint);
-            mPaint.setStyle(Paint.Style.FILL);
+            // Tactile grip grooves on thumb (solid variant only; a slim bar has no room)
+            if (!slimThumb) {
+                mPaint.setColor(mIsTouching ? HudColors.textPrimary : HudColors.withAlpha(HudColors.textPrimary, 0x88));
+                mPaint.setStyle(Paint.Style.STROKE);
+                mPaint.setStrokeWidth(1.2f * density);
+                float thumbCy = thumbY + thumbH * 0.5f;
+                float lineW = thumbW * 0.35f;
+                canvas.drawLine(cx - lineW, thumbCy - 3f * density, cx + lineW, thumbCy - 3f * density, mPaint);
+                canvas.drawLine(cx - lineW, thumbCy, cx + lineW, thumbCy, mPaint);
+                canvas.drawLine(cx - lineW, thumbCy + 3f * density, cx + lineW, thumbCy + 3f * density, mPaint);
+                mPaint.setStyle(Paint.Style.FILL);
+            }
         } else {
             // ===== HORIZONTAL =====
             float cy = h * 0.5f;
@@ -163,45 +178,54 @@ public final class HudScrollBarView extends View {
             float arrowSize = Math.min(h * 0.30f, 8f * density);
 
             // Left Arrow (◀)
-            mArrowPath1.reset();
-            mArrowPath1.moveTo(arrowPad, cy);
-            mArrowPath1.lineTo(arrowPad + arrowSize * 1.1f, cy - arrowSize);
-            mArrowPath1.lineTo(arrowPad + arrowSize * 1.1f, cy + arrowSize);
-            mArrowPath1.close();
-            canvas.drawPath(mArrowPath1, mPaint);
+            if (showArrows) {
+                mArrowPath1.reset();
+                mArrowPath1.moveTo(arrowPad, cy);
+                mArrowPath1.lineTo(arrowPad + arrowSize * 1.1f, cy - arrowSize);
+                mArrowPath1.lineTo(arrowPad + arrowSize * 1.1f, cy + arrowSize);
+                mArrowPath1.close();
+                canvas.drawPath(mArrowPath1, mPaint);
 
-            // Right Arrow (▶)
-            mArrowPath2.reset();
-            mArrowPath2.moveTo(w - arrowPad, cy);
-            mArrowPath2.lineTo(w - arrowPad - arrowSize * 1.1f, cy - arrowSize);
-            mArrowPath2.lineTo(w - arrowPad - arrowSize * 1.1f, cy + arrowSize);
-            mArrowPath2.close();
-            canvas.drawPath(mArrowPath2, mPaint);
+                // Right Arrow (▶)
+                mArrowPath2.reset();
+                mArrowPath2.moveTo(w - arrowPad, cy);
+                mArrowPath2.lineTo(w - arrowPad - arrowSize * 1.1f, cy - arrowSize);
+                mArrowPath2.lineTo(w - arrowPad - arrowSize * 1.1f, cy + arrowSize);
+                mArrowPath2.close();
+                canvas.drawPath(mArrowPath2, mPaint);
+            }
 
             // Sliding Thumb Pill
-            float reservedEnds = arrowPad + arrowSize * 1.1f + 4f * density;
+            float reservedEnds = showArrows
+                    ? arrowPad + arrowSize * 1.1f + 4f * density
+                    : 4f * density;
             float availableTrack = w - 2 * reservedEnds;
             float thumbW = Math.max(18f * density, Math.min(availableTrack * 0.40f, 40f * density));
-            float thumbH = Math.max(8f * density, h - 8f * density);
+            float thumbH = slimThumb
+                    ? Math.max(6f * density, h * 0.45f)
+                    : Math.max(8f * density, h - 8f * density);
             float maxTravel = (availableTrack - thumbW) * 0.5f;
             if (maxTravel < 0) maxTravel = 0;
             mThumbOffset = Math.max(-maxTravel, Math.min(maxTravel, mThumbOffset));
             float thumbX = (w - thumbW) * 0.5f + mThumbOffset;
 
-            mThumbBounds.set(thumbX, 4f * density, thumbX + thumbW, 4f * density + thumbH);
-            mPaint.setColor(mIsTouching ? 0xEE80DEEA : 0x6680DEEA);
+            mThumbBounds.set(thumbX, slimThumb ? (h - thumbH) * 0.5f : 4f * density,
+                    thumbX + thumbW, (slimThumb ? (h - thumbH) * 0.5f : 4f * density) + thumbH);
+            mPaint.setColor(mIsTouching ? HudColors.withAlpha(HudColors.primary, 0xEE) : HudColors.withAlpha(HudColors.primary, 0x66));
             canvas.drawRoundRect(mThumbBounds, thumbH * 0.5f, thumbH * 0.5f, mPaint);
 
-            // Tactile grip grooves on thumb
-            mPaint.setColor(mIsTouching ? 0xFFFFFFFF : 0x88FFFFFF);
-            mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setStrokeWidth(1.2f * density);
-            float thumbCx = thumbX + thumbW * 0.5f;
-            float lineH = thumbH * 0.35f;
-            canvas.drawLine(thumbCx - 3f * density, cy - lineH, thumbCx - 3f * density, cy + lineH, mPaint);
-            canvas.drawLine(thumbCx, cy - lineH, thumbCx, cy + lineH, mPaint);
-            canvas.drawLine(thumbCx + 3f * density, cy - lineH, thumbCx + 3f * density, cy + lineH, mPaint);
-            mPaint.setStyle(Paint.Style.FILL);
+            // Tactile grip grooves on thumb (solid variant only; a slim bar has no room)
+            if (!slimThumb) {
+                mPaint.setColor(mIsTouching ? HudColors.textPrimary : HudColors.withAlpha(HudColors.textPrimary, 0x88));
+                mPaint.setStyle(Paint.Style.STROKE);
+                mPaint.setStrokeWidth(1.2f * density);
+                float thumbCx = thumbX + thumbW * 0.5f;
+                float lineH = thumbH * 0.35f;
+                canvas.drawLine(thumbCx - 3f * density, cy - lineH, thumbCx - 3f * density, cy + lineH, mPaint);
+                canvas.drawLine(thumbCx, cy - lineH, thumbCx, cy + lineH, mPaint);
+                canvas.drawLine(thumbCx + 3f * density, cy - lineH, thumbCx + 3f * density, cy + lineH, mPaint);
+                mPaint.setStyle(Paint.Style.FILL);
+            }
         }
     }
 

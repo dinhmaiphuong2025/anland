@@ -1,5 +1,9 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.HudColors;
+import com.anland.consumer.hud.design.HudChrome;
+import com.anland.consumer.hud.design.HudType;
+
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -77,52 +81,64 @@ public final class SuperGestureButtonView extends View {
         float h = getHeight();
         mBounds.set(2, 2, w - 2, h - 2);
 
-        // Background
-        mPaint.setStyle(Paint.Style.FILL);
-        int targetCol = mIsPressed ? 0xFF80DEEA : mModel.bgColor;
-        int origAlpha = (targetCol >>> 24);
-        int finalAlpha = Math.round(mModel.opacity * origAlpha);
-        mPaint.setColor((targetCol & 0x00FFFFFF) | (finalAlpha << 24));
+        // Background and border are drawn by the design layer. Border width and colour come
+        // from the model so the Style tab actually restyles this widget; the previous
+        // hardcoded 1.5dp white stroke made both style controls look broken here.
+        int targetCol = mIsPressed ? HudColors.primary : mModel.bgColor;
         float corner = mModel.cornerRadiusDp * density;
+        float strokePx = mModel.borderStrokeWidthDp > 0
+                ? Math.max(1f, mModel.borderStrokeWidthDp * density)
+                : 0f;
 
-        HudFreeformButtonView.computeRadii(mModel.cornerShape, corner, mRadii);
-        mPath.reset();
-        mPath.addRoundRect(mBounds, mRadii, Path.Direction.CW);
-        canvas.drawPath(mPath, mPaint);
+        HudChrome.drawSurface(canvas, mPaint, mPath, mBounds,
+                mModel.cornerShape, corner, targetCol, mModel.opacity,
+                strokePx, mModel.borderColor);
 
-        // Border Stroke
-        mPaint.setStyle(Paint.Style.STROKE);
-        mPaint.setStrokeWidth(Math.max(1, Math.round(1.5f * density)));
-        mPaint.setColor(0x88FFFFFF);
-        canvas.drawPath(mPath, mPaint);
+        // Label: vector icon when one is set, otherwise auto-scaled text.
+        boolean hasIcon = mModel.iconId != null
+                && !HudVectorIcons.ICON_NONE.equals(mModel.iconId)
+                && !mModel.iconId.isEmpty();
 
-        // Main Center Text with safe auto font scaling away from chevrons
-        mTextPaint.setColor(mIsPressed ? 0xFF11111B : mModel.textColor);
-        String label = mModel.label != null ? mModel.label : "SUPER";
-        float maxTextWidth = Math.max(10 * density, w - 30 * density);
-        float textSize = Math.min(w * 0.20f, Math.min(h * 0.24f, 14 * density));
-        mTextPaint.setTextSize(textSize);
-        float textW = mTextPaint.measureText(label);
-        if (textW > maxTextWidth && textW > 0) {
-            textSize = Math.max(7 * density, textSize * (maxTextWidth / textW));
-            mTextPaint.setTextSize(textSize);
-        }
-        float textY = h * 0.5f - ((mTextPaint.descent() + mTextPaint.ascent()) * 0.5f);
-        float textX;
-        if (mModel.textAlign == HudButton.ALIGN_LEFT) {
-            mTextPaint.setTextAlign(Paint.Align.LEFT);
-            textX = 14 * density;
-        } else if (mModel.textAlign == HudButton.ALIGN_RIGHT) {
-            mTextPaint.setTextAlign(Paint.Align.RIGHT);
-            textX = w - 14 * density;
+        if (hasIcon) {
+            mPaint.setColor(mIsPressed ? HudColors.onActive : mModel.textColor);
+            // Leave clearance for the 4-way chevrons drawn along the edges.
+            float iconSize = Math.min(w, h) * 0.30f;
+            float iconCx = w * 0.5f;
+            if (mModel.textAlign == HudButton.ALIGN_LEFT) {
+                iconCx = 8 * density + iconSize * 0.5f;
+            } else if (mModel.textAlign == HudButton.ALIGN_RIGHT) {
+                iconCx = w - 8 * density - iconSize * 0.5f;
+            }
+            HudVectorIcons.drawIcon(canvas, mModel.iconId, iconCx, h * 0.5f, iconSize, mPaint);
         } else {
-            mTextPaint.setTextAlign(Paint.Align.CENTER);
-            textX = w * 0.5f;
+            // Main Center Text with safe auto font scaling away from chevrons
+            mTextPaint.setColor(mIsPressed ? HudColors.onActive : mModel.textColor);
+            String label = mModel.label != null ? mModel.label : "SUPER";
+            float maxTextWidth = Math.max(10 * density, w - 30 * density);
+            float textSize = Math.min(w * 0.20f, Math.min(h * 0.24f, HudType.SUBTITLE_SP * density));
+            mTextPaint.setTextSize(textSize);
+            float textW = mTextPaint.measureText(label);
+            if (textW > maxTextWidth && textW > 0) {
+                textSize = Math.max(7 * density, textSize * (maxTextWidth / textW));
+                mTextPaint.setTextSize(textSize);
+            }
+            float textY = h * 0.5f - ((mTextPaint.descent() + mTextPaint.ascent()) * 0.5f);
+            float textX;
+            if (mModel.textAlign == HudButton.ALIGN_LEFT) {
+                mTextPaint.setTextAlign(Paint.Align.LEFT);
+                textX = 14 * density;
+            } else if (mModel.textAlign == HudButton.ALIGN_RIGHT) {
+                mTextPaint.setTextAlign(Paint.Align.RIGHT);
+                textX = w - 14 * density;
+            } else {
+                mTextPaint.setTextAlign(Paint.Align.CENTER);
+                textX = w * 0.5f;
+            }
+            canvas.drawText(label, textX, textY, mTextPaint);
         }
-        canvas.drawText(label, textX, textY, mTextPaint);
 
         // 4-way outward vector chevrons (Top, Bottom, Left, Right)
-        mPaint.setColor(0xCC80DEEA);
+        mPaint.setColor(HudColors.withAlpha(HudColors.primary, 0xCC));
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(1.8f * density);
         mPaint.setStrokeCap(Paint.Cap.ROUND);

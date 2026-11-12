@@ -331,7 +331,7 @@ public class VirtualKeyboardView extends View {
     private int keyHeight;
     private int padding = 4;
 
-    // ---- Material 3 tokens (dark scheme, matches theme/M3.java) ----
+    // ---- Material 3 tokens (dark scheme, mirrors hud/design/HudPalette) ----
     // Keys are tonal surfaces with a state layer; the old build stroked every
     // key with a 1px white outline, which is what read as "old Android".
     private static final int MD_SURFACE                  = 0xF21B1B27; // keyboard backdrop
@@ -351,7 +351,7 @@ public class VirtualKeyboardView extends View {
     private static final float HANDLE_HEIGHT_DP   = 4f;
 
     private static final int COLOR_TEXT_MUTED = MD_ON_SURFACE_VARIANT;
-    private static final int COLOR_PRIMARY = 0xFF80DEEA;
+    private static final int COLOR_PRIMARY = 0xFFA39CB8;
     private static final int COLOR_SECONDARY = 0xFFB4BEFE;
 
     public interface OnKeyEventListener {

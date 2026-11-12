@@ -1,5 +1,9 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.HudColors;
+import com.anland.consumer.hud.design.HudChrome;
+import com.anland.consumer.hud.design.HudType;
+
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -119,32 +123,20 @@ public final class HudTouchpadView extends View {
         float corner = mModel.cornerRadiusDp * density;
         mBounds.set(2, 2, w - 2, h - 2);
 
-        HudFreeformButtonView.computeRadii(mModel.cornerShape, corner, mRadii);
-        mPath.reset();
-        mPath.addRoundRect(mBounds, mRadii, Path.Direction.CW);
-
-        // 1. Steam Deck Square Matte Surface with Rounded Corners
-        mPaint.setStyle(Paint.Style.FILL);
-        int baseBg = mModel.bgColor != 0 ? mModel.bgColor : 0xFF424242;
+        // 1. Surface fill + outer border are drawn by the design layer so every widget
+        //    shares one definition of corner shape, opacity and stroke.
+        int baseBg = mModel.bgColor != 0 ? mModel.bgColor : HudColors.surfaceHigh;
         int variant = mModel.styleVariant; // 0=Precision Matte, 1=Laptop Trackpad, 2=Glass Outline
 
-        if (variant == 2) {
-            mPaint.setColor(0x00000000);
-        } else {
-            int targetCol = mIsTouching ? 0xFFA39CB8 : baseBg;
-            int origAlpha = (targetCol >>> 24);
-            int finalAlpha = Math.round(mModel.opacity * origAlpha);
-            mPaint.setColor((targetCol & 0x00FFFFFF) | (finalAlpha << 24));
-        }
-        canvas.drawPath(mPath, mPaint);
-
-        // 2. Outer Border Stroke
-        if (mModel.borderStrokeWidthDp > 0) {
-            mPaint.setStyle(Paint.Style.STROKE);
-            mPaint.setStrokeWidth(Math.max(1, Math.round(mModel.borderStrokeWidthDp * density)));
-            mPaint.setColor(mModel.borderColor);
-            canvas.drawPath(mPath, mPaint);
-        }
+        int fillColor = (variant == 2)
+                ? Color.TRANSPARENT
+                : (mIsTouching ? HudColors.primary : baseBg);
+        float strokePx = mModel.borderStrokeWidthDp > 0
+                ? Math.max(1f, mModel.borderStrokeWidthDp * density)
+                : 0f;
+        HudChrome.drawSurface(canvas, mPaint, mPath, mBounds,
+                mModel.cornerShape, corner, fillColor, mModel.opacity,
+                strokePx, mModel.borderColor);
 
         // 3. Inner Tactile Recessed Boundary (Only in Precision Matte)
         if (variant == 0) {
@@ -153,7 +145,7 @@ public final class HudTouchpadView extends View {
             float innerCorner = Math.max(4f * density, corner - inset * 0.7f);
             mPaint.setStyle(Paint.Style.STROKE);
             mPaint.setStrokeWidth(Math.max(1, Math.round(1.0f * density)));
-            mPaint.setColor(mIsTouching ? 0x55A39CB8 : 0x22FFFFFF);
+            mPaint.setColor(mIsTouching ? HudColors.withAlpha(HudColors.primary, 0x55) : HudColors.outlineSubtle);
             canvas.drawRoundRect(innerBounds, innerCorner, innerCorner, mPaint);
         }
 
@@ -171,7 +163,7 @@ public final class HudTouchpadView extends View {
             float gap = 2.5f * density;
             mPaint.setStyle(Paint.Style.STROKE);
             mPaint.setStrokeWidth(1.2f * density);
-            mPaint.setColor(0xFFFFFFFF);
+            mPaint.setColor(HudColors.textPrimary);
             canvas.drawLine(cx - armLen, cy, cx - gap, cy, mPaint);
             canvas.drawLine(cx + gap, cy, cx + armLen, cy, mPaint);
             canvas.drawLine(cx, cy - armLen, cx, cy - gap, mPaint);
@@ -180,7 +172,7 @@ public final class HudTouchpadView extends View {
 
         // 5. Center Touchpad Label
         mTextPaint.setColor(Color.WHITE);
-        mTextPaint.setTextSize(Math.max(8 * density, 9.5f * density));
+        mTextPaint.setTextSize(HudType.MICRO_SP * density);
         mTextPaint.setTextAlign(Paint.Align.CENTER);
         mTextPaint.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         String label = (mModel.label != null && !mModel.label.isEmpty() && !"BTN".equals(mModel.label))
