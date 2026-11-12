@@ -1,5 +1,11 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.widget.HudToggleView;
+
+import com.anland.consumer.hud.design.HudColors;
+
+import com.anland.consumer.hud.design.HudType;
+
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.res.Configuration;
@@ -9,6 +15,7 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
@@ -20,6 +27,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -29,13 +37,13 @@ import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import com.anland.consumer.R;
-import com.anland.consumer.theme.M3;
 
 /**
  * Landscape Modal Property Inspector (Alight Motion Design Specification).
  * Sidebar tabs: Transform, Label, Event, Style.
- * Exact color palette: #484848 (body), #A9A9A9 (footer), #A39CB8 (active tab/pills).
- * Includes Zalith 8 Corner Shapes picker and real-time auto-ghosting (25% opacity on seek).
+ * Exact color palette: #484848 (body), #A9A9A9 (footer), #9D85C2 (active tab/pills).
+ * Includes Zalith 8 Corner Shapes picker and real-time auto-ghosting (only the
+ * active slider row stays visible while dragging).
  */
 public final class HudPropertyInspectorView extends LinearLayout {
 
@@ -53,12 +61,12 @@ public final class HudPropertyInspectorView extends LinearLayout {
         void onCancelRequested();
     }
 
-    private static final int COLOR_BODY_BG = 0xFF484848;
-    private static final int COLOR_FOOTER_BG = 0xFFA9A9A9;
-    private static final int COLOR_TAB_ACTIVE = 0xFFA39CB8;
-    private static final int COLOR_TEXT_MUTED = 0xFFC3C3CD;
-    private static final int COLOR_BTN_GREY = 0xFF878787;
-    private static final int COLOR_DIVIDER = 0xFF5F5F5F;
+    private static final int COLOR_BODY_BG = HudColors.surfaceHighest;
+    private static final int COLOR_FOOTER_BG = HudColors.textMuted;
+    private static final int COLOR_TAB_ACTIVE = HudColors.primary;
+    private static final int COLOR_TEXT_MUTED = HudColors.textMuted;
+    private static final int COLOR_BTN_GREY = HudColors.textDisabled;
+    private static final int COLOR_DIVIDER = HudColors.textDisabled;
 
     private static final int SIZE_MAX_DP = 240;
     private static final int GROUP_SIZE_MAX_DP = 480;
@@ -70,6 +78,10 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private boolean mIsProgrammaticChange = false;
     private boolean mAspectRatioLocked = false;
     private boolean mIsPreviewing = false;
+    private boolean mSliderGhosting = false;
+    private Drawable mSliderGhostBackground;
+    private float mSliderGhostElevation;
+    private ScrollView mSliderGhostScrollView;
 
     // Sidebar Tab Buttons
     private LinearLayout mSidebarContainer;
@@ -109,6 +121,15 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private View mRowsRow;
     private SeekBar mRowsSeekBar;
     private TextView mRowsBadge;
+    // Container child placement (GRID / FREE) and the parent container of a selected key,
+    // so a key can copy its size to its siblings.
+    private View mLayoutModeRow;
+    private TextView mPillGrid;
+    private TextView mPillFree;
+    private View mApplySizeRow;
+    private View mReserveSpaceRow;
+    private HudToggleView mReserveSpaceToggle;
+    private HudButton mParentContainer;
 
     // Tab 2: Label
     private View mLabelPillText;
@@ -131,7 +152,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private Button mBtnPickLongPressAction;
     private View mSendPillPress;
     private View mSendPillRelease;
-    private M3.ToggleView mRepeatToggle;
+    private HudToggleView mRepeatToggle;
     private View mRepeatRow;
     private SeekBar mLongPressSeekBar;
     private TextView mLongPressBadge;
@@ -155,8 +176,9 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private TextView mOpacityBadge;
     private SeekBar mBorderWidthSeekBar;
     private TextView mBorderWidthBadge;
-    private M3.ToggleView mHapticToggle;
-    private M3.ToggleView mAttachKeyboardToggle;
+    private HudToggleView mHapticToggle;
+    private View mHapticRow;
+    private HudToggleView mAttachKeyboardToggle;
     private LinearLayout mColorThemeRow;
     private LinearLayout mStyleVariantSection;
     private LinearLayout mStyleVariantRow;
@@ -241,7 +263,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
             final int tabIndex = i;
             TextView tabBtn = new TextView(getContext());
             tabBtn.setText(tabs[i]);
-            tabBtn.setTextSize(11.5f);
+            tabBtn.setTextSize(HudType.CAPTION_SP);
             tabBtn.setTypeface(Typeface.DEFAULT_BOLD);
             tabBtn.setGravity(Gravity.CENTER);
             tabBtn.setSingleLine(true);
@@ -362,7 +384,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         TextView resizeHandle = new TextView(getContext());
         resizeHandle.setText("◢");
-        resizeHandle.setTextSize(20);
+        resizeHandle.setTextSize(HudType.GLYPH_SP);
         resizeHandle.setTextColor(Color.WHITE);
         resizeHandle.setGravity(Gravity.CENTER);
         resizeHandle.setContentDescription(getContext().getString(R.string.hud_resize_panel));
@@ -426,7 +448,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private Button createFooterButton(String text, int bgColor, int textColor) {
         Button b = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
         b.setText(text);
-        b.setTextSize(11);
+        b.setTextSize(HudType.CAPTION_SP);
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setTextColor(textColor);
         b.setAllCaps(false);
@@ -446,6 +468,11 @@ public final class HudPropertyInspectorView extends LinearLayout {
         lp.leftMargin = dp(2);
         b.setLayoutParams(lp);
         return b;
+    }
+
+    /** Both editor entry points start on Transform, so they look identical. */
+    public void resetToFirstTab() {
+        selectTab(0);
     }
 
     private void selectTab(int index) {
@@ -533,14 +560,11 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mColumnsBadge = createBadgeTextView(getContext().getString(R.string.hud_editor_grid_auto));
         mColumnsRow = createSliderRow(getContext().getString(R.string.hud_editor_grid_columns), mColumnsSeekBar, mColumnsBadge, 0, 16, "", val -> {
             if (mActiveButton != null) {
+                // Columns and rows describe the same cell grid, so both stay set: clearing one
+                // when the other changed is what forced every edit back to "Auto".
                 mActiveButton.columns = val;
-                if (val > 0 && mActiveButton.rows > 0) {
-                    mActiveButton.rows = 0;
-                    if (mRowsSeekBar != null) syncSliderAndBadge(mRowsSeekBar, mRowsBadge, 0, 0, "");
-                    if (mRowsBadge != null) mRowsBadge.setText(getContext().getString(R.string.hud_editor_grid_auto));
-                }
                 mColumnsBadge.setText(val == 0 ? getContext().getString(R.string.hud_editor_grid_auto) : String.valueOf(val));
-                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                applyGridChange();
             }
         });
         content.addView(mColumnsRow);
@@ -550,20 +574,256 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mRowsBadge = createBadgeTextView(getContext().getString(R.string.hud_editor_grid_auto));
         mRowsRow = createSliderRow(getContext().getString(R.string.hud_editor_grid_rows), mRowsSeekBar, mRowsBadge, 0, 8, "", val -> {
             if (mActiveButton != null) {
+                // Rows are independent of columns: a grid is columns x rows, both kept.
                 mActiveButton.rows = val;
-                if (val > 0 && mActiveButton.columns > 0) {
-                    mActiveButton.columns = 0;
-                    if (mColumnsSeekBar != null) syncSliderAndBadge(mColumnsSeekBar, mColumnsBadge, 0, 0, "");
-                    if (mColumnsBadge != null) mColumnsBadge.setText(getContext().getString(R.string.hud_editor_grid_auto));
-                }
                 mRowsBadge.setText(val == 0 ? getContext().getString(R.string.hud_editor_grid_auto) : String.valueOf(val));
-                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+                applyGridChange();
             }
         });
         content.addView(mRowsRow);
 
+        // Where children sit: GRID packs equal cells in insertion order, FREE keeps each key's
+        // own position and size so clusters like WASD can be shaped by hand.
+        TextView layoutTitle = new TextView(getContext());
+        layoutTitle.setText(R.string.hud_editor_layout_mode);
+        layoutTitle.setTextColor(Color.WHITE);
+        layoutTitle.setTextSize(HudType.LABEL_SP);
+        layoutTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        layoutTitle.setPadding(0, dp(10), 0, dp(4));
+        mLayoutModeRow = new LinearLayout(getContext());
+        ((LinearLayout) mLayoutModeRow).setOrientation(HORIZONTAL);
+        ((LinearLayout) mLayoutModeRow).setGravity(Gravity.CENTER);
+        mLayoutModeRow.setPadding(dp(4), dp(4), dp(4), dp(4));
+        GradientDrawable layoutBg = new GradientDrawable();
+        layoutBg.setCornerRadius(dp(16));
+        layoutBg.setColor(HudColors.surfaceTint);
+        layoutBg.setStroke(dp(1), HudColors.ripple);
+        mLayoutModeRow.setBackground(layoutBg);
+        mPillGrid = (TextView) createSegmentedPill(
+                getContext().getString(R.string.hud_editor_layout_grid), true,
+                () -> applyChildLayoutMode(HudButton.LAYOUT_GRID));
+        mPillFree = (TextView) createSegmentedPill(
+                getContext().getString(R.string.hud_editor_layout_free), false,
+                () -> applyChildLayoutMode(HudButton.LAYOUT_FREE));
+        ((LinearLayout) mLayoutModeRow).addView(mPillGrid, new LinearLayout.LayoutParams(0, dp(30), 1f));
+        ((LinearLayout) mLayoutModeRow).addView(mPillFree, new LinearLayout.LayoutParams(0, dp(30), 1f));
+
+        // One tap copies the selected key's size to every sibling in the container. Without it
+        // a 16-key bar has to be resized key by key.
+        mApplySizeRow = createApplySizeRow();
+
+        LinearLayout layoutSection = new LinearLayout(getContext());
+        layoutSection.setOrientation(VERTICAL);
+        layoutSection.addView(layoutTitle);
+        layoutSection.addView(mLayoutModeRow);
+        // Keep the whole section (title + pills) addressable so bindButton can hide it for
+        // widgets that have no children.
+        mLayoutModeRow = layoutSection;
+
+        content.addView(layoutSection);
+        content.addView(mApplySizeRow);
+
+        // Containers can claim the bottom strip instead of floating over the desktop, which is
+        // how the original extra-keys bar behaved.
+        mReserveSpaceToggle = new HudToggleView(getContext());
+        mReserveSpaceToggle.setOnCheckedChangeListener((v, checked) -> {
+            if (mActiveButton == null) return;
+            mActiveButton.reserveSpace = checked;
+            if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+        });
+        mReserveSpaceRow = createToggleRow(
+                getContext().getString(R.string.hud_editor_reserve_space),
+                getContext().getString(R.string.hud_editor_reserve_space_hint),
+                mReserveSpaceToggle);
+        content.addView(mReserveSpaceRow);
+
         mTabTransformView.addView(content);
         mTabContentContainer.addView(mTabTransformView);
+    }
+
+    /** "Apply size to all keys" action row, shown only for a key inside a container. */
+    private View createApplySizeRow() {
+        TextView apply = new TextView(getContext());
+        apply.setText(R.string.hud_editor_apply_size_all);
+        apply.setTextSize(HudType.LABEL_SP);
+        apply.setTypeface(Typeface.DEFAULT_BOLD);
+        apply.setGravity(Gravity.CENTER);
+        apply.setClickable(true);
+        apply.setTextColor(HudColors.textPrimary);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(10));
+        bg.setColor(HudColors.surfaceHigh);
+        bg.setStroke(dp(1), HudColors.outlineStrong);
+        apply.setBackground(bg);
+        apply.setPadding(dp(12), dp(8), dp(12), dp(8));
+        apply.setOnClickListener(v -> applySizeToSiblings());
+
+        LinearLayout row = new LinearLayout(getContext());
+        row.setOrientation(VERTICAL);
+        row.setPadding(0, dp(8), 0, 0);
+        row.addView(apply, new LinearLayout.LayoutParams(
+                LayoutParams.MATCH_PARENT, dp(36)));
+        return row;
+    }
+
+    /** Called by the host before binding so a key can reach its container. */
+    public void setParentContainer(HudButton parent) {
+        this.mParentContainer = parent;
+    }
+
+    private void applyChildLayoutMode(int mode) {
+        if (mActiveButton == null) return;
+        if (mActiveButton.layoutMode == mode) {
+            updateLayoutModePills();
+            return;
+        }
+        mActiveButton.layoutMode = mode;
+        if (mode == HudButton.LAYOUT_FREE) {
+            // Free mode reads each key's own size. Copy the current cell size into every child
+            // first, otherwise the keys visibly shrink to whatever stale width they last stored.
+            copyCellsToChildren(mActiveButton);
+            // Seed positions from the cells they occupy, so switching does not stack the keys.
+            seedFreePositions(mActiveButton);
+        }
+        updateLayoutModePills();
+        if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+    }
+
+    /** Grid shape of a container: explicit counts when set, otherwise derived from key count. */
+    private static int[] gridShape(HudButton container) {
+        int count = container != null && container.children != null
+                ? Math.max(1, container.children.size()) : 1;
+        int cols;
+        int rows;
+        if (container != null && container.columns > 0) {
+            cols = container.columns;
+            rows = container.rows > 0 ? container.rows : Math.max(1, (count + cols - 1) / cols);
+        } else if (container != null && container.rows > 0) {
+            rows = container.rows;
+            cols = Math.max(1, (count + rows - 1) / rows);
+        } else {
+            cols = Math.max(1, (int) Math.ceil(Math.sqrt(count)));
+            rows = Math.max(1, (count + cols - 1) / cols);
+        }
+        return new int[]{cols, rows};
+    }
+
+    /**
+     * Called when the user edits columns/rows. Existing keys that have no cell yet are spread
+     * over the new grid instead of being packed into the first row, which is what made an old
+     * container look like its keys were being pulled to the top-left.
+     */
+    private void applyGridChange() {
+        if (mActiveButton == null) return;
+        HudButton container = mActiveButton;
+        if (container.children != null && !container.children.isEmpty()) {
+            int[] shape = gridShape(container);
+            int capacity = Math.max(1, shape[0] * shape[1]);
+            // Cells that fall outside the new grid go back to "unplaced".
+            for (HudButton child : container.children) {
+                if (child.gridSlot >= capacity) child.gridSlot = -1;
+            }
+            spreadMissingSlots(container, shape[0], shape[1]);
+            if (container.layoutMode == HudButton.LAYOUT_FREE) copyCellsToChildren(container);
+        }
+        if (mCallback != null) mCallback.onModelChanged(container);
+    }
+
+    /**
+     * Fill only the children that have no cell, balanced across the rows and spread across the
+     * columns, so a 4-key cluster in a 3x2 grid becomes 2+2 rather than 3+1.
+     */
+    private static void spreadMissingSlots(HudButton container, int cols, int rows) {
+        if (container.children == null || container.children.isEmpty()) return;
+        java.util.List<HudButton> missing = new java.util.ArrayList<>();
+        java.util.Set<Integer> used = new java.util.HashSet<>();
+        for (HudButton child : container.children) {
+            if (child.gridSlot >= 0) used.add(child.gridSlot);
+            else missing.add(child);
+        }
+        if (missing.isEmpty()) return;
+
+        int n = missing.size();
+        int perRowBase = n / rows;
+        int extra = n % rows;
+        int index = 0;
+        for (int r = 0; r < rows && index < n; r++) {
+            int inRow = perRowBase + (r < extra ? 1 : 0);
+            for (int k = 0; k < inRow && index < n; k++) {
+                int col = inRow <= 1
+                        ? cols / 2
+                        : Math.round(k * (cols - 1) / (float) (inRow - 1));
+                int slot = r * cols + col;
+                // Skip cells an explicitly placed key already owns.
+                int guard = 0;
+                while (used.contains(slot) && guard++ < cols * rows) {
+                    slot = (slot + 1) % (cols * rows);
+                }
+                used.add(slot);
+                missing.get(index++).gridSlot = slot;
+            }
+        }
+    }
+
+    /** Give every child the size of its current cell, so GRID -> FREE keeps the same look. */
+    private static void copyCellsToChildren(HudButton container) {
+        if (container == null || container.children == null || container.children.isEmpty()) return;
+        int[] shape = gridShape(container);
+        int cols = shape[0];
+        int rows = shape[1];
+        int pad = Math.max(4, container.padDp);
+        int gap = 4;
+        int cellW = Math.max(1, (container.widthDp - pad * 2 - (cols - 1) * gap) / cols);
+        int cellH = Math.max(1, (container.heightDp - pad * 2 - (rows - 1) * gap) / rows);
+        for (HudButton child : container.children) {
+            child.widthDp = cellW;
+            child.heightDp = cellH;
+        }
+    }
+
+    /** Lay the existing children out on the container's own grid, preserving the current look. */
+    private static void seedFreePositions(HudButton container) {
+        if (container == null || container.children == null || container.children.isEmpty()) return;
+        int count = container.children.size();
+        int[] shape = gridShape(container);
+        int cols = shape[0];
+        int rows = shape[1];
+        for (int i = 0; i < count; i++) {
+            HudButton child = container.children.get(i);
+            // A child that was never placed in free mode still sits at the 0.5/0.5 default;
+            // those get seeded from the grid. Manual placements are left untouched.
+            boolean unplaced = Math.abs(child.posXPercent - 0.5f) < 0.0001f
+                    && Math.abs(child.posYPercent - 0.5f) < 0.0001f;
+            if (!unplaced) continue;
+            // Honour an explicit cell so switching GRID -> FREE keeps the arrangement.
+            int slot = child.gridSlot >= 0 ? child.gridSlot : i;
+            int row = slot / cols;
+            int col = slot % cols;
+            child.posXPercent = Math.min(1f, (col + 0.5f) / cols);
+            child.posYPercent = Math.min(1f, (row + 0.5f) / rows);
+        }
+    }
+
+    private void updateLayoutModePills() {
+        boolean free = mActiveButton != null && mActiveButton.layoutMode == HudButton.LAYOUT_FREE;
+        updateSegmentedPill(mPillGrid, !free);
+        updateSegmentedPill(mPillFree, free);
+    }
+
+    private void applySizeToSiblings() {
+        if (mActiveButton == null || mParentContainer == null) return;
+        if (mParentContainer.children == null) return;
+        for (HudButton sibling : mParentContainer.children) {
+            sibling.widthDp = mActiveButton.widthDp;
+            sibling.heightDp = mActiveButton.heightDp;
+            // Equal sizes inside a stretched grid are pointless, so a copy implies free layout.
+            if (mParentContainer.layoutMode != HudButton.LAYOUT_FREE) {
+                mParentContainer.layoutMode = HudButton.LAYOUT_FREE;
+                seedFreePositions(mParentContainer);
+            }
+        }
+        updateLayoutModePills();
+        if (mCallback != null) mCallback.onModelChanged(mActiveButton);
     }
 
     // =========================================================================
@@ -583,8 +843,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
         pillSwitch.setPadding(dp(4), dp(4), dp(4), dp(4));
         GradientDrawable swBg = new GradientDrawable();
         swBg.setCornerRadius(dp(16));
-        swBg.setColor(0x33000000);
-        swBg.setStroke(dp(1), 0x33FFFFFF);
+        swBg.setColor(HudColors.surfaceTint);
+        swBg.setStroke(dp(1), HudColors.ripple);
         pillSwitch.setBackground(swBg);
 
         mLabelPillText = createSegmentedPill(getContext().getString(R.string.hud_editor_text_pill), true, () -> setLabelMode(false));
@@ -601,18 +861,18 @@ public final class HudPropertyInspectorView extends LinearLayout {
         TextView labelTitle = new TextView(getContext());
         labelTitle.setText(R.string.hud_display_label);
         labelTitle.setTextColor(Color.WHITE);
-        labelTitle.setTextSize(12);
+        labelTitle.setTextSize(HudType.LABEL_SP);
         labelTitle.setTypeface(Typeface.DEFAULT_BOLD);
         mTextSectionContainer.addView(labelTitle);
 
         mLabelInput = new EditText(getContext());
         mLabelInput.setTextColor(Color.WHITE);
-        mLabelInput.setTextSize(14);
+        mLabelInput.setTextSize(HudType.SUBTITLE_SP);
         mLabelInput.setSingleLine(true);
         GradientDrawable lblBg = new GradientDrawable();
         lblBg.setCornerRadius(dp(8));
-        lblBg.setColor(0x33000000);
-        lblBg.setStroke(dp(1), 0x33FFFFFF);
+        lblBg.setColor(HudColors.surfaceTint);
+        lblBg.setStroke(dp(1), HudColors.ripple);
         mLabelInput.setBackground(lblBg);
         mLabelInput.setPadding(dp(12), 0, dp(12), 0);
         LinearLayout.LayoutParams etlp = new LinearLayout.LayoutParams(
@@ -669,7 +929,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private View createSegmentedPill(String title, boolean active, Runnable onClick) {
         TextView tv = new TextView(getContext());
         tv.setText(title);
-        tv.setTextSize(11.5f);
+        tv.setTextSize(HudType.CAPTION_SP);
         tv.setTypeface(Typeface.DEFAULT_BOLD);
         tv.setGravity(Gravity.CENTER);
         tv.setClickable(true);
@@ -687,7 +947,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         bg.setCornerRadius(dp(13));
         bg.setColor(active ? COLOR_TAB_ACTIVE : Color.TRANSPARENT);
         tv.setBackground(bg);
-        tv.setTextColor(active ? Color.WHITE : 0xAAFFFFFF);
+        tv.setTextColor(active ? Color.WHITE : HudColors.withAlpha(HudColors.textPrimary, 0xAA));
     }
 
     /** Track container shared by the compact Text/Icon and Press/Release switches. */
@@ -698,8 +958,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
         row.setPadding(dp(4), dp(4), dp(4), dp(4));
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(dp(16));
-        bg.setColor(0x33000000);
-        bg.setStroke(dp(1), 0x33FFFFFF);
+        bg.setColor(HudColors.surfaceTint);
+        bg.setStroke(dp(1), HudColors.ripple);
         row.setBackground(bg);
         return row;
     }
@@ -708,7 +968,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
      * Build a compact label + custom toggle row.
      * The summary line is optional and rendered below the label in muted text.
      */
-    private LinearLayout createToggleRow(String label, String summary, M3.ToggleView toggle) {
+    private LinearLayout createToggleRow(String label, String summary, HudToggleView toggle) {
         LinearLayout container = new LinearLayout(getContext());
         container.setOrientation(VERTICAL);
         container.setPadding(0, dp(6), 0, dp(6));
@@ -720,7 +980,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         TextView title = new TextView(getContext());
         title.setText(label);
         title.setTextColor(Color.WHITE);
-        title.setTextSize(12);
+        title.setTextSize(HudType.LABEL_SP);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
                 0, LayoutParams.WRAP_CONTENT, 1f);
@@ -733,8 +993,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
         if (summary != null && !summary.isEmpty()) {
             TextView desc = new TextView(getContext());
             desc.setText(summary);
-            desc.setTextColor(0xFF888888);
-            desc.setTextSize(10f);
+            desc.setTextColor(HudColors.textDisabled);
+            desc.setTextSize(HudType.MICRO_SP);
             desc.setPadding(0, dp(2), dp(42), 0);
             container.addView(desc);
         }
@@ -777,7 +1037,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private Button createAlignButton(String label, int alignValue) {
         Button b = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
         b.setText(label);
-        b.setTextSize(11f);
+        b.setTextSize(HudType.CAPTION_SP);
         b.setTypeface(Typeface.DEFAULT_BOLD);
         b.setAllCaps(false);
         b.setPadding(0, 0, 0, 0);
@@ -804,10 +1064,10 @@ public final class HudPropertyInspectorView extends LinearLayout {
         if (b == null) return;
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(dp(8));
-        bg.setColor(active ? COLOR_TAB_ACTIVE : 0x33000000);
-        bg.setStroke(dp(1), active ? Color.WHITE : 0x33FFFFFF);
+        bg.setColor(active ? COLOR_TAB_ACTIVE : HudColors.surfaceTint);
+        bg.setStroke(dp(1), active ? Color.WHITE : HudColors.ripple);
         b.setBackground(bg);
-        b.setTextColor(active ? Color.WHITE : 0xAAFFFFFF);
+        b.setTextColor(active ? Color.WHITE : HudColors.withAlpha(HudColors.textPrimary, 0xAA));
     }
 
     private LinearLayout createTextColorPresetsRow() {
@@ -815,7 +1075,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         row.setOrientation(HORIZONTAL);
         row.setPadding(0, dp(4), 0, dp(4));
 
-        final int[] colors = new int[]{0xFFFFFFFF, 0xFFA39CB8, 0xFF80DEEA, 0xFFF38BA8, 0xFFF9E2AF, 0xFFA6E3A1};
+        final int[] colors = new int[]{0xFFFFFFFF, 0xFF9D85C2, 0xFF80DEEA, 0xFFF38BA8, 0xFFF9E2AF, 0xFFA6E3A1};
         for (int c : colors) {
             View dot = new View(getContext());
             GradientDrawable d = new GradientDrawable();
@@ -880,8 +1140,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(dp(8));
-        bg.setColor(isSelected ? 0xFF504A60 : 0xFF3A3A3A);
-        bg.setStroke(dp(isSelected ? 1.5f : 1), isSelected ? COLOR_TAB_ACTIVE : 0x33FFFFFF);
+        bg.setColor(isSelected ? HudColors.primaryContainer : HudColors.surface);
+        bg.setStroke(dp(isSelected ? 1.5f : 1), isSelected ? COLOR_TAB_ACTIVE : HudColors.ripple);
         card.setBackground(bg);
         card.setPadding(dp(4), dp(6), dp(4), dp(6));
 
@@ -899,8 +1159,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         TextView tv = new TextView(ctx);
         tv.setText(label);
-        tv.setTextSize(9.5f);
-        tv.setTextColor(0xFFCCCCCC);
+        tv.setTextSize(HudType.MICRO_SP);
+        tv.setTextColor(HudColors.textMuted);
         tv.setSingleLine(true);
         tv.setGravity(Gravity.CENTER);
         card.addView(tv);
@@ -953,7 +1213,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         content.addView(mSendModeRow);
 
         // Repeat Toggle
-        mRepeatToggle = new M3.ToggleView(getContext());
+        mRepeatToggle = new HudToggleView(getContext());
         mRepeatToggle.setOnCheckedChangeListener((view, checked) -> {
             if (mIsProgrammaticChange || mActiveButton == null || mActiveButton.action == null) return;
             mActiveButton.action.repeat = checked;
@@ -1035,16 +1295,17 @@ public final class HudPropertyInspectorView extends LinearLayout {
         content.addView(createSectionHeader(getContext().getString(R.string.hud_editor_event)));
 
         // Haptic Feedback Toggle (Moved to Event tab)
-        mHapticToggle = new M3.ToggleView(getContext());
+        mHapticToggle = new HudToggleView(getContext());
         mHapticToggle.setOnCheckedChangeListener((view, checked) -> {
             if (mIsProgrammaticChange || mActiveButton == null) return;
             mActiveButton.hapticEnabled = checked;
             if (mCallback != null) mCallback.onModelChanged(mActiveButton);
         });
-        content.addView(createToggleRow(getContext().getString(R.string.hud_haptic_feedback), null, mHapticToggle));
+        mHapticRow = createToggleRow(getContext().getString(R.string.hud_haptic_feedback), null, mHapticToggle);
+        content.addView(mHapticRow);
 
         // Lift with Soft Keyboard Toggle (ExtraKey mode - Moved to Event tab)
-        mAttachKeyboardToggle = new M3.ToggleView(getContext());
+        mAttachKeyboardToggle = new HudToggleView(getContext());
         mAttachKeyboardToggle.setOnCheckedChangeListener((view, checked) -> {
             if (mIsProgrammaticChange || mActiveButton == null) return;
             mActiveButton.attachToKeyboard = checked;
@@ -1127,7 +1388,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         mShapeTitle = new TextView(getContext());
         mShapeTitle.setText(getContext().getString(R.string.hud_editor_corner_shape));
         mShapeTitle.setTextColor(Color.WHITE);
-        mShapeTitle.setTextSize(12);
+        mShapeTitle.setTextSize(HudType.LABEL_SP);
         mShapeTitle.setTypeface(Typeface.DEFAULT_BOLD);
         mShapeTitle.setPadding(0, dp(8), 0, dp(4));
         content.addView(mShapeTitle);
@@ -1164,15 +1425,15 @@ public final class HudPropertyInspectorView extends LinearLayout {
             final int varIdx = v;
             Button b = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
             b.setText(variants[v]);
-            b.setTextSize(10.5f);
+            b.setTextSize(HudType.MICRO_SP);
             b.setTypeface(Typeface.DEFAULT_BOLD);
             b.setTextColor(Color.WHITE);
             b.setSingleLine(true);
             b.setEllipsize(android.text.TextUtils.TruncateAt.END);
             GradientDrawable bg = new GradientDrawable();
             bg.setCornerRadius(dp(8));
-            bg.setColor(0xFF3A3A3A);
-            bg.setStroke(dp(1), 0x33FFFFFF);
+            bg.setColor(HudColors.surface);
+            bg.setStroke(dp(1), HudColors.ripple);
             b.setBackground(bg);
             b.setMinHeight(dp(32));
             b.setPadding(dp(6), dp(4), dp(6), dp(4));
@@ -1198,8 +1459,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
             if (child instanceof Button) {
                 GradientDrawable bg = new GradientDrawable();
                 bg.setCornerRadius(dp(8));
-                bg.setColor(i == sel ? COLOR_TAB_ACTIVE : 0xFF3A3A3A);
-                bg.setStroke(dp(1), i == sel ? Color.WHITE : 0x33FFFFFF);
+                bg.setColor(i == sel ? COLOR_TAB_ACTIVE : HudColors.surface);
+                bg.setStroke(dp(1), i == sel ? Color.WHITE : HudColors.ripple);
                 child.setBackground(bg);
             }
         }
@@ -1210,12 +1471,12 @@ public final class HudPropertyInspectorView extends LinearLayout {
         row.setOrientation(HORIZONTAL);
         row.setPadding(0, dp(4), 0, dp(4));
 
-        final int[] colors = new int[]{0xFFFFFFFF, 0xFFA39CB8, 0xFF80DEEA, 0xFFFFD54F, 0xFFF38BA8, 0x00000000};
+        final int[] colors = new int[]{0xFFFFFFFF, 0xFF9D85C2, 0xFF80DEEA, 0xFFFFD54F, 0xFFF38BA8, 0x00000000};
         for (int c : colors) {
             View dot = new View(getContext());
             GradientDrawable d = new GradientDrawable();
             d.setShape(GradientDrawable.OVAL);
-            d.setColor(c == 0 ? 0x22FFFFFF : c);
+            d.setColor(c == 0 ? HudColors.outlineSubtle : c);
             d.setStroke(dp(1), Color.WHITE);
             dot.setBackground(d);
             dot.setOnClickListener(v -> {
@@ -1240,7 +1501,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         GradientDrawable thumb = new GradientDrawable();
         thumb.setShape(GradientDrawable.RECTANGLE);
         thumb.setCornerRadius(dp(4));
-        thumb.setColor(COLOR_TAB_ACTIVE); // Lilac pastel #A39CB8
+        thumb.setColor(COLOR_TAB_ACTIVE); // Lilac pastel #9D85C2
         thumb.setSize(dp(4), dp(40));
         sv.setVerticalScrollbarThumbDrawable(thumb);
     }
@@ -1252,7 +1513,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         TextView tv = new TextView(getContext());
         tv.setText(title);
         tv.setTextColor(COLOR_TEXT_MUTED);
-        tv.setTextSize(10);
+        tv.setTextSize(HudType.MICRO_SP);
         tv.setTypeface(Typeface.DEFAULT_BOLD);
         tv.setPadding(0, dp(10), 0, dp(4));
         return tv;
@@ -1261,7 +1522,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
     private TextView createBadgeTextView(String defaultText) {
         TextView tv = new TextView(getContext());
         tv.setText(defaultText);
-        tv.setTextSize(11);
+        tv.setTextSize(HudType.CAPTION_SP);
         tv.setTypeface(Typeface.DEFAULT_BOLD);
         tv.setTextColor(Color.WHITE);
         tv.setGravity(Gravity.CENTER);
@@ -1287,7 +1548,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         TextView lbl = new TextView(getContext());
         lbl.setText(label);
         lbl.setTextColor(Color.WHITE);
-        lbl.setTextSize(13);
+        lbl.setTextSize(HudType.BODY_SP);
         lbl.setTypeface(Typeface.DEFAULT_BOLD);
         top.addView(lbl, new LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f));
         LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(dp(76), dp(26));
@@ -1309,17 +1570,13 @@ public final class HudPropertyInspectorView extends LinearLayout {
         bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onStartTrackingTouch(SeekBar seekBar) {
-                // Auto-Ghosting: Dim to 0% opacity (completely invisible) while dragging to see HUD
-                animate().cancel();
-                setAlpha(0.0f);
+                // Ghost the whole inspector but keep this slider row fully visible
+                // so the user can still read the value while seeing the HUD.
+                enterSliderGhost(row);
             }
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 if (fromUser) {
-                    if (getAlpha() > 0.0f) {
-                        animate().cancel();
-                        setAlpha(0.0f);
-                    }
                     int val = min + progress;
                     badge.setText(val + unit + " ✎");
                     consumer.accept(val);
@@ -1327,9 +1584,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
             }
             @Override
             public void onStopTrackingTouch(SeekBar seekBar) {
-                // Restore to 100% opacity on release
-                animate().cancel();
-                animate().alpha(1.0f).setDuration(120).start();
+                exitSliderGhost();
             }
         });
 
@@ -1337,16 +1592,74 @@ public final class HudPropertyInspectorView extends LinearLayout {
         return row;
     }
 
+    /**
+     * Keep only the row being dragged at full opacity. Siblings stay in the
+     * layout (just transparent) so the row does not jump while the SeekBar is
+     * moving, and the panel background is removed so the HUD behind is visible.
+     */
+    private void enterSliderGhost(View row) {
+        if (mSliderGhosting) return;
+        mSliderGhosting = true;
+        mSliderGhostBackground = getBackground();
+        mSliderGhostElevation = getElevation();
+
+        setBackground(null);
+        setElevation(0f);
+
+        View child = row;
+        ViewParent parent = child.getParent();
+        while (parent instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) parent;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View sibling = group.getChildAt(i);
+                if (sibling != child) sibling.setAlpha(0f);
+            }
+            if (group instanceof ScrollView) {
+                mSliderGhostScrollView = (ScrollView) group;
+                mSliderGhostScrollView.setVerticalScrollBarEnabled(false);
+            }
+            if (group == this) break;
+            child = group;
+            parent = group.getParent();
+        }
+        row.setAlpha(1f);
+    }
+
+    private void exitSliderGhost() {
+        if (!mSliderGhosting) return;
+        mSliderGhosting = false;
+        restoreAlphaRecursive(this);
+        if (mSliderGhostScrollView != null) {
+            mSliderGhostScrollView.setVerticalScrollBarEnabled(true);
+            mSliderGhostScrollView = null;
+        }
+        setBackground(mSliderGhostBackground);
+        setElevation(mSliderGhostElevation);
+        mSliderGhostBackground = null;
+    }
+
+    private void restoreAlphaRecursive(View view) {
+        view.setAlpha(1f);
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                restoreAlphaRecursive(group.getChildAt(i));
+            }
+        }
+    }
+
     private void showNumberInputDialog(String label, int min, int max, String unit,
                                        SeekBar bar, TextView badge, ValueConsumer consumer) {
         Context ctx = getContext();
-        AlertDialog.Builder builder = new AlertDialog.Builder(ctx);
+        // Use the dark dialog theme so the legacy activity theme cannot draw
+        // its square window frame around the rounded card.
+        AlertDialog.Builder builder = new AlertDialog.Builder(ctx, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
 
         LinearLayout root = new LinearLayout(ctx);
         root.setOrientation(VERTICAL);
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(dp(16));
-        bg.setColor(0xFF3A3A3A);
+        bg.setColor(HudColors.surface);
         bg.setStroke(dp(1), COLOR_TAB_ACTIVE);
         root.setBackground(bg);
         root.setPadding(dp(16), dp(14), dp(16), dp(16));
@@ -1354,7 +1667,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
         TextView title = new TextView(ctx);
         title.setText(getContext().getString(R.string.hud_editor_set_value, label));
         title.setTextColor(Color.WHITE);
-        title.setTextSize(13);
+        title.setTextSize(HudType.BODY_SP);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setGravity(Gravity.CENTER);
         title.setPadding(0, 0, 0, dp(10));
@@ -1366,21 +1679,21 @@ public final class HudPropertyInspectorView extends LinearLayout {
         input.setText(String.valueOf(curVal));
         input.setSelectAllOnFocus(true);
         input.setTextColor(Color.WHITE);
-        input.setTextSize(16);
+        input.setTextSize(HudType.TITLE_SP);
         input.setTypeface(Typeface.DEFAULT_BOLD);
         input.setGravity(Gravity.CENTER);
         GradientDrawable inputBg = new GradientDrawable();
         inputBg.setCornerRadius(dp(8));
-        inputBg.setColor(0xFF484848);
-        inputBg.setStroke(dp(1), 0x33FFFFFF);
+        inputBg.setColor(HudColors.surfaceHighest);
+        inputBg.setStroke(dp(1), HudColors.ripple);
         input.setBackground(inputBg);
         input.setPadding(dp(10), dp(8), dp(10), dp(8));
         root.addView(input);
 
         TextView rangeHint = new TextView(ctx);
         rangeHint.setText(getContext().getString(R.string.hud_editor_range, min, max, unit));
-        rangeHint.setTextColor(0xFF888888);
-        rangeHint.setTextSize(10);
+        rangeHint.setTextColor(HudColors.textDisabled);
+        rangeHint.setTextSize(HudType.MICRO_SP);
         rangeHint.setGravity(Gravity.CENTER);
         rangeHint.setPadding(0, dp(6), 0, dp(12));
         root.addView(rangeHint);
@@ -1393,18 +1706,37 @@ public final class HudPropertyInspectorView extends LinearLayout {
             dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
         }
 
-        Button btnCancel = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
+        // Same rounded card as Apply. The platform buttonBarButtonStyle draws a square frame
+        // under the legacy host theme, which is why Cancel looked nothing like its neighbour.
+        Button btnCancel = new Button(ctx);
         btnCancel.setText(R.string.hud_overlay_cancel);
-        btnCancel.setTextColor(0xFF888888);
-        btnCancel.setTextSize(11);
+        btnCancel.setAllCaps(false);
+        btnCancel.setTextColor(HudColors.textPrimary);
+        btnCancel.setTextSize(HudType.CAPTION_SP);
+        btnCancel.setMinWidth(0);
+        btnCancel.setMinimumWidth(0);
+        btnCancel.setMinHeight(0);
+        btnCancel.setMinimumHeight(0);
+        btnCancel.setPadding(0, 0, 0, 0);
+        GradientDrawable cancelBg = new GradientDrawable();
+        cancelBg.setCornerRadius(dp(8));
+        cancelBg.setColor(HudColors.surfaceHighest);
+        cancelBg.setStroke(dp(1), HudColors.outlineSubtle);
+        btnCancel.setBackground(cancelBg);
         btnCancel.setOnClickListener(v -> dialog.dismiss());
         btnRow.addView(btnCancel, new LinearLayout.LayoutParams(0, dp(34), 1f));
 
-        Button btnOk = new Button(ctx, null, android.R.attr.buttonBarButtonStyle);
+        Button btnOk = new Button(ctx);
         btnOk.setText(R.string.hud_editor_apply);
+        btnOk.setAllCaps(false);
         btnOk.setTextColor(Color.WHITE);
         btnOk.setTypeface(Typeface.DEFAULT_BOLD);
-        btnOk.setTextSize(11);
+        btnOk.setTextSize(HudType.CAPTION_SP);
+        btnOk.setMinWidth(0);
+        btnOk.setMinimumWidth(0);
+        btnOk.setMinHeight(0);
+        btnOk.setMinimumHeight(0);
+        btnOk.setPadding(0, 0, 0, 0);
         GradientDrawable okBg = new GradientDrawable();
         okBg.setCornerRadius(dp(8));
         okBg.setColor(COLOR_TAB_ACTIVE);
@@ -1441,7 +1773,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
         GradientDrawable background = new GradientDrawable();
         background.setCornerRadius(dp(6));
-        background.setColor(COLOR_TAB_ACTIVE);
+        // Track uses the soft lilac so sliders stay visually distinct from primary accents.
+        background.setColor(HudColors.primarySoft);
 
         android.graphics.drawable.ClipDrawable clip = new android.graphics.drawable.ClipDrawable(
                 progress, Gravity.LEFT, android.graphics.drawable.ClipDrawable.HORIZONTAL);
@@ -1458,20 +1791,20 @@ public final class HudPropertyInspectorView extends LinearLayout {
         thumb.setSize(dp(12), dp(22));
         thumb.setCornerRadius(dp(6));
         thumb.setColor(Color.WHITE);
-        thumb.setStroke(dp(1.5f), 0xFF3A3A3A);
+        thumb.setStroke(dp(1.5f), HudColors.surface);
         bar.setThumb(thumb);
     }
 
     private Button createBadgeButton(String label) {
-        Button b = new Button(getContext(), null, android.R.attr.buttonBarButtonStyle);
+        Button b = new Button(getContext());
         b.setText(label);
         b.setTextColor(Color.WHITE);
-        b.setTextSize(11.5f);
+        b.setTextSize(HudType.LABEL_SP);
         b.setAllCaps(false);
         GradientDrawable badgeBg = new GradientDrawable();
         badgeBg.setCornerRadius(dp(8));
-        badgeBg.setColor(0x33000000);
-        badgeBg.setStroke(dp(1), 0x33FFFFFF);
+        badgeBg.setColor(HudColors.surfaceTint);
+        badgeBg.setStroke(dp(1), HudColors.ripple);
         b.setBackground(badgeBg);
         b.setPadding(dp(12), 0, dp(12), 0);
         b.setMinHeight(0);
@@ -1479,7 +1812,9 @@ public final class HudPropertyInspectorView extends LinearLayout {
         b.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         b.setSingleLine(true);
         b.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        LayoutParams lp = new LayoutParams(LayoutParams.MATCH_PARENT, dp(36));
+        // 36dp read as a shrunken row next to the rest of the panel; 44dp matches the
+        // inspector's other action rows and stays a comfortable touch target.
+        LayoutParams lp = new LayoutParams(LayoutParams.MATCH_PARENT, dp(44));
         lp.setMargins(0, dp(2), 0, dp(6));
         b.setLayoutParams(lp);
         return b;
@@ -1551,6 +1886,20 @@ public final class HudPropertyInspectorView extends LinearLayout {
         }
     }
 
+    /**
+     * Echo the widget position into the Transform sliders while the widget is being dragged on
+     * the canvas. A full {@link #bindButton} rebuild is too heavy to run on every touch move, so
+     * this touches only the two position rows.
+     */
+    public void syncTransformLive(HudButton b) {
+        if (b == null || b != mActiveButton) return;
+        if (getVisibility() != VISIBLE) return;
+        if (mPosXSeekBar == null || mPosXBadge == null) return;
+        if (mPosYSeekBar == null || mPosYBadge == null) return;
+        syncSliderAndBadge(mPosXSeekBar, mPosXBadge, Math.round(b.posXPercent * 100), 0, "%");
+        syncSliderAndBadge(mPosYSeekBar, mPosYBadge, Math.round(b.posYPercent * 100), 0, "%");
+    }
+
     public void bindButton(HudButton b) {
         this.mActiveButton = b;
         if (b == null) {
@@ -1580,14 +1929,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
             }
         }
 
-        // Hide Event tab entirely for Group and ExtraKeys (containers)
-        boolean isGroup = b != null && (HudButton.WIDGET_GROUP.equals(b.widgetType) || HudButton.WIDGET_EXTRA_KEYS.equals(b.widgetType));
-        if (mTabButtons != null && mTabButtons.length > 2) {
-            mTabButtons[2].setVisibility(isGroup ? GONE : VISIBLE);
-            if (isGroup && mCurrentTab == 2) {
-                selectTab(0);
-            }
-        }
+        // Containers keep the Event tab: it exposes the lift-with-keyboard
+        // toggle, while the key-specific action rows are hidden below.
 
         mIsProgrammaticChange = true;
         try {
@@ -1641,18 +1984,34 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
             // Container / ExtraKeys column/row splitting controls
             boolean isContainer = b != null && (HudButton.WIDGET_GROUP.equals(b.widgetType) || HudButton.WIDGET_EXTRA_KEYS.equals(b.widgetType));
+            // Grid splits only describe GRID layout; FREE places keys by percentage.
+            boolean showGridRows = isContainer && b.layoutMode != HudButton.LAYOUT_FREE;
             if (mColumnsRow != null) {
-                mColumnsRow.setVisibility(isContainer ? VISIBLE : GONE);
-                if (isContainer) {
+                mColumnsRow.setVisibility(showGridRows ? VISIBLE : GONE);
+                if (showGridRows) {
                     syncSliderAndBadge(mColumnsSeekBar, mColumnsBadge, Math.max(0, Math.min(16, b.columns)), 0, "");
                     mColumnsBadge.setText(b.columns == 0 ? getContext().getString(R.string.hud_editor_grid_auto) : String.valueOf(b.columns));
                 }
             }
             if (mRowsRow != null) {
-                mRowsRow.setVisibility(isContainer ? VISIBLE : GONE);
-                if (isContainer) {
+                mRowsRow.setVisibility(showGridRows ? VISIBLE : GONE);
+                if (showGridRows) {
                     syncSliderAndBadge(mRowsSeekBar, mRowsBadge, Math.max(0, Math.min(8, b.rows)), 0, "");
                     mRowsBadge.setText(b.rows == 0 ? getContext().getString(R.string.hud_editor_grid_auto) : String.valueOf(b.rows));
+                }
+            }
+            if (mLayoutModeRow != null) {
+                mLayoutModeRow.setVisibility(isContainer ? VISIBLE : GONE);
+                if (isContainer) updateLayoutModePills();
+            }
+            if (mApplySizeRow != null) {
+                // Only a key inside a container has siblings to copy its size to.
+                mApplySizeRow.setVisibility(mParentContainer != null ? VISIBLE : GONE);
+            }
+            if (mReserveSpaceRow != null) {
+                mReserveSpaceRow.setVisibility(isContainer ? VISIBLE : GONE);
+                if (isContainer && mReserveSpaceToggle != null) {
+                    mReserveSpaceToggle.setChecked(b.reserveSpace);
                 }
             }
 
@@ -1668,7 +2027,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
             boolean isSuperGesture = b != null && HudButton.WIDGET_SUPER_GESTURE.equals(b.widgetType);
 
             // Hide standard key binding for Touchpad, Scrollbar, D-Pad, Super Gesture
-            boolean hideStandardKeys = isTouchpadOrScrollbar || isDpad || isSuperGesture;
+            // and for containers, which only need the behavior toggles here.
+            boolean hideStandardKeys = isTouchpadOrScrollbar || isDpad || isSuperGesture || isContainer;
             if (mSectionPrimaryAction != null) mSectionPrimaryAction.setVisibility(hideStandardKeys ? GONE : VISIBLE);
             if (mBtnPickMainAction != null) mBtnPickMainAction.setVisibility(hideStandardKeys ? GONE : VISIBLE);
             if (mSendModeRow != null) mSendModeRow.setVisibility(hideStandardKeys ? GONE : VISIBLE);
@@ -1678,6 +2038,8 @@ public final class HudPropertyInspectorView extends LinearLayout {
             if (mSectionLongPressAction != null) mSectionLongPressAction.setVisibility(hideStandardKeys ? GONE : VISIBLE);
             if (mBtnPickLongPressAction != null) mBtnPickLongPressAction.setVisibility(hideStandardKeys ? GONE : VISIBLE);
             if (mLongPressDelayRow != null) mLongPressDelayRow.setVisibility(hideStandardKeys ? GONE : VISIBLE);
+            // Containers have no haptic of their own: their children carry it.
+            if (mHapticRow != null) mHapticRow.setVisibility(isContainer ? GONE : VISIBLE);
 
             if (mBtnPickMainAction != null) {
                 mBtnPickMainAction.setText(formatActionBadge(b.action));

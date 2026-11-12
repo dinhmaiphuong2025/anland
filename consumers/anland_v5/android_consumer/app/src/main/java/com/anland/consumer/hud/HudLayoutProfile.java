@@ -1,5 +1,7 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.HudColors;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -40,21 +42,39 @@ public final class HudLayoutProfile {
     }
 
     private void initDefaults() {
-        portraitLayout = createDefaultPortraitLayout();
-        landscapeLayout = createSteamDeckLayout();
+        // Layouts 1 and 2 ship empty; Layout 3 is the built-in default.
         try {
-            importSlot(new JSONObject(DefaultHudLayout2.JSON), 0, 1);
+            importSlot(new JSONObject(DefaultHudLayout3.JSON), 0, 2);
         } catch (JSONException e) {
-            throw new IllegalStateException("Invalid built-in HUD layout 2", e);
+            throw new IllegalStateException("Invalid built-in HUD layout 3", e);
+        }
+    }
+
+    /** Portrait layer of built-in Layout 3: a single Extra Keys row. */
+    public static HudLayout createDefaultPortraitLayout() {
+        return defaultLayout3Layer("portrait");
+    }
+
+    /** Landscape layer of built-in Layout 3: Super Gesture pill and action group. */
+    public static HudLayout createDefaultLandscapeLayout() {
+        return defaultLayout3Layer("landscape");
+    }
+
+    private static HudLayout defaultLayout3Layer(String key) {
+        try {
+            return HudLayout.fromJSON(new JSONObject(DefaultHudLayout3.JSON)
+                    .getJSONObject("layout").getJSONObject(key));
+        } catch (JSONException e) {
+            throw new IllegalStateException("Invalid built-in HUD layout 3", e);
         }
     }
 
     /**
-     * User's actual live Portrait Layout:
+     * Explicit four-button portrait hotkeys preset:
      * - Right pill Super Gesture widget (Super+Left, Super+Right, Super+F, Toggle IME)
      * - Quick action buttons: Q (Super+Q), OV (Super+O / Overview), CP (Ctrl+Shift+V / Copy-Paste)
      */
-    public static HudLayout createDefaultPortraitLayout() {
+    public static HudLayout createPortraitHotkeysLayout() {
         HudLayout layout = new HudLayout();
         layout.dockEnabled = false;
 
@@ -62,15 +82,17 @@ public final class HudLayoutProfile {
         HudButton gesture = new HudButton();
         gesture.widgetType = HudButton.WIDGET_SUPER_GESTURE;
         gesture.label = "";
-        gesture.posXPercent = 0.817f;
-        gesture.posYPercent = 0.397f;
+        gesture.posXPercent = 0.857f;
+        gesture.posYPercent = 0.437f;
         gesture.widthDp = 120;
         gesture.heightDp = 30;
-        gesture.cornerRadiusDp = 29;
+        gesture.cornerShape = HudButton.CORNER_ALL;
+        gesture.cornerRadiusDp = 15;
         gesture.opacity = 0.10f;
-        gesture.bgColor = 0xE62A2B3D;
-        gesture.textColor = 0xFFFFFFFF;
-        gesture.activeColor = 0xFF80DEEA;
+        gesture.bgColor = HudColors.surfaceTranslucent;
+        gesture.textColor = HudColors.textPrimary;
+        gesture.activeColor = HudColors.primary;
+        gesture.borderStrokeWidthDp = 1;
         gesture.action = HudAction.key(0);
         gesture.swipeLeftAction = HudAction.combo(125, 105);   // Super + Left
         gesture.swipeRightAction = HudAction.combo(125, 106);  // Super + Right
@@ -82,15 +104,17 @@ public final class HudLayoutProfile {
         // 2. Q button (Super + Q / Settings)
         HudButton btnQ = new HudButton();
         btnQ.label = "Q";
-        btnQ.posXPercent = 0.919f;
-        btnQ.posYPercent = 0.437f;
+        btnQ.posXPercent = 0.950f;
+        btnQ.posYPercent = 0.477f;
         btnQ.widthDp = 36;
         btnQ.heightDp = 36;
+        btnQ.cornerShape = HudButton.CORNER_ALL;
         btnQ.cornerRadiusDp = 8;
         btnQ.opacity = 0.10f;
-        btnQ.bgColor = 0xE62A2B3D;
-        btnQ.textColor = 0xFFFFFFFF;
-        btnQ.activeColor = 0xFF80DEEA;
+        btnQ.bgColor = HudColors.surfaceTranslucent;
+        btnQ.textColor = HudColors.textPrimary;
+        btnQ.activeColor = HudColors.primary;
+        btnQ.borderStrokeWidthDp = 1;
         btnQ.action = HudAction.combo(125, 16); // Super + Q (Close window)
         btnQ.popupAction = HudAction.system("open_settings");
         btnQ.sendOnRelease = true;
@@ -99,15 +123,17 @@ public final class HudLayoutProfile {
         // 3. OV button (Super + O / Enter)
         HudButton btnOv = new HudButton();
         btnOv.label = "OV";
-        btnOv.posXPercent = 0.812f;
-        btnOv.posYPercent = 0.437f;
+        btnOv.posXPercent = 0.852f;
+        btnOv.posYPercent = 0.477f;
         btnOv.widthDp = 36;
         btnOv.heightDp = 36;
+        btnOv.cornerShape = HudButton.CORNER_ALL;
         btnOv.cornerRadiusDp = 8;
         btnOv.opacity = 0.10f;
-        btnOv.bgColor = 0xE62A2B3D;
-        btnOv.textColor = 0xFFFFFFFF;
-        btnOv.activeColor = 0xFF80DEEA;
+        btnOv.bgColor = HudColors.surfaceTranslucent;
+        btnOv.textColor = HudColors.textPrimary;
+        btnOv.activeColor = HudColors.primary;
+        btnOv.borderStrokeWidthDp = 1;
         btnOv.action = HudAction.combo(125, 24); // Super + O (Overview)
         btnOv.sendOnRelease = true;
         btnOv.popupAction = HudAction.key(28);   // Enter
@@ -116,15 +142,17 @@ public final class HudLayoutProfile {
         // 4. CP button (Ctrl+Shift+V / Ctrl+Shift+C)
         HudButton btnCp = new HudButton();
         btnCp.label = "CP";
-        btnCp.posXPercent = 0.715f;
-        btnCp.posYPercent = 0.437f;
+        btnCp.posXPercent = 0.755f;
+        btnCp.posYPercent = 0.477f;
         btnCp.widthDp = 36;
         btnCp.heightDp = 36;
+        btnCp.cornerShape = HudButton.CORNER_ALL;
         btnCp.cornerRadiusDp = 8;
         btnCp.opacity = 0.10f;
-        btnCp.bgColor = 0xE62A2B3D;
-        btnCp.textColor = 0xFFFFFFFF;
-        btnCp.activeColor = 0xFF80DEEA;
+        btnCp.bgColor = HudColors.surfaceTranslucent;
+        btnCp.textColor = HudColors.textPrimary;
+        btnCp.activeColor = HudColors.primary;
+        btnCp.borderStrokeWidthDp = 1;
         btnCp.action = HudAction.combo(29, 42, 47);      // Ctrl + Shift + V (Paste)
         btnCp.sendOnRelease = true;
         btnCp.popupAction = HudAction.combo(29, 42, 46); // Ctrl + Shift + C (Copy)
@@ -193,7 +221,7 @@ public final class HudLayoutProfile {
         deckTrackpad.trackpointDeadzoneDp = 4;
         deckTrackpad.widthDp = 92;
         deckTrackpad.heightDp = 92;
-        deckTrackpad.cornerRadiusDp = 18;
+        deckTrackpad.cornerRadiusDp = 46;
         deckTrackpad.posXPercent = 0.9200000f;
         deckTrackpad.posYPercent = 0.7729167f;
         layout.floatingButtons.add(deckTrackpad);
@@ -227,16 +255,6 @@ public final class HudLayoutProfile {
         float rightX = isLandscape ? 0.87f : 0.82f;
 
         // Left Side Controls (10% Margin)
-        HudButton mouseNub = new HudButton();
-        mouseNub.widgetType = HudButton.WIDGET_TRACKPOINT;
-        mouseNub.label = "MOUSE";
-        mouseNub.widthDp = 62;
-        mouseNub.heightDp = 62;
-        mouseNub.cornerRadiusDp = 31;
-        mouseNub.posXPercent = isLandscape ? 0.15f : 0.20f;
-        mouseNub.posYPercent = 0.68f;
-        layout.floatingButtons.add(mouseNub);
-
         HudButton btnEsc = new HudButton();
         btnEsc.label = "ESC";
         btnEsc.action = HudAction.key(1);
@@ -283,7 +301,7 @@ public final class HudLayoutProfile {
         superGesture.label = "SUPER";
         superGesture.widthDp = 120;
         superGesture.heightDp = 32;
-        superGesture.cornerRadiusDp = 29;
+        superGesture.cornerRadiusDp = 16;
         superGesture.posXPercent = isLandscape ? 0.85f : 0.80f;
         superGesture.posYPercent = 0.16f;
         superGesture.swipeLeftAction = HudAction.combo(125, 105);

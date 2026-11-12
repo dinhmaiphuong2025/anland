@@ -1,5 +1,7 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.HudColors;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -14,7 +16,7 @@ public final class HudLayout {
     public boolean dockEnabled = true;
     public boolean dockScrollable = false;
     public int dockHeightDp = 40;
-    public int dockBgColor = 0xCC11111B;
+    public int dockBgColor = HudColors.withAlpha(HudColors.onActive, 0xCC);
     public List<HudButton> dockItems = new ArrayList<>();
     public List<HudButton> floatingButtons = new ArrayList<>();
 
@@ -44,7 +46,7 @@ public final class HudLayout {
         l.dockEnabled = obj.optBoolean("dock_enabled", true);
         l.dockScrollable = obj.optBoolean("dock_scrollable", false);
         l.dockHeightDp = obj.optInt("dock_height_dp", 40);
-        l.dockBgColor = obj.optInt("dock_bg_color", 0xCC11111B);
+        l.dockBgColor = obj.optInt("dock_bg_color", HudColors.withAlpha(HudColors.onActive, 0xCC));
 
         JSONArray dockArr = obj.optJSONArray("dock_items");
         if (dockArr != null) {

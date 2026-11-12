@@ -1,5 +1,10 @@
 package com.anland.consumer.hud;
 
+import com.anland.consumer.hud.design.HudColors;
+import com.anland.consumer.hud.design.HudCornerShape;
+import com.anland.consumer.hud.design.HudDefaults;
+import com.anland.consumer.hud.design.HudShape;
+
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -14,7 +19,6 @@ import java.util.UUID;
 public final class HudButton {
     public static final String WIDGET_STANDARD = "button";
     public static final String WIDGET_SUPER_GESTURE = "super_gesture";
-    public static final String WIDGET_TRACKPOINT = "trackpoint";
     public static final String WIDGET_TOUCHPAD = "touchpad";
     public static final String WIDGET_SCROLLBAR = "scrollbar";
     public static final String WIDGET_DPAD = "dpad";
@@ -27,7 +31,6 @@ public final class HudButton {
     public enum WidgetKind {
         KEY,           // WIDGET_STANDARD
         SUPER_GESTURE, // WIDGET_SUPER_GESTURE
-        TRACKPOINT,    // WIDGET_TRACKPOINT
         TOUCHPAD,      // WIDGET_TOUCHPAD
         SCROLLBAR,     // WIDGET_SCROLLBAR
         DPAD,          // WIDGET_DPAD
@@ -52,32 +55,53 @@ public final class HudButton {
     public int columns = 0;
     // Number of rows for WIDGET_GROUP / WIDGET_EXTRA_KEYS (0 = auto wrap)
     public int rows = 0;
+    /**
+     * How children are placed inside WIDGET_GROUP / WIDGET_EXTRA_KEYS.
+     * GRID fills equal cells by child order (right for key bars). FREE honours each child's
+     * own posXPercent / posYPercent and size, which is what makes non-rectangular clusters
+     * (WASD, thumb pads) possible. Stored as an int so old profiles keep loading as GRID.
+     */
+    public int layoutMode = LAYOUT_GRID;
+    public static final int LAYOUT_GRID = 0;
+    public static final int LAYOUT_FREE = 1;
+    /**
+     * Grid cell this key occupies inside its container (row * columns + column), or -1 when it
+     * has no fixed cell and simply fills the next free one. Fixed cells are what make "drop it
+     * in this cell and it stays there" work instead of the whole bar reflowing.
+     */
+    public int gridSlot = -1;
+    /**
+     * Containers only: reserve the strip this widget covers at the bottom of the screen instead
+     * of floating over the desktop, the way the original extra-keys bar did. The host shrinks the
+     * display surface by that strip so nothing is hidden behind the keys.
+     */
+    public boolean reserveSpace = false;
     /** Inner padding for WIDGET_GROUP, in dp. */
     public int padDp = 8;
-    // Zalith-style 8 button corner shapes:
-    // 1: Top-Left, 2: Top-Right, 3: Bottom-Left, 4: Bottom-Right,
-    // 5: Left Both, 6: Right Both, 7: All 4 Corners (default), 8: None (Sharp 90deg)
-    public static final int CORNER_TOP_LEFT = 1;
-    public static final int CORNER_TOP_RIGHT = 2;
-    public static final int CORNER_BOTTOM_LEFT = 3;
-    public static final int CORNER_BOTTOM_RIGHT = 4;
-    public static final int CORNER_LEFT_BOTH = 5;
-    public static final int CORNER_RIGHT_BOTH = 6;
-    public static final int CORNER_TOP_BOTH = 7;
-    public static final int CORNER_BOTTOM_BOTH = 8;
-    public static final int CORNER_ALL = 9;
-    public static final int CORNER_NONE = 10;
-    public int cornerShape = CORNER_ALL;
+    // Corner shapes are a design-layer concept; these are aliases of HudCornerShape so that
+    // saved profiles keep their existing integer ids. Values must never be renumbered.
+    public static final int CORNER_TOP_LEFT = HudCornerShape.TOP_LEFT;
+    public static final int CORNER_TOP_RIGHT = HudCornerShape.TOP_RIGHT;
+    public static final int CORNER_BOTTOM_LEFT = HudCornerShape.BOTTOM_LEFT;
+    public static final int CORNER_BOTTOM_RIGHT = HudCornerShape.BOTTOM_RIGHT;
+    public static final int CORNER_LEFT_BOTH = HudCornerShape.LEFT_BOTH;
+    public static final int CORNER_RIGHT_BOTH = HudCornerShape.RIGHT_BOTH;
+    public static final int CORNER_TOP_BOTH = HudCornerShape.TOP_BOTH;
+    public static final int CORNER_BOTTOM_BOTH = HudCornerShape.BOTTOM_BOTH;
+    public static final int CORNER_ALL = HudCornerShape.ALL;
+    public static final int CORNER_NONE = HudCornerShape.NONE;
+    public int cornerShape = HudCornerShape.DEFAULT;
 
-    public int cornerRadiusDp = 8;
-    public float opacity = 0.85f;
+    public int cornerRadiusDp = HudShape.BUTTON_DP;
+    public float opacity = HudDefaults.OPACITY_WIDGET;
 
-    // Styling colors (ARGB hex)
-    public int bgColor = 0xFF424242; // Alight Motion dark charcoal C23C479
-    public int textColor = 0xFFFFFFFF;
-    public int activeColor = 0xFFA39CB8; // Lilac pastel C23C479
+    // Styling colors (ARGB hex). Defaults resolve through the design layer so re-skinning the
+    // palette does not require touching this model.
+    public int bgColor = HudColors.surfaceHigh;
+    public int textColor = HudColors.textPrimary;
+    public int activeColor = HudColors.primary;
     public int borderStrokeWidthDp = 0;  // 0 = none (default), 1..10 dp
-    public int borderColor = 0xFFFFFFFF; // Clean white border default
+    public int borderColor = HudColors.textPrimary;
     public String iconId = null;         // Pure vector icon identifier (e.g. "save", "copy", "up"...)
     public int styleVariant = 0;         // Widget-specific visual variant (0=default/minimal, 1=classic/matte, 2=outline/glass)
 
@@ -176,6 +200,8 @@ public final class HudButton {
         JSONObject obj = new JSONObject();
         obj.put("id", id);
         obj.put("widget_type", widgetType);
+        obj.put("grid_slot", gridSlot);
+        obj.put("reserve_space", reserveSpace);
         obj.put("label", label);
         obj.put("pos_x_pct", posXPercent);
         obj.put("pos_y_pct", posYPercent);
@@ -207,7 +233,7 @@ public final class HudButton {
             obj.put("swipe_up", actionJSON(swipeUpAction));
             obj.put("swipe_down", actionJSON(swipeDownAction));
             obj.put("swipe_threshold_dp", swipeThresholdDp);
-        } else if (WIDGET_TRACKPOINT.equals(widgetType) || WIDGET_TOUCHPAD.equals(widgetType) || WIDGET_SCROLLBAR.equals(widgetType)) {
+        } else if (WIDGET_TOUCHPAD.equals(widgetType) || WIDGET_SCROLLBAR.equals(widgetType)) {
             obj.put("trackpoint_sensitivity", trackpointSensitivity);
             obj.put("trackpoint_deadzone_dp", trackpointDeadzoneDp);
             obj.put("trackpoint_mode", trackpointMode != null ? trackpointMode : MODE_MOUSE);
@@ -224,6 +250,7 @@ public final class HudButton {
             obj.put("pad_dp", padDp);
             obj.put("columns", columns);
             obj.put("rows", rows);
+            obj.put("layout_mode", layoutMode);
             JSONArray kids = new JSONArray();
             for (HudButton child : children) kids.put(child.toJSON());
             obj.put("children", kids);
@@ -244,6 +271,8 @@ public final class HudButton {
         HudButton b = new HudButton();
         b.id = obj.optString("id", UUID.randomUUID().toString());
         b.widgetType = obj.optString("widget_type", WIDGET_STANDARD);
+        b.gridSlot = obj.optInt("grid_slot", -1);
+        b.reserveSpace = obj.optBoolean("reserve_space", false);
         b.label = obj.optString("label", "BTN");
         b.posXPercent = (float) obj.optDouble("pos_x_pct", 0.5);
         b.posYPercent = (float) obj.optDouble("pos_y_pct", 0.5);
@@ -252,11 +281,11 @@ public final class HudButton {
         b.cornerShape = obj.optInt("corner_shape", CORNER_ALL);
         b.cornerRadiusDp = obj.optInt("corner_radius_dp", 8);
         b.opacity = (float) obj.optDouble("opacity", 0.85);
-        b.bgColor = obj.optInt("bg_color", 0xFF424242);
-        b.textColor = obj.optInt("text_color", 0xFFFFFFFF);
-        b.activeColor = obj.optInt("active_color", 0xFFA39CB8);
+        b.bgColor = obj.optInt("bg_color", HudColors.surfaceHigh);
+        b.textColor = obj.optInt("text_color", HudColors.textPrimary);
+        b.activeColor = obj.optInt("active_color", HudColors.primary);
         b.borderStrokeWidthDp = obj.optInt("border_stroke_width_dp", 0);
-        b.borderColor = obj.optInt("border_color", 0xFFFFFFFF);
+        b.borderColor = obj.optInt("border_color", HudColors.textPrimary);
         if (obj.has("icon_id")) b.iconId = obj.optString("icon_id", null);
         b.styleVariant = obj.optInt("style_variant", 0);
         b.textAlign = obj.optInt("text_align", ALIGN_CENTER);
@@ -300,6 +329,7 @@ public final class HudButton {
             b.padDp = obj.optInt("pad_dp", 8);
             b.columns = obj.optInt("columns", 0);
             b.rows = obj.optInt("rows", 0);
+            b.layoutMode = obj.optInt("layout_mode", LAYOUT_GRID);
             JSONArray kids = obj.optJSONArray("children");
             if (kids != null) {
                 for (int i = 0; i < kids.length(); i++) {
@@ -379,6 +409,11 @@ public final class HudButton {
         d.hapticEnabled = this.hapticEnabled;
         d.attachToKeyboard = this.attachToKeyboard;
         d.padDp = this.padDp;
+        d.columns = this.columns;
+        d.rows = this.rows;
+        d.layoutMode = this.layoutMode;
+        d.gridSlot = this.gridSlot;
+        d.reserveSpace = this.reserveSpace;
         for (HudButton child : this.children) d.children.add(child.duplicate());
         return d;
     }
