@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="hud_editor_icon_delete">Delete</string>
+    <string name="hud_editor_icon_touchpad">Touchpad</string>
+    <string name="hud_editor_icon_slider">Slider</string>
+    <string name="hud_editor_icon_columns">Columns</string>
+    <string name="hud_editor_icon_rows">Rows</string>
+    <string name="hud_editor_icon_move">Move</string>
+    <string name="hud_editor_icon_pin">Pin</string>
+    <string name="hud_editor_icon_pip">Float window</string>
+    <string name="hud_editor_icon_camera">Screenshot</string>
+    <string name="hud_editor_icon_eye">Eye</string>
+    <string name="hud_editor_icon_eye_off">Eye off</string>
     <string name="hud_editor_drag_mode">Drag style</string>
     <string name="hud_editor_drag_double_tap">Double tap</string>
     <string name="hud_editor_drag_hold">Hold</string>

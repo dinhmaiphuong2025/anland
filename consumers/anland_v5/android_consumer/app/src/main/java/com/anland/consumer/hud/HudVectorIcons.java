@@ -46,6 +46,7 @@ public final class HudVectorIcons {
     public static final String ICON_KEYBOARD_OFF = "keyboard_off";
     public static final String ICON_SLIDER = "slider";
     public static final String ICON_EYE = "eye";
+    public static final String ICON_EYE_OFF = "eye_off";
 
     // Extended HUD Key Label Icons
     public static final String ICON_HOUSE = "house";
@@ -71,6 +72,12 @@ public final class HudVectorIcons {
     public static final String ICON_DESKTOP = "desktop";
     public static final String ICON_POINTER = "pointer";
     public static final String ICON_HAND = "hand";
+    public static final String ICON_COLUMNS = "columns";
+    public static final String ICON_ROWS = "rows";
+    public static final String ICON_MOVE = "move";
+    public static final String ICON_PIN = "pin";
+    public static final String ICON_PIP = "pip";
+    public static final String ICON_CAMERA = "camera";
 
     public static final String[] ALL_ICONS = new String[]{
             ICON_UP, ICON_DOWN, ICON_LEFT, ICON_RIGHT,
@@ -81,7 +88,9 @@ public final class HudVectorIcons {
             ICON_MUTE, ICON_PLAY, ICON_PAUSE, ICON_BRIGHTNESS,
             ICON_WINDOW, ICON_BROWSER, ICON_TERMINAL, ICON_EDITOR,
             ICON_CLOSE, ICON_SUPER, ICON_ALT, ICON_TAB,
-            ICON_DESKTOP, ICON_POINTER, ICON_HAND
+            ICON_DESKTOP, ICON_POINTER, ICON_HAND, ICON_EYE, ICON_EYE_OFF,
+            ICON_DELETE, ICON_TOUCHPAD, ICON_SLIDER,
+            ICON_COLUMNS, ICON_ROWS, ICON_MOVE, ICON_PIN, ICON_PIP, ICON_CAMERA
     };
 
     public static final int[] ICON_LABELS = new int[]{
@@ -93,7 +102,11 @@ public final class HudVectorIcons {
             R.string.hud_editor_icon_mute, R.string.hud_editor_icon_play, R.string.hud_editor_icon_pause, R.string.hud_editor_icon_brightness,
             R.string.hud_editor_icon_window, R.string.hud_editor_icon_browser, R.string.hud_editor_icon_terminal, R.string.hud_editor_icon_editor,
             R.string.hud_editor_icon_close, R.string.hud_editor_icon_super, R.string.hud_editor_icon_alt, R.string.hud_editor_icon_tab,
-            R.string.hud_editor_icon_desktop, R.string.hud_editor_icon_pointer, R.string.hud_editor_icon_hand
+            R.string.hud_editor_icon_desktop, R.string.hud_editor_icon_pointer, R.string.hud_editor_icon_hand,
+            R.string.hud_editor_icon_eye, R.string.hud_editor_icon_eye_off,
+            R.string.hud_editor_icon_delete, R.string.hud_editor_icon_touchpad, R.string.hud_editor_icon_slider,
+            R.string.hud_editor_icon_columns, R.string.hud_editor_icon_rows, R.string.hud_editor_icon_move,
+            R.string.hud_editor_icon_pin, R.string.hud_editor_icon_pip, R.string.hud_editor_icon_camera
     };
 
     /**
@@ -559,11 +572,90 @@ public final class HudVectorIcons {
                 break;
             }
 
+            case ICON_COLUMNS: { // Lucide: columns-3
+                // <rect width="18" height="18" x="3" y="3" rx="2" />
+                // <path d="M9 3v18" /><path d="M15 3v18" />
+                sRect.set(p(cx, 3f, scale), p(cy, 3f, scale), p(cx, 21f, scale), p(cy, 21f, scale));
+                canvas.drawRoundRect(sRect, 2f * scale, 2f * scale, paint);
+                canvas.drawLine(p(cx, 9f, scale), p(cy, 3f, scale), p(cx, 9f, scale), p(cy, 21f, scale), paint);
+                canvas.drawLine(p(cx, 15f, scale), p(cy, 3f, scale), p(cx, 15f, scale), p(cy, 21f, scale), paint);
+                break;
+            }
+            case ICON_ROWS: { // Lucide: rows-3
+                // <rect width="18" height="18" x="3" y="3" rx="2" />
+                // <path d="M21 9H3" /><path d="M21 15H3" />
+                sRect.set(p(cx, 3f, scale), p(cy, 3f, scale), p(cx, 21f, scale), p(cy, 21f, scale));
+                canvas.drawRoundRect(sRect, 2f * scale, 2f * scale, paint);
+                canvas.drawLine(p(cx, 3f, scale), p(cy, 9f, scale), p(cx, 21f, scale), p(cy, 9f, scale), paint);
+                canvas.drawLine(p(cx, 3f, scale), p(cy, 15f, scale), p(cx, 21f, scale), p(cy, 15f, scale), paint);
+                break;
+            }
+            case ICON_MOVE: { // Lucide: move
+                // <path d="M12 2v20" /><path d="M2 12h20" /> plus four heads
+                canvas.drawLine(p(cx, 12f, scale), p(cy, 2f, scale), p(cx, 12f, scale), p(cy, 22f, scale), paint);
+                canvas.drawLine(p(cx, 2f, scale), p(cy, 12f, scale), p(cx, 22f, scale), p(cy, 12f, scale), paint);
+                // up
+                canvas.drawLine(p(cx, 9f, scale), p(cy, 5f, scale), p(cx, 12f, scale), p(cy, 2f, scale), paint);
+                canvas.drawLine(p(cx, 12f, scale), p(cy, 2f, scale), p(cx, 15f, scale), p(cy, 5f, scale), paint);
+                // down
+                canvas.drawLine(p(cx, 9f, scale), p(cy, 19f, scale), p(cx, 12f, scale), p(cy, 22f, scale), paint);
+                canvas.drawLine(p(cx, 12f, scale), p(cy, 22f, scale), p(cx, 15f, scale), p(cy, 19f, scale), paint);
+                // left
+                canvas.drawLine(p(cx, 5f, scale), p(cy, 9f, scale), p(cx, 2f, scale), p(cy, 12f, scale), paint);
+                canvas.drawLine(p(cx, 2f, scale), p(cy, 12f, scale), p(cx, 5f, scale), p(cy, 15f, scale), paint);
+                // right
+                canvas.drawLine(p(cx, 19f, scale), p(cy, 9f, scale), p(cx, 22f, scale), p(cy, 12f, scale), paint);
+                canvas.drawLine(p(cx, 22f, scale), p(cy, 12f, scale), p(cx, 19f, scale), p(cy, 15f, scale), paint);
+                break;
+            }
+            case ICON_PIN: { // Lucide: pin (simplified silhouette)
+                canvas.drawLine(p(cx, 12f, scale), p(cy, 17f, scale), p(cx, 12f, scale), p(cy, 22f, scale), paint);
+                sPath.reset();
+                sPath.moveTo(p(cx, 8f, scale), p(cy, 4f, scale));
+                sPath.lineTo(p(cx, 16f, scale), p(cy, 4f, scale));
+                sPath.lineTo(p(cx, 16f, scale), p(cy, 7f, scale));
+                sPath.lineTo(p(cx, 15f, scale), p(cy, 10.8f, scale));
+                sPath.lineTo(p(cx, 19f, scale), p(cy, 15.2f, scale));
+                sPath.lineTo(p(cx, 19f, scale), p(cy, 16f, scale));
+                sPath.lineTo(p(cx, 5f, scale), p(cy, 16f, scale));
+                sPath.lineTo(p(cx, 5f, scale), p(cy, 15.2f, scale));
+                sPath.lineTo(p(cx, 9f, scale), p(cy, 10.8f, scale));
+                sPath.lineTo(p(cx, 8f, scale), p(cy, 7f, scale));
+                sPath.close();
+                canvas.drawPath(sPath, paint);
+                break;
+            }
+            case ICON_PIP: { // Lucide: picture-in-picture
+                sRect.set(p(cx, 3f, scale), p(cy, 4f, scale), p(cx, 21f, scale), p(cy, 20f, scale));
+                canvas.drawRoundRect(sRect, 2f * scale, 2f * scale, paint);
+                sRect.set(p(cx, 12f, scale), p(cy, 14f, scale), p(cx, 22f, scale), p(cy, 21f, scale));
+                canvas.drawRoundRect(sRect, scale, scale, paint);
+                break;
+            }
+            case ICON_CAMERA: { // Lucide: camera
+                sRect.set(p(cx, 2f, scale), p(cy, 7f, scale), p(cx, 22f, scale), p(cy, 18f, scale));
+                canvas.drawRoundRect(sRect, 2f * scale, 2f * scale, paint);
+                canvas.drawLine(p(cx, 7f, scale), p(cy, 7f, scale), p(cx, 8.6f, scale), p(cy, 4.5f, scale), paint);
+                canvas.drawLine(p(cx, 8.6f, scale), p(cy, 4.5f, scale), p(cx, 15.4f, scale), p(cy, 4.5f, scale), paint);
+                canvas.drawLine(p(cx, 15.4f, scale), p(cy, 4.5f, scale), p(cx, 17f, scale), p(cy, 7f, scale), paint);
+                canvas.drawCircle(p(cx, 12f, scale), p(cy, 12.5f, scale), 3f * scale, paint);
+                break;
+            }
             case ICON_EYE: { // Lucide: eye
                 canvas.drawCircle(cx, cy, 3f * scale, paint);
                 sRect.set(p(cx, 2f, scale), p(cy, 4f, scale), p(cx, 22f, scale), p(cy, 20f, scale));
                 canvas.drawArc(sRect, 30, 120, false, paint);
                 canvas.drawArc(sRect, 210, 120, false, paint);
+                break;
+            }
+            case ICON_EYE_OFF: { // Lucide: eye-off
+                // Same eye outline as ICON_EYE plus the diagonal slash.
+                canvas.drawCircle(cx, cy, 3f * scale, paint);
+                sRect.set(p(cx, 2f, scale), p(cy, 4f, scale), p(cx, 22f, scale), p(cy, 20f, scale));
+                canvas.drawArc(sRect, 30, 120, false, paint);
+                canvas.drawArc(sRect, 210, 120, false, paint);
+                canvas.drawLine(p(cx, 2f, scale), p(cy, 2f, scale),
+                        p(cx, 22f, scale), p(cy, 22f, scale), paint);
                 break;
             }
             case ICON_HOUSE: { // Lucide: house

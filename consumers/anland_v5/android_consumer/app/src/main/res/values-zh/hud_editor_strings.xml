@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="hud_editor_icon_delete">删除</string>
+    <string name="hud_editor_icon_touchpad">触控板</string>
+    <string name="hud_editor_icon_slider">滑块</string>
+    <string name="hud_editor_icon_columns">分栏</string>
+    <string name="hud_editor_icon_rows">分行</string>
+    <string name="hud_editor_icon_move">移动</string>
+    <string name="hud_editor_icon_pin">固定</string>
+    <string name="hud_editor_icon_pip">浮窗</string>
+    <string name="hud_editor_icon_camera">截图</string>
+    <string name="hud_editor_icon_eye">眼睛</string>
+    <string name="hud_editor_icon_eye_off">隐藏</string>
     <string name="hud_editor_drag_mode">拖拽方式</string>
     <string name="hud_editor_drag_double_tap">双击</string>
     <string name="hud_editor_drag_hold">长按</string>

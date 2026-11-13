@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="hud_editor_icon_delete">삭제</string>
+    <string name="hud_editor_icon_touchpad">터치패드</string>
+    <string name="hud_editor_icon_slider">슬라이더</string>
+    <string name="hud_editor_icon_columns">열</string>
+    <string name="hud_editor_icon_rows">행</string>
+    <string name="hud_editor_icon_move">이동</string>
+    <string name="hud_editor_icon_pin">고정</string>
+    <string name="hud_editor_icon_pip">플로팅 창</string>
+    <string name="hud_editor_icon_camera">스크린샷</string>
+    <string name="hud_editor_icon_eye">눈</string>
+    <string name="hud_editor_icon_eye_off">눈 감추기</string>
     <string name="hud_editor_drag_mode">드래그 방식</string>
     <string name="hud_editor_drag_double_tap">두 번 탭</string>
     <string name="hud_editor_drag_hold">길게 누르기</string>
