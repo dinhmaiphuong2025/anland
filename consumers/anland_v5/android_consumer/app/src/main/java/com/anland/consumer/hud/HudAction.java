@@ -16,6 +16,10 @@ public final class HudAction {
     public static final String TYPE_COMBO = "combo";
     public static final String TYPE_TEXT = "text";
     public static final String TYPE_SYSTEM = "system";
+    /** Pointer button (BTN_LEFT 0x110, BTN_RIGHT 0x111, BTN_MIDDLE 0x112).
+     *  Dispatched on the press and release edges of the widget, so holding the
+     *  key holds the button - that is what makes a two-thumb drag possible. */
+    public static final String TYPE_MOUSE = "mouse";
 
     public String type = TYPE_KEY;
     public int code = 0; // evdev scancode for key / modifier
@@ -54,6 +58,13 @@ public final class HudAction {
         return a;
     }
 
+    public static HudAction mouse(int buttonCode) {
+        HudAction a = new HudAction();
+        a.type = TYPE_MOUSE;
+        a.code = buttonCode;
+        return a;
+    }
+
     public static HudAction system(String command) {
         HudAction a = new HudAction();
         a.type = TYPE_SYSTEM;
@@ -70,7 +81,7 @@ public final class HudAction {
     public JSONObject toJSON() throws JSONException {
         JSONObject obj = new JSONObject();
         obj.put("type", type);
-        if (TYPE_KEY.equals(type) || TYPE_MODIFIER.equals(type)) {
+        if (TYPE_KEY.equals(type) || TYPE_MODIFIER.equals(type) || TYPE_MOUSE.equals(type)) {
             obj.put("code", code);
             obj.put("repeat", repeat);
         } else if (TYPE_COMBO.equals(type)) {
@@ -101,6 +112,13 @@ public final class HudAction {
             for (int i = 0; i < arr.length(); i++) {
                 a.comboKeys.add(arr.optInt(i));
             }
+        }
+        // Profiles written before pointer buttons became a real action type still carry the
+        // click-only system command. Promote them so holding the key holds the button.
+        if (TYPE_SYSTEM.equals(a.type)) {
+            if ("mouse_left".equals(a.systemCommand)) return mouse(0x110);
+            if ("mouse_right".equals(a.systemCommand)) return mouse(0x111);
+            if ("mouse_middle".equals(a.systemCommand)) return mouse(0x112);
         }
         return a;
     }

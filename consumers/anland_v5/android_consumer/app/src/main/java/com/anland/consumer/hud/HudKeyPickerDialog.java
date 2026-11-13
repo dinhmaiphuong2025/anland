@@ -464,9 +464,9 @@ public final class HudKeyPickerDialog {
         list.add(new KeyEntry(context.getString(R.string.hud_system_toggle_hud_hidden), HudAction.system("toggle_hud_hidden")));
         list.add(new KeyEntry(context.getString(R.string.hud_system_settings), HudAction.system("open_settings")));
         list.add(new KeyEntry(context.getString(R.string.hud_system_open_editor), HudAction.system("open_editor")));
-        list.add(new KeyEntry(context.getString(R.string.hud_system_mouse_left), HudAction.system("mouse_left")));
-        list.add(new KeyEntry(context.getString(R.string.hud_system_mouse_right), HudAction.system("mouse_right")));
-        list.add(new KeyEntry(context.getString(R.string.hud_system_mouse_middle), HudAction.system("mouse_middle")));
+        list.add(new KeyEntry(context.getString(R.string.hud_system_mouse_left), HudAction.mouse(0x110)));
+        list.add(new KeyEntry(context.getString(R.string.hud_system_mouse_right), HudAction.mouse(0x111)));
+        list.add(new KeyEntry(context.getString(R.string.hud_system_mouse_middle), HudAction.mouse(0x112)));
         list.add(new KeyEntry(context.getString(R.string.hud_system_scroll_up), HudAction.system("mouse_scroll_up")));
         list.add(new KeyEntry(context.getString(R.string.hud_system_scroll_down), HudAction.system("mouse_scroll_down")));
         return list;

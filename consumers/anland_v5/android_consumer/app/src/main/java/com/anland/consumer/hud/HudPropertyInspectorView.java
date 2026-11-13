@@ -2144,6 +2144,10 @@ public final class HudPropertyInspectorView extends LinearLayout {
                 return sb.toString();
             case HudAction.TYPE_TEXT:
                 return a.text != null && !a.text.isEmpty() ? a.text : getContext().getString(R.string.hud_editor_text);
+            case HudAction.TYPE_MOUSE:
+                return getContext().getString(a.code == 0x111 ? R.string.hud_system_mouse_right
+                        : a.code == 0x112 ? R.string.hud_system_mouse_middle
+                        : R.string.hud_system_mouse_left);
             case HudAction.TYPE_SYSTEM:
                 return getContext().getString(R.string.hud_system_action, systemActionLabel(a.systemCommand));
             default:

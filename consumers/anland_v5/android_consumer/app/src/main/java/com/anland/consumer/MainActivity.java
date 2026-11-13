@@ -2662,23 +2662,63 @@ public class MainActivity extends Activity
      */
     private void routeGrabbedTouch(MotionEvent ev) {
         handleTabletMotionEvent(ev);
-        if (!immersiveHudTouch) {
-            // Setting off: the grabbed stream belongs to the desktop alone,
-            // exactly like it did before the HUD could be reached here.
-            grabbedOverlayPointers.clear();
-            if (isTouchpadMode) {
-                updateTouchpadBounds(null);
-                dispatchTouchpadWithoutTablet(ev);
-            } else {
-                handleTouchEvent(ev);
-            }
-            return;
-        }
         final int action = ev.getActionMasked();
         final int index = ev.getActionIndex();
         final int pointerId = ev.getPointerId(index);
         final boolean isDown = action == MotionEvent.ACTION_DOWN
                 || action == MotionEvent.ACTION_POINTER_DOWN;
+
+        if (!immersiveHudTouch) {
+            if (isTouchpadMode) {
+                updateTouchpadBounds(null);
+                // The pad must not read a thumb resting on a HUD key as a second finger: that
+                // turned the gesture into a two-finger scroll and froze the cursor mid-drag.
+                // Ownership is decided per pointer, and the pad only sees the fingers that
+                // started on empty screen, so its gesture keeps running while a button is held.
+                if (isDown) {
+                    if (!isTabletTool(ev.getToolType(index))
+                            && isOverlayControlAt(ev.getX(index), ev.getY(index)))
+                        grabbedOverlayPointers.add(pointerId);
+                    else
+                        grabbedOverlayPointers.remove(pointerId);
+                } else if (action == MotionEvent.ACTION_UP
+                        || action == MotionEvent.ACTION_POINTER_UP) {
+                    // Release the id, or a reused id would keep the finger parked on the HUD and
+                    // the pad would stop receiving the other finger that is still down.
+                    grabbedOverlayPointers.remove(pointerId);
+                } else if (action == MotionEvent.ACTION_CANCEL) {
+                    grabbedOverlayPointers.clear();
+                }
+                boolean hasOverlay = anyOverlayPointer(ev);
+                boolean hasDesktop = anyDesktopPointer(ev);
+                if (hasOverlay && mRoot != null) {
+                    MotionEvent overlay = hasDesktop ? splitGrabbedEvent(ev, true) : ev;
+                    if (overlay != null) {
+                        try {
+                            mRoot.dispatchTouchEvent(overlay);
+                        } finally {
+                            if (overlay != ev) overlay.recycle();
+                        }
+                    }
+                }
+                if (hasDesktop) {
+                    MotionEvent desktop = hasOverlay ? splitGrabbedEvent(ev, false) : ev;
+                    if (desktop != null) {
+                        try {
+                            dispatchTouchpadWithoutTablet(desktop);
+                        } finally {
+                            if (desktop != ev) desktop.recycle();
+                        }
+                    }
+                }
+                return;
+            }
+            // Setting off and no pad: the grabbed stream belongs to the desktop alone,
+            // exactly like it did before the HUD could be reached here.
+            grabbedOverlayPointers.clear();
+            handleTouchEvent(ev);
+            return;
+        }
 
         if (isDown) {
             // With the touch lock on, a finger that misses every HUD control still belongs to
@@ -2945,6 +2985,64 @@ public class MainActivity extends Activity
     // ================================================================
     // Route touchscreen gestures and ordinary (non-captured) mouse events.
     // ================================================================
+    /**
+     * In pad mode the screen touchpad owns every finger that does not start on a HUD control.
+     *
+     * <p>The pad used to be fed from {@link #onTouchEvent}, which Android only calls when no view
+     * handled the event. As soon as one finger pressed a HUD key the whole MotionEvent -- both
+     * pointers -- counted as handled, so the pad stopped receiving the finger that was moving and
+     * the cursor froze mid-drag. Ownership is therefore decided here, before the view hierarchy
+     * sees the stream: HUD fingers go to the views, the rest go to the pad.
+     */
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (!isTouchpadMode || touchscreenGrabbed || isMouseEvent(ev) || containsTabletPointer(ev)
+                || (mHudOverlay != null && mHudOverlay.isEditMode())) {
+            return super.dispatchTouchEvent(ev);
+        }
+        final int action = ev.getActionMasked();
+        final int index = ev.getActionIndex();
+        final int pointerId = ev.getPointerId(index);
+
+        if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+            if (isOverlayControlAt(ev.getX(index), ev.getY(index)))
+                grabbedOverlayPointers.add(pointerId);
+            else
+                grabbedOverlayPointers.remove(pointerId);
+        }
+
+        boolean hasOverlay = anyOverlayPointer(ev);
+        boolean hasPad = anyDesktopPointer(ev);
+
+        if (hasOverlay) {
+            MotionEvent overlay = hasPad ? splitGrabbedEvent(ev, true) : ev;
+            if (overlay != null) {
+                try {
+                    super.dispatchTouchEvent(overlay);
+                } finally {
+                    if (overlay != ev) overlay.recycle();
+                }
+            }
+        }
+        if (hasPad) {
+            updateTouchpadBounds(null);
+            MotionEvent padEvent = hasOverlay ? splitGrabbedEvent(ev, false) : ev;
+            if (padEvent != null) {
+                try {
+                    dispatchTouchpadWithoutTablet(padEvent);
+                } finally {
+                    if (padEvent != ev) padEvent.recycle();
+                }
+            }
+        }
+
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_POINTER_UP)
+            grabbedOverlayPointers.remove(pointerId);
+        else if (action == MotionEvent.ACTION_CANCEL)
+            grabbedOverlayPointers.clear();
+        return true;
+    }
+
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         if (touchscreenGrabbed && event.isFromSource(InputDevice.SOURCE_TOUCHSCREEN))

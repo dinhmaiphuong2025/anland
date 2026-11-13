@@ -53,6 +53,8 @@ public final class HudFreeformButtonView extends View {
     // touch ourselves, or the parent would think we have a competing gesture
     // and we would also accidentally trigger button press on every tap.
     private boolean mInEditMode = false;
+    /** True while a pointer button is held: it must live until the finger lifts. */
+    private boolean mHoldingMouse = false;
 
     // Hold-to-repeat: the legacy extra-keys bar repeated directional and
     // editing keys while held. HudAction.repeat carries that intent.
@@ -100,7 +102,21 @@ public final class HudFreeformButtonView extends View {
 
     public void setInEditMode(boolean editMode) {
         mInEditMode = editMode;
-        if (editMode) stopRepeat();
+        if (editMode) {
+            stopRepeat();
+            releaseMouseIfHeld();
+        }
+    }
+
+    private boolean isMouseAction() {
+        return mModel != null && mModel.action != null
+                && HudAction.TYPE_MOUSE.equals(mModel.action.type) && mModel.action.code > 0;
+    }
+
+    private void releaseMouseIfHeld() {
+        if (!mHoldingMouse) return;
+        mHoldingMouse = false;
+        if (mListener != null) mListener.onButtonPress(mModel, false);
     }
 
     private void sendPrimaryTap() {
@@ -112,6 +128,7 @@ public final class HudFreeformButtonView extends View {
     @Override
     protected void onDetachedFromWindow() {
         mIsPressed = false;
+        releaseMouseIfHeld();
         mPress.cancel();
         stopRepeat();
         dropLongPress();
@@ -254,8 +271,14 @@ public final class HudFreeformButtonView extends View {
                     mRepeatHandler.postDelayed(mLongPressTick, Math.max(HudButton.LONG_PRESS_MIN_MS,
                             Math.min(HudButton.LONG_PRESS_MAX_MS, mModel.longPressMs)));
                 }
-                mPress.down(mModel.sendOnRelease, this::sendPrimaryTap);
-                startRepeat();
+                if (isMouseAction()) {
+                    // A mouse button is a held state, not a tap: press now, release on lift.
+                    mHoldingMouse = true;
+                    if (mListener != null) mListener.onButtonPress(mModel, true);
+                } else {
+                    mPress.down(mModel.sendOnRelease, this::sendPrimaryTap);
+                    startRepeat();
+                }
                 return true;
 
             case MotionEvent.ACTION_MOVE:
@@ -268,6 +291,7 @@ public final class HudFreeformButtonView extends View {
                     stopRepeat();
                     dropLongPress();
                     mPress.cancel();
+                    releaseMouseIfHeld();
                     if (isHapticEnabled()) performHapticFeedback(HapticFeedbackConstants.CONFIRM);
                     invalidate();
                     if (mListener != null) {
@@ -283,6 +307,10 @@ public final class HudFreeformButtonView extends View {
                 stopRepeat();
                 dropLongPress();
                 invalidate();
+                if (mHoldingMouse) {
+                    releaseMouseIfHeld();
+                    return true;
+                }
                 if (mLongPressFired) {
                     mLongPressFired = false;
                     return true;   // the hold already did its job
