@@ -940,11 +940,25 @@ public class MainActivity extends Activity
                 sendCapturedTouchpadMotion(dx, dy);
             }
             @Override public void sendMouseButton(int button, boolean pressed) {
-                if (mNative != null) mNative.sendMouseButton(button, pressed);
+                if (mHudOverlay != null) {
+                    mHudOverlay.runWithActiveModifiers(() -> {
+                        if (mNative != null) mNative.sendMouseButton(button, pressed);
+                    });
+                } else if (mNative != null) {
+                    mNative.sendMouseButton(button, pressed);
+                }
             }
 
             @Override public void sendMouseScroll(int axis, float value) {
-                if (mNative != null) mNative.sendMouseScroll(axis, value);
+                // A latched modifier has to reach the click/scroll the pad produces, not just
+                // keys the HUD dispatches itself.
+                if (mHudOverlay != null) {
+                    mHudOverlay.runWithActiveModifiers(() -> {
+                        if (mNative != null) mNative.sendMouseScroll(axis, value);
+                    });
+                } else if (mNative != null) {
+                    mNative.sendMouseScroll(axis, value);
+                }
             }
             @Override public void toggleSystemKeyboard() {
                 if (systemIme != null) systemIme.toggleSystemKeyboard();

@@ -60,12 +60,15 @@ public final class HudFreeformButtonView extends View {
     // editing keys while held. HudAction.repeat carries that intent.
     private static final long REPEAT_INITIAL_DELAY_MS = 320L;
     private static final long REPEAT_INTERVAL_MS = 60L;
+    /** Scrolling repeats slower than key repeat; one notch every 60ms overshoots. */
+    private static final long REPEAT_SCROLL_INTERVAL_MS = 130L;
     private final Handler mRepeatHandler = new Handler(Looper.getMainLooper());
     private final Runnable mRepeatTick = new Runnable() {
         @Override public void run() {
             if (!mIsPressed || mListener == null) return;
             mPress.repeat(HudFreeformButtonView.this::sendPrimaryTap);
-            mRepeatHandler.postDelayed(this, REPEAT_INTERVAL_MS);
+            mRepeatHandler.postDelayed(this,
+                    isScrollAction() ? REPEAT_SCROLL_INTERVAL_MS : REPEAT_INTERVAL_MS);
         }
     };
 
@@ -136,9 +139,21 @@ public final class HudFreeformButtonView extends View {
     }
 
     private boolean isRepeatable() {
-        return mModel != null && !mModel.sendOnRelease && mModel.action != null
-                && HudAction.TYPE_KEY.equals(mModel.action.type)
-                && mModel.action.code > 0 && mModel.action.repeat;
+        if (mModel == null || mModel.sendOnRelease || mModel.action == null) return false;
+        if (HudAction.TYPE_KEY.equals(mModel.action.type))
+            return mModel.action.code > 0 && mModel.action.repeat;
+        // Scroll notches were one-shot: holding the key did nothing after the first step.
+        if (HudAction.TYPE_SYSTEM.equals(mModel.action.type))
+            return "mouse_scroll_up".equals(mModel.action.systemCommand)
+                    || "mouse_scroll_down".equals(mModel.action.systemCommand);
+        return false;
+    }
+
+    private boolean isScrollAction() {
+        return mModel != null && mModel.action != null
+                && HudAction.TYPE_SYSTEM.equals(mModel.action.type)
+                && ("mouse_scroll_up".equals(mModel.action.systemCommand)
+                    || "mouse_scroll_down".equals(mModel.action.systemCommand));
     }
 
     private void startRepeat() {

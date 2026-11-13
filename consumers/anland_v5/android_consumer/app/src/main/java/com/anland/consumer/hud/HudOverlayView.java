@@ -187,6 +187,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
     private float mInitialBtnLeft;
     private float mInitialBtnTop;
 
+    /** One scroll notch; matches what the virtual keyboard sends per gesture. */
+    private static final float SCROLL_STEP = 10f;
+
     // Modifier latch: tap toggles, long press locks. SystemIME reads it through
     // IModifierProvider so soft-keyboard combos carry the same modifiers.
     private static final class ModState {
@@ -460,6 +463,7 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         }
         mTopToolbar.setVisibility(editMode ? VISIBLE : GONE);
         if (!editMode) {
+            releaseAllModifiers();
             selectButton(null, null);
             mHistory.clear();
             dropPendingHistoryCommit();
@@ -2090,6 +2094,20 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         return m != null && m.active;
     }
 
+    /**
+     * Runs a pointer-side emission (button press, scroll notch) with the latched modifiers
+     * applied, exactly like a HUD-dispatched key. This is what makes a latched CTRL reach a
+     * click or a scroll made on the pad, without holding CTRL down for the whole session.
+     */
+    public void runWithActiveModifiers(Runnable emit) {
+        if (emit == null) return;
+        if (mModifiers.isEmpty()) {
+            emit.run();
+            return;
+        }
+        sendWithModifiers(emit);
+    }
+
     @Override
     public void sendKeyComboFromExternal(int evdevScancode) {
         sendWithModifiers(() -> {
@@ -2120,16 +2138,32 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         if (!state.active) state.locked = false;
     }
 
+    /** Repaints every widget, including keys nested inside containers. */
+    private static void invalidateTree(View v) {
+        if (v == null) return;
+        v.invalidate();
+        if (v instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) invalidateTree(g.getChildAt(i));
+        }
+    }
+
+    /** Drops every latched modifier and tells the compositor to let go of those keys. */
+    private void releaseAllModifiers() {
+        for (ModState m : mModifiers.values()) setModifierActive(m, false);
+    }
+
     private void setModifierActive(ModState state, boolean active) {
+        if (state.active == active) return;
         state.active = active;
         if (!active) state.locked = false;
-        // Invalidate floating container and its children so modifier keys (CTRL, ALT...) update activeColor highlight!
-        if (mFloatingContainer != null) {
-            mFloatingContainer.invalidate();
-            for (int i = 0; i < mFloatingContainer.getChildCount(); i++) {
-                mFloatingContainer.getChildAt(i).invalidate();
-            }
-        }
+        // The latch is not held down globally: the IME already emits its own modifier edges
+        // through sendKeyComboFromExternal, and a second held copy fought with it. Modifiers are
+        // applied per event instead, by sendWithModifiers and runWithActiveModifiers.
+        // The key that draws the highlight can be a grandchild of a group, or a group reparented
+        // onto the keyboard layer, so a single-container sweep left a latched CTRL lit after the
+        // latch had already been released. Walk the whole tree instead.
+        invalidateTree(this);
     }
 
     private void sendWithModifiers(Runnable emit) {
@@ -3469,6 +3503,11 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
                         if (mHost != null) mHost.sendMouseButton(action.code, false);
                     }, 50);
                 }
+            }
+            else if ("mouse_scroll_up".equals(action.systemCommand)) {
+                mHost.sendMouseScroll(0, -SCROLL_STEP);
+            } else if ("mouse_scroll_down".equals(action.systemCommand)) {
+                mHost.sendMouseScroll(0, SCROLL_STEP);
             }
             else if ("mouse_left".equals(action.systemCommand)) {
                 mHost.sendMouseButton(0x110, true);
