@@ -3019,7 +3019,10 @@ public class MainActivity extends Activity
         final int pointerId = ev.getPointerId(index);
 
         if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
-            if (isOverlayControlAt(ev.getX(index), ev.getY(index)))
+            // Touch lock has to be honoured on this path too: it was only enforced in the grabbed
+            // stream, so with the lock on a finger on empty screen still drove the cursor.
+            boolean touchLocked = mHudOverlay != null && mHudOverlay.isTouchLockActive();
+            if (touchLocked || isOverlayControlAt(ev.getX(index), ev.getY(index)))
                 grabbedOverlayPointers.add(pointerId);
             else
                 grabbedOverlayPointers.remove(pointerId);

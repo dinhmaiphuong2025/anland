@@ -1680,6 +1680,9 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
      * display cannot click the desktop.
      */
     public boolean isTouchLockActive() {
+        // Per layout by construction: the lock is a property of a pad widget, and each
+        // orientation (and layer, and slot) owns its own widget list. A layout with no pad has
+        // no lock, and a lock set on one orientation can only apply there.
         if (getVisibility() != VISIBLE) return false;
         HudLayout layout = getActiveLayout();
         if (layout == null) return false;
@@ -1786,10 +1789,18 @@ public final class HudOverlayView extends FrameLayout implements IModifierProvid
         // portrait and "wrap-content, centred" in landscape, so its layout
         // parameters have to be recomputed for the new orientation once the new
         // size is known.
+        // A rotation swaps the layout object, so a selected button belongs to the model of the
+        // orientation we just left. Editing it wrote into a widget nobody can see - that is how a
+        // Touch lock set in portrait ended up on the landscape pad. Drop the session instead of
+        // re-placing the inspector on the stale model.
+        if (mSelectedButton != null) {
+            selectButton(null, null);
+            if (mInspectorView != null) mInspectorView.bindButton(null);
+            mInspectorSessionLayout = null;
+        }
         post(() -> {
             applyToolbarLayoutParams();
-            if (mSelectedButton != null) placeInspector(mSelectedButton);
-            else if (mInspectorView != null) mInspectorView.adaptSize(getWidth(), getHeight());
+            if (mInspectorView != null) mInspectorView.adaptSize(getWidth(), getHeight());
         });
     }
 
