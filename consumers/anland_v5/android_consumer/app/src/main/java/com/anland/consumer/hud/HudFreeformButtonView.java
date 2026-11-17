@@ -4,6 +4,7 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.RectF;
 import android.os.Handler;
 import android.os.Looper;
@@ -31,6 +32,8 @@ public final class HudFreeformButtonView extends View {
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final RectF mBounds = new RectF();
+    private final Path mPath = new Path();
+    private final float[] mRadii = new float[8];
     private final HudButtonPress mPress = new HudButtonPress();
 
     private boolean mIsPressed;
@@ -125,6 +128,39 @@ public final class HudFreeformButtonView extends View {
         mRepeatHandler.removeCallbacks(mRepeatTick);
     }
 
+    public static void computeRadii(int shape, float r, float[] outRadii) {
+        // [Top-Left x, y, Top-Right x, y, Bottom-Right x, y, Bottom-Left x, y]
+        java.util.Arrays.fill(outRadii, 0f);
+        switch (shape) {
+            case HudButton.CORNER_TOP_LEFT:
+                outRadii[0] = r; outRadii[1] = r;
+                break;
+            case HudButton.CORNER_TOP_RIGHT:
+                outRadii[2] = r; outRadii[3] = r;
+                break;
+            case HudButton.CORNER_BOTTOM_LEFT:
+                outRadii[6] = r; outRadii[7] = r;
+                break;
+            case HudButton.CORNER_BOTTOM_RIGHT:
+                outRadii[4] = r; outRadii[5] = r;
+                break;
+            case HudButton.CORNER_LEFT_BOTH:
+                outRadii[0] = r; outRadii[1] = r;
+                outRadii[6] = r; outRadii[7] = r;
+                break;
+            case HudButton.CORNER_RIGHT_BOTH:
+                outRadii[2] = r; outRadii[3] = r;
+                outRadii[4] = r; outRadii[5] = r;
+                break;
+            case HudButton.CORNER_ALL:
+                java.util.Arrays.fill(outRadii, r);
+                break;
+            case HudButton.CORNER_NONE:
+            default:
+                break;
+        }
+    }
+
     public HudButton getModel() {
         return mModel;
     }
@@ -154,13 +190,17 @@ public final class HudFreeformButtonView extends View {
         mPaint.setColor(mIsPressed ? mModel.activeColor : mModel.bgColor);
         mPaint.setAlpha(Math.round(mModel.opacity * 255));
         float corner = mModel.cornerRadiusDp * density;
-        canvas.drawRoundRect(mBounds, corner, corner, mPaint);
+
+        computeRadii(mModel.cornerShape, corner, mRadii);
+        mPath.reset();
+        mPath.addRoundRect(mBounds, mRadii, Path.Direction.CW);
+        canvas.drawPath(mPath, mPaint);
 
         // Stroke
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(Math.max(1, Math.round(1.0f * density)));
         mPaint.setColor(0x66FFFFFF);
-        canvas.drawRoundRect(mBounds, corner, corner, mPaint);
+        canvas.drawPath(mPath, mPaint);
 
         // Text with auto font scaling
         mTextPaint.setColor(mIsPressed ? 0xFF11111B : mModel.textColor);

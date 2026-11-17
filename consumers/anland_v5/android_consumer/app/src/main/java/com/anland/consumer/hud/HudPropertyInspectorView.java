@@ -84,6 +84,7 @@ public final class HudPropertyInspectorView extends LinearLayout {
 
     private SeekBar mCornerSeekBar;
     private EditText mCornerInput;
+    private HudCornerShapePickerView mShapePickerView;
 
     private SeekBar mOpacitySeekBar;
     private EditText mOpacityInput;
@@ -364,6 +365,23 @@ public final class HudPropertyInspectorView extends LinearLayout {
                 if (mCallback != null) mCallback.onModelChanged(mActiveButton);
             }
         }));
+
+        // Zalith-style 8-Shape Corner Selector Matrix
+        TextView shapeLabel = new TextView(getContext());
+        shapeLabel.setText("Button Shape (Zalith Presets)");
+        shapeLabel.setTextColor(0xFFCCCCCC);
+        shapeLabel.setTextSize(12);
+        shapeLabel.setPadding(0, dp(6), 0, dp(4));
+        mSizeSection.addView(shapeLabel);
+
+        mShapePickerView = new HudCornerShapePickerView(getContext());
+        mShapePickerView.setOnShapeSelectedListener(shape -> {
+            if (mActiveButton != null) {
+                mActiveButton.cornerShape = shape;
+                if (mCallback != null) mCallback.onModelChanged(mActiveButton);
+            }
+        });
+        mSizeSection.addView(mShapePickerView);
 
         mOpacitySeekBar = new SeekBar(getContext());
         mOpacityInput = createExactNumberInput();
@@ -769,6 +787,9 @@ public final class HudPropertyInspectorView extends LinearLayout {
         syncSliderAndInput(mWidthSeekBar, mWidthInput, b.widthDp, SIZE_MIN_DP, sizeMax);
         syncSliderAndInput(mHeightSeekBar, mHeightInput, b.heightDp, SIZE_MIN_DP, sizeMax);
         syncSliderAndInput(mCornerSeekBar, mCornerInput, b.cornerRadiusDp, 0, 50);
+        if (mShapePickerView != null) {
+            mShapePickerView.setSelectedShape(b.cornerShape > 0 ? b.cornerShape : HudButton.CORNER_ALL);
+        }
         syncSliderAndInput(mOpacitySeekBar, mOpacityInput, Math.round(b.opacity * 100), 10, 100);
 
         // Update the badges with the live values from the model.
@@ -978,8 +999,16 @@ public final class HudPropertyInspectorView extends LinearLayout {
                     consumer.accept(val);
                 }
             }
-            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
-            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {
+                // Ghosting UX: Dim inspector to 25% opacity while dragging so user sees button underneath
+                animate().alpha(0.25f).setDuration(120).start();
+            }
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {
+                // Restore inspector opacity to 100% when finger is released
+                animate().alpha(1.0f).setDuration(150).start();
+            }
         });
 
         input.addTextChangedListener(new TextWatcher() {

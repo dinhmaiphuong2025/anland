@@ -46,6 +46,19 @@ public final class HudButton {
     public int heightDp = 40;
     /** Inner padding for WIDGET_GROUP, in dp. */
     public int padDp = 8;
+    // Zalith-style 8 button corner shapes:
+    // 1: Top-Left, 2: Top-Right, 3: Bottom-Left, 4: Bottom-Right,
+    // 5: Left Both, 6: Right Both, 7: All 4 Corners (default), 8: None (Sharp 90deg)
+    public static final int CORNER_TOP_LEFT = 1;
+    public static final int CORNER_TOP_RIGHT = 2;
+    public static final int CORNER_BOTTOM_LEFT = 3;
+    public static final int CORNER_BOTTOM_RIGHT = 4;
+    public static final int CORNER_LEFT_BOTH = 5;
+    public static final int CORNER_RIGHT_BOTH = 6;
+    public static final int CORNER_ALL = 7;
+    public static final int CORNER_NONE = 8;
+    public int cornerShape = CORNER_ALL;
+
     public int cornerRadiusDp = 8;
     public float opacity = 0.85f;
 
@@ -145,6 +158,7 @@ public final class HudButton {
         obj.put("pos_y_pct", posYPercent);
         obj.put("width_dp", widthDp);
         obj.put("height_dp", heightDp);
+        obj.put("corner_shape", cornerShape);
         obj.put("corner_radius_dp", cornerRadiusDp);
         obj.put("opacity", opacity);
         obj.put("bg_color", bgColor);
@@ -204,6 +218,7 @@ public final class HudButton {
         b.posYPercent = (float) obj.optDouble("pos_y_pct", 0.5);
         b.widthDp = obj.optInt("width_dp", 64);
         b.heightDp = obj.optInt("height_dp", 40);
+        b.cornerShape = obj.optInt("corner_shape", CORNER_ALL);
         b.cornerRadiusDp = obj.optInt("corner_radius_dp", 8);
         b.opacity = (float) obj.optDouble("opacity", 0.85);
         b.bgColor = obj.optInt("bg_color", 0xE62A2B3D);
@@ -294,6 +309,7 @@ public final class HudButton {
         d.posYPercent = Math.min(0.95f, this.posYPercent + 0.04f);
         d.widthDp = this.widthDp;
         d.heightDp = this.heightDp;
+        d.cornerShape = this.cornerShape;
         d.cornerRadiusDp = this.cornerRadiusDp;
         d.opacity = this.opacity;
         d.bgColor = this.bgColor;

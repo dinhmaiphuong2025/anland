@@ -57,7 +57,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments "-DANDROID_STL=c++_static"
+                arguments "-DANDROID_STL=c++_static", "-DANDROID_HOST_TAG=linux-aarch64"
             }
         }
     }
